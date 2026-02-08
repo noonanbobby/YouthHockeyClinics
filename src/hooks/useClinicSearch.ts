@@ -23,6 +23,8 @@ export function useClinicSearch() {
     isLoading,
     isRefreshing,
     clinics,
+    getEffectiveLocation,
+    homeLocation,
   } = useStore();
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,6 +54,18 @@ export function useClinicSearch() {
         if (apiKeys.googleCseId) params.set('googleCseId', apiKeys.googleCseId);
         if (apiKeys.bingApiKey) params.set('bingApiKey', apiKeys.bingApiKey);
         if (apiKeys.eventbriteApiKey) params.set('eventbriteApiKey', apiKeys.eventbriteApiKey);
+
+        // Pass location for tiered search
+        const loc = getEffectiveLocation();
+        if (loc) {
+          params.set('lat', loc.lat.toString());
+          params.set('lng', loc.lng.toString());
+        }
+        if (homeLocation) {
+          params.set('city', homeLocation.city);
+          params.set('state', homeLocation.state);
+          params.set('country', homeLocation.country);
+        }
 
         const response = await fetch(`/api/search?${params}`, {
           signal: controller.signal,
@@ -89,7 +103,7 @@ export function useClinicSearch() {
         setRefreshing(false);
       }
     },
-    [apiKeys, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError]
+    [apiKeys, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError, getEffectiveLocation, homeLocation]
   );
 
   // Initial load

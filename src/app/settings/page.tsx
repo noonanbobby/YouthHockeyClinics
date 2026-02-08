@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
 import { requestNotificationPermission } from '@/hooks/useServiceWorker';
@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Key,
   Bell,
-  MapPin,
   RefreshCw,
   Database,
   Zap,
@@ -23,6 +22,10 @@ import {
   Plug,
   Video,
   Calendar,
+  Home,
+  Navigation,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -34,9 +37,10 @@ export default function SettingsPage() {
   const {
     notificationsEnabled,
     setNotificationsEnabled,
-    locationEnabled,
     setLocationEnabled,
     setUserLocation,
+    homeLocation,
+    setHomeLocation,
     apiKeys,
     setApiKey,
     autoRefreshInterval,
@@ -52,23 +56,79 @@ export default function SettingsPage() {
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState('');
+  const [homeInput, setHomeInput] = useState(homeLocation ? `${homeLocation.city}, ${homeLocation.state}` : '');
+  const [isGeolocating, setIsGeolocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState('');
 
-  const handleLocationToggle = async () => {
-    if (!locationEnabled) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
+  const geocodeHome = useCallback(async (input: string) => {
+    if (!input.trim()) return;
+    setIsGeolocating(true);
+    setLocationStatus('Looking up location...');
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
+          q: input, format: 'json', limit: '1', addressdetails: '1',
+        })}`
+      );
+      const data = await res.json();
+      if (data.length > 0) {
+        const r = data[0];
+        const city = r.address?.city || r.address?.town || r.address?.village || r.address?.county || input.split(',')[0].trim();
+        const state = r.address?.state || '';
+        const country = r.address?.country || '';
+        setHomeLocation({
+          city, state, country,
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
         });
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationEnabled(true);
-      } catch {
-        alert('Location access denied. Please enable it in your device settings.');
+        setHomeInput(`${city}, ${state}`);
+        setLocationStatus(`Set to ${city}, ${state}, ${country}`);
+        setTimeout(() => setLocationStatus(''), 3000);
+      } else {
+        setLocationStatus('Location not found. Try a different city name.');
+        setTimeout(() => setLocationStatus(''), 3000);
       }
-    } else {
-      setLocationEnabled(false);
-      setUserLocation(null);
+    } catch {
+      setLocationStatus('Network error. Try again.');
+      setTimeout(() => setLocationStatus(''), 3000);
+    } finally {
+      setIsGeolocating(false);
     }
-  };
+  }, [setHomeLocation]);
+
+  const useGPSForHome = useCallback(async () => {
+    setIsGeolocating(true);
+    setLocationStatus('Getting GPS location...');
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+      });
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setUserLocation({ lat, lng });
+      setLocationEnabled(true);
+
+      // Reverse geocode to get city name
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?${new URLSearchParams({
+          lat: lat.toString(), lon: lng.toString(), format: 'json',
+        })}`
+      );
+      const data = await res.json();
+      const city = data.address?.city || data.address?.town || data.address?.village || 'Unknown';
+      const state = data.address?.state || '';
+      const country = data.address?.country || '';
+      setHomeLocation({ city, state, country, lat, lng });
+      setHomeInput(`${city}, ${state}`);
+      setLocationStatus(`Located: ${city}, ${state}`);
+      setTimeout(() => setLocationStatus(''), 3000);
+    } catch {
+      setLocationStatus('GPS unavailable. Enter your city manually.');
+      setTimeout(() => setLocationStatus(''), 3000);
+    } finally {
+      setIsGeolocating(false);
+    }
+  }, [setUserLocation, setLocationEnabled, setHomeLocation]);
 
   const handleNotificationToggle = async () => {
     if (!notificationsEnabled) {
@@ -411,33 +471,104 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Location */}
+          {/* Home Location — Tiered Search */}
           <div className="bg-white/[0.03] rounded-2xl border border-white/5 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
-                  <MapPin size={18} className="text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Location Services</p>
-                  <p className="text-xs text-slate-400">Sort by distance</p>
-                </div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <Home size={18} className="text-green-400" />
               </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Home Location</p>
+                <p className="text-xs text-slate-400">
+                  {homeLocation
+                    ? `${homeLocation.city}, ${homeLocation.state}, ${homeLocation.country}`
+                    : 'Set your location for local clinic priority'}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">
+              Clinics near you appear first. Search expands outward: your city → region → state → country → global.
+              Outstanding clinics always surface regardless of distance.
+            </p>
+
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={homeInput}
+                onChange={(e) => setHomeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') geocodeHome(homeInput);
+                }}
+                placeholder="Enter city (e.g. Fort Lauderdale, FL)"
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:theme-border-primary-strong"
+              />
               <button
-                onClick={handleLocationToggle}
-                className={cn(
-                  'w-11 h-6 rounded-full transition-colors relative',
-                  locationEnabled ? 'theme-bg-primary' : 'bg-white/10'
-                )}
+                onClick={() => geocodeHome(homeInput)}
+                disabled={isGeolocating || !homeInput.trim()}
+                className="px-3 py-2.5 theme-bg-primary text-white text-xs font-medium rounded-xl disabled:opacity-40 transition-colors"
               >
-                <div
-                  className={cn(
-                    'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform',
-                    locationEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
-                  )}
-                />
+                {isGeolocating ? <Loader2 size={14} className="animate-spin" /> : 'Set'}
               </button>
             </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={useGPSForHome}
+                disabled={isGeolocating}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-slate-300 hover:text-white transition-colors disabled:opacity-40"
+              >
+                <Navigation size={12} />
+                Use GPS
+              </button>
+              {homeLocation && (
+                <button
+                  onClick={() => {
+                    setHomeLocation(null);
+                    setHomeInput('');
+                    setLocationStatus('Location cleared');
+                    setTimeout(() => setLocationStatus(''), 2000);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-slate-400 hover:text-red-400 transition-colors"
+                >
+                  <X size={12} />
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {locationStatus && (
+              <p className={cn(
+                'text-[10px] mt-2 transition-colors',
+                locationStatus.includes('Set to') || locationStatus.includes('Located')
+                  ? 'text-emerald-400'
+                  : locationStatus.includes('error') || locationStatus.includes('not found')
+                  ? 'text-red-400'
+                  : 'text-slate-400'
+              )}>
+                {locationStatus}
+              </p>
+            )}
+
+            {homeLocation && (
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <p className="text-[10px] text-slate-500 font-medium mb-1">SEARCH PRIORITY</p>
+                <div className="flex flex-wrap gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium theme-bg-primary-20 theme-primary">
+                    1. {homeLocation.city}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-slate-300">
+                    2. {homeLocation.state}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-slate-400">
+                    3. {homeLocation.country}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.03] text-slate-500">
+                    4. Global
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* About */}

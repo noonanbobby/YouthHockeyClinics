@@ -34,7 +34,7 @@
 import { Clinic } from '@/types';
 import { extractClinicsFromHTML } from './extractor';
 import { deduplicateClinics } from './deduplicator';
-import { geocodeLocation } from './geocoder';
+import { geocodeLocation, calculateDistance } from './geocoder';
 import SEED_CLINICS from './seedClinics';
 
 export interface SearchConfig {
@@ -46,6 +46,13 @@ export interface SearchConfig {
   maxResultsPerSource?: number;
   timeout?: number;
   maxConcurrent?: number; // Max parallel fetches
+  /** User's location for tiered proximity search */
+  userLat?: number;
+  userLng?: number;
+  /** Resolved location names for query generation */
+  userCity?: string;
+  userState?: string;
+  userCountry?: string;
 }
 
 export interface RawClinicData {
@@ -613,8 +620,8 @@ export class ClinicSearchEngine {
     type TaskResult = { name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string };
 
     // PHASE 1 tasks: Scrape known sources
-    // Prioritize the most important sources first
-    const prioritySources = KNOWN_SOURCES.slice(0, 30); // Top 30 most important
+    // Prioritize sources near the user, then national, then international
+    const prioritySources = this.prioritizeSourcesByLocation(KNOWN_SOURCES).slice(0, 30);
     const scrapeTasks: (() => Promise<TaskResult>)[] = prioritySources.map((source) => async () => {
       try {
         const results = await this.scrapeSource(source.url, source.name);
@@ -739,10 +746,54 @@ export class ClinicSearchEngine {
       ? await this.geoEnrich(deduped.slice(0, 20)) // Only geocode top 20
       : deduped;
 
-    const sorted = enriched.sort((a, b) => {
-      if (a.featured !== b.featured) return a.featured ? -1 : 1;
-      return a.dates.start.localeCompare(b.dates.start);
+    // ─── TIERED DISTANCE SCORING ────────────────────────────
+    // Score each clinic by relevance (distance + quality + featured)
+    const userLat = this.config.userLat;
+    const userLng = this.config.userLng;
+    const hasLocation = userLat !== undefined && userLng !== undefined && userLat !== 0;
+
+    const scored = enriched.map((clinic) => {
+      let score = 0;
+
+      // Distance-based scoring (0 to 50 points)
+      if (hasLocation && clinic.location.lat !== 0 && clinic.location.lng !== 0) {
+        const dist = calculateDistance(userLat!, userLng!, clinic.location.lat, clinic.location.lng);
+        if (dist < 50) score += 50;       // Tier 1: Local city (<50km)
+        else if (dist < 150) score += 40;  // Tier 2: Regional (<150km)
+        else if (dist < 500) score += 30;  // Tier 3: State (<500km)
+        else if (dist < 2000) score += 20; // Tier 4: Country (<2000km)
+        else score += 5;                   // Tier 5: Global
+      } else {
+        score += 15; // No location data — neutral
+      }
+
+      // Quality signals (0 to 30 points)
+      if (clinic.featured) score += 15;
+      if (clinic.rating >= 4.5) score += 10;
+      else if (clinic.rating >= 4.0) score += 5;
+      if (clinic.reviewCount > 50) score += 5;
+
+      // Recency bonus (0 to 10 points)
+      if (clinic.isNew) score += 5;
+      const daysUntil = (new Date(clinic.dates.start).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysUntil > 0 && daysUntil < 90) score += 5;    // Upcoming soon
+      else if (daysUntil > 0 && daysUntil < 180) score += 3;
+
+      // "Must-join" breakthrough: high-rated + featured clinics get a global boost
+      if (clinic.featured && clinic.rating >= 4.7 && clinic.reviewCount > 100) {
+        score += 20; // Outstanding clinic — surfaces regardless of distance
+      }
+
+      return { clinic, score };
     });
+
+    // Sort by score descending, then by date ascending for ties
+    const sorted = scored
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.clinic.dates.start.localeCompare(b.clinic.dates.start);
+      })
+      .map((s) => s.clinic);
 
     this.cache.set(cacheKey, { data: sorted, timestamp: Date.now() });
 
@@ -787,15 +838,81 @@ export class ClinicSearchEngine {
       expansions.push(`${query} summer`);
     }
 
-    return [...new Set(expansions)].slice(0, 15);
+    // Location-aware expansions: inject user's city/state into query variations
+    const { userCity, userState } = this.config;
+    if (userCity && !q.includes(userCity.toLowerCase())) {
+      expansions.push(`${query} ${userCity}`);
+    }
+    if (userState && !q.includes(userState.toLowerCase())) {
+      expansions.push(`${query} ${userState}`);
+    }
+
+    return [...new Set(expansions)].slice(0, 18);
   }
 
   /**
-   * Select a diverse set of queries from our massive corpus.
-   * Uses round-robin style selection to cover different categories.
+   * Generate TIERED location-aware search queries.
+   *
+   * Priority tiers (most queries for closest, fewer for farther):
+   *   Tier 1 — Local city (e.g. "Fort Lauderdale hockey camp 2026")
+   *   Tier 2 — Regional / metro area (e.g. "South Florida hockey camp")
+   *   Tier 3 — State / province (e.g. "Florida hockey camp")
+   *   Tier 4 — Country-level (e.g. "USA Hockey camp")
+   *   Tier 5 — Global (rotated diverse sample from the corpus)
+   *
+   * If no location is available, falls back to a diverse global selection.
    */
   private selectSearchQueries(): string[] {
-    // Categorize queries
+    const { userCity, userState, userCountry } = this.config;
+    const selected: string[] = [];
+
+    // ── TIER 1 & 2 & 3: Location-specific queries ─────────────
+    if (userCity || userState) {
+      const baseTerms = [
+        'youth hockey camp', 'hockey clinic', 'hockey skills camp',
+        'youth hockey development', 'learn to play hockey',
+        'hockey camp', 'ice hockey camp',
+      ];
+
+      // Tier 1: City-level (highest priority — 6 queries)
+      if (userCity) {
+        for (const term of baseTerms.slice(0, 6)) {
+          selected.push(`${term} ${userCity} 2026`);
+        }
+        selected.push(`hockey camp near ${userCity}`);
+        selected.push(`youth hockey ${userCity} registration`);
+      }
+
+      // Tier 2: Regional / broader metro (4 queries)
+      const regionNames = this.getRegionalNames(userCity || '', userState || '');
+      for (const region of regionNames.slice(0, 2)) {
+        selected.push(`youth hockey camp ${region} 2026`);
+        selected.push(`hockey clinic ${region}`);
+      }
+
+      // Tier 3: State-level (3 queries)
+      if (userState) {
+        selected.push(`hockey camp ${userState} 2026`);
+        selected.push(`youth hockey development ${userState}`);
+        selected.push(`ice hockey clinic ${userState} summer 2026`);
+      }
+    }
+
+    // ── TIER 4: Country-level (2 queries) ──────────────────────
+    if (userCountry) {
+      const countryQueries: Record<string, string[]> = {
+        'United States': ['USA Hockey player development camp', 'youth hockey camp summer 2026'],
+        'Canada': ['Hockey Canada skills academy', 'hockey camp Ontario Quebec Alberta 2026'],
+        'Sweden': ['ishockeyskola Sverige 2026', 'SHL hockey school'],
+        'Finland': ['jääkiekkokoulu 2026', 'Liiga hockey school Finland'],
+      };
+      const cq = countryQueries[userCountry] || [`ice hockey camp ${userCountry} 2026`];
+      selected.push(...cq.slice(0, 2));
+    }
+
+    // ── TIER 5: Global diverse sample ──────────────────────────
+    // Fill remaining slots from the global corpus
+    const targetTotal = 27; // Total queries budget
     const categories = {
       core: SEARCH_QUERIES.filter((_, i) => i < 19),
       specialty: SEARCH_QUERIES.filter((_, i) => i >= 19 && i < 35),
@@ -809,26 +926,149 @@ export class ClinicSearchEngine {
       college: SEARCH_QUERIES.filter((_, i) => i >= 256),
     };
 
-    // Pick a diverse sample from each category
-    const selected: string[] = [];
+    const globalPool: string[] = [];
     const pick = (arr: string[], count: number) => {
-      // Shuffle and take first N
       const shuffled = [...arr].sort(() => Math.random() - 0.5);
-      selected.push(...shuffled.slice(0, count));
+      globalPool.push(...shuffled.slice(0, count));
     };
 
-    pick(categories.core, 5);
-    pick(categories.specialty, 3);
+    pick(categories.core, 3);
+    pick(categories.specialty, 2);
     pick(categories.girls, 1);
-    pick(categories.regional_us, 3);
-    pick(categories.regional_canada, 2);
-    pick(categories.regional_europe, 3);
-    pick(categories.coaches, 3);
-    pick(categories.organizations, 3);
+    pick(categories.regional_us, 2);
+    pick(categories.regional_canada, 1);
+    pick(categories.regional_europe, 2);
+    pick(categories.coaches, 2);
+    pick(categories.organizations, 2);
     pick(categories.nhl, 2);
-    pick(categories.college, 2);
+    pick(categories.college, 1);
+
+    // Deduplicate and fill remaining
+    const existingSet = new Set(selected.map((s) => s.toLowerCase()));
+    for (const q of globalPool) {
+      if (selected.length >= targetTotal) break;
+      if (!existingSet.has(q.toLowerCase())) {
+        selected.push(q);
+        existingSet.add(q.toLowerCase());
+      }
+    }
 
     return selected;
+  }
+
+  /**
+   * Get regional area names for a city/state combination
+   * (e.g. Fort Lauderdale, FL → ["South Florida", "Broward County", "Miami-Dade"])
+   */
+  private getRegionalNames(city: string, state: string): string[] {
+    const regions: string[] = [];
+    const cityLower = city.toLowerCase();
+    const stateLower = state.toLowerCase();
+
+    // Florida regions
+    if (stateLower === 'fl' || stateLower === 'florida') {
+      if (['fort lauderdale', 'miami', 'coral springs', 'pembroke pines', 'sunrise', 'boca raton', 'hollywood', 'pompano beach', 'deerfield beach', 'plantation', 'weston', 'davie', 'coconut creek'].some(c => cityLower.includes(c))) {
+        regions.push('South Florida', 'Broward County', 'Miami-Fort Lauderdale');
+      } else if (['tampa', 'st petersburg', 'clearwater', 'brandon', 'lakeland'].some(c => cityLower.includes(c))) {
+        regions.push('Tampa Bay', 'Central Florida');
+      } else if (['orlando', 'kissimmee'].some(c => cityLower.includes(c))) {
+        regions.push('Central Florida', 'Orlando metro');
+      } else if (['jacksonville'].some(c => cityLower.includes(c))) {
+        regions.push('North Florida', 'Jacksonville metro');
+      } else if (['west palm beach', 'palm beach', 'jupiter', 'boynton beach', 'delray beach'].some(c => cityLower.includes(c))) {
+        regions.push('Palm Beach County', 'South Florida');
+      }
+    }
+
+    // Northeast US
+    if (['ma', 'massachusetts'].includes(stateLower)) {
+      regions.push('New England', 'Greater Boston');
+    } else if (['ct', 'connecticut', 'nh', 'new hampshire', 'vt', 'vermont', 'me', 'maine', 'ri', 'rhode island'].includes(stateLower)) {
+      regions.push('New England');
+    } else if (['ny', 'new york'].includes(stateLower)) {
+      regions.push('Tri-State area', 'New York metro');
+    } else if (['nj', 'new jersey'].includes(stateLower)) {
+      regions.push('Tri-State area', 'New Jersey');
+    } else if (['mn', 'minnesota'].includes(stateLower)) {
+      regions.push('Twin Cities', 'Upper Midwest');
+    } else if (['mi', 'michigan'].includes(stateLower)) {
+      regions.push('Great Lakes', 'Michigan');
+    } else if (['co', 'colorado'].includes(stateLower)) {
+      regions.push('Front Range', 'Rocky Mountain');
+    } else if (['tx', 'texas'].includes(stateLower)) {
+      if (cityLower.includes('dallas') || cityLower.includes('fort worth') || cityLower.includes('frisco')) {
+        regions.push('DFW', 'North Texas');
+      } else if (cityLower.includes('houston')) {
+        regions.push('Houston metro', 'Southeast Texas');
+      }
+    } else if (['ca', 'california'].includes(stateLower)) {
+      if (cityLower.includes('los angeles') || cityLower.includes('anaheim') || cityLower.includes('irvine')) {
+        regions.push('Southern California', 'LA metro');
+      } else if (cityLower.includes('san jose') || cityLower.includes('san francisco') || cityLower.includes('oakland')) {
+        regions.push('Bay Area', 'Northern California');
+      }
+    } else if (['il', 'illinois'].includes(stateLower)) {
+      regions.push('Chicagoland', 'Greater Chicago');
+    } else if (['pa', 'pennsylvania'].includes(stateLower)) {
+      if (cityLower.includes('pittsburgh')) regions.push('Western Pennsylvania');
+      else regions.push('Delaware Valley', 'Greater Philadelphia');
+    }
+
+    // Canadian provinces
+    if (['on', 'ontario'].includes(stateLower)) {
+      if (cityLower.includes('toronto')) regions.push('Greater Toronto Area', 'GTA');
+      else if (cityLower.includes('ottawa')) regions.push('National Capital Region');
+      else regions.push('Southern Ontario');
+    } else if (['qc', 'quebec'].includes(stateLower)) {
+      regions.push('Greater Montreal', 'Quebec');
+    } else if (['bc', 'british columbia'].includes(stateLower)) {
+      regions.push('Lower Mainland', 'BC');
+    } else if (['ab', 'alberta'].includes(stateLower)) {
+      regions.push('Alberta', cityLower.includes('calgary') ? 'Calgary metro' : 'Edmonton metro');
+    }
+
+    // Fallback: just use the state name
+    if (regions.length === 0 && state) {
+      regions.push(state);
+    }
+
+    return regions;
+  }
+
+  /**
+   * Prioritize known sources based on user's location.
+   * Sources matching the user's country/state come first, then the rest.
+   */
+  private prioritizeSourcesByLocation(
+    sources: typeof KNOWN_SOURCES
+  ): typeof KNOWN_SOURCES {
+    const { userCountry, userState } = this.config;
+    if (!userCountry && !userState) return sources;
+
+    // Map country names to region codes
+    const countryToRegion: Record<string, string[]> = {
+      'United States': ['US'],
+      'Canada': ['CA'],
+      'Sweden': ['SE'],
+      'Finland': ['FI'],
+      'Czech Republic': ['CZ'],
+      'Germany': ['DE'],
+      'Switzerland': ['CH'],
+      'Russia': ['RU'],
+      'United Kingdom': ['GB'],
+      'France': ['FR'],
+      'Japan': ['JP'],
+      'Australia': ['AU'],
+    };
+
+    const userRegions = new Set(countryToRegion[userCountry || ''] || []);
+
+    // Score each source: local region first, then international, then rest
+    return [...sources].sort((a, b) => {
+      const aLocal = userRegions.has(a.region) ? 0 : (a.region === 'INT' ? 1 : 2);
+      const bLocal = userRegions.has(b.region) ? 0 : (b.region === 'INT' ? 1 : 2);
+      return aLocal - bLocal;
+    });
   }
 
   /**

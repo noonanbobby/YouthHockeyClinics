@@ -1,9 +1,10 @@
 'use client';
 
 import { Clinic } from '@/types';
-import { formatDateRange, formatPrice, getClinicTypeLabel, getClinicTypeColor, getSpotsColor, getCountryFlag, cn, timeUntil } from '@/lib/utils';
-import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video } from 'lucide-react';
+import { formatDateRange, formatPrice, getClinicTypeLabel, getSpotsColor, getCountryFlag, cn, timeUntil } from '@/lib/utils';
+import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video, Award } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import { calculateDistance } from '@/lib/geocoder';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -12,12 +13,19 @@ interface ClinicCardProps {
   index: number;
 }
 
+const TYPE_ICONS: Record<string, string> = {
+  camp: '🏕️',
+  clinic: '🏒',
+  tournament: '🏆',
+  showcase: '⭐',
+  development: '📚',
+};
+
 export default function ClinicCard({ clinic, index }: ClinicCardProps) {
-  const { toggleFavorite, isFavorite, liveBarnConfig } = useStore();
+  const { toggleFavorite, isFavorite, liveBarnConfig, getEffectiveLocation } = useStore();
   const router = useRouter();
   const fav = isFavorite(clinic.id);
 
-  // Check if this clinic's venue has a LiveBarn stream
   const hasLiveStream = clinic.hasLiveStream || (
     liveBarnConfig.connected &&
     liveBarnConfig.venues.some(
@@ -25,120 +33,143 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     )
   );
 
+  const hasImage = clinic.imageUrl && clinic.imageUrl.length > 5;
+
+  // Distance from user
+  const userLoc = getEffectiveLocation();
+  let distanceLabel = '';
+  if (userLoc && clinic.location.lat !== 0 && clinic.location.lng !== 0) {
+    const km = calculateDistance(userLoc.lat, userLoc.lng, clinic.location.lat, clinic.location.lng);
+    const mi = km * 0.621371;
+    distanceLabel = mi < 100 ? `${Math.round(mi)} mi` : `${Math.round(mi).toLocaleString()} mi`;
+  }
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
+      transition={{ duration: 0.25, delay: Math.min(index * 0.04, 0.5) }}
       onClick={() => router.push(`/clinic/${clinic.id}`)}
-      className="group relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl overflow-hidden border border-white/5 hover:theme-border-primary transition-all duration-300 cursor-pointer active:scale-[0.98]"
+      className="group relative rounded-2xl overflow-hidden border border-white/[0.06] hover:border-[var(--theme-primary)]/30 transition-all duration-300 cursor-pointer active:scale-[0.98]"
+      style={{ backgroundColor: 'var(--theme-card-bg, rgba(15,23,42,0.8))' }}
     >
-      {/* Image */}
-      <div className="relative h-44 overflow-hidden">
-        <img
-          src={clinic.imageUrl}
-          alt={clinic.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent" />
-
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex gap-2">
-          <span className={cn('px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full border', getClinicTypeColor(clinic.type))}>
-            {getClinicTypeLabel(clinic.type)}
-          </span>
-          {clinic.isNew && (
-            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              New
-            </span>
-          )}
-          {clinic.featured && (
-            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              Featured
-            </span>
-          )}
-        </div>
-
-        {/* Favorite button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFavorite(clinic.id);
-          }}
-          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 transition-all active:scale-90"
-        >
-          <Heart
-            size={18}
-            className={cn(
-              'transition-all',
-              fav ? 'fill-red-500 text-red-500' : 'text-white/80'
-            )}
-          />
-        </button>
-
-        {/* Live Stream Badge */}
-        {hasLiveStream && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-red-500/90 backdrop-blur-sm rounded-full px-2 py-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <Video size={10} className="text-white" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-wider">Live</span>
-          </div>
-        )}
-
-        {/* Rating */}
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-1">
-          <Star size={12} className="fill-amber-400 text-amber-400" />
-          <span className="text-xs font-semibold text-white">{clinic.rating}</span>
-          <span className="text-[10px] text-slate-400">({clinic.reviewCount})</span>
-        </div>
-
-        {/* Country flag */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
-          <span className="text-sm">{getCountryFlag(clinic.location.countryCode)}</span>
-          <span className="text-xs font-medium text-white">{clinic.location.country}</span>
-        </div>
+      {/* Top accent strip with gradient */}
+      <div className={cn('relative h-3', hasImage ? '' : '')}>
+        <div className="absolute inset-0 bg-gradient-to-r opacity-80" style={{
+          backgroundImage: `linear-gradient(to right, var(--theme-primary), var(--theme-secondary))`
+        }} />
       </div>
 
-      {/* Content */}
+      {/* Image - only if available */}
+      {hasImage && (
+        <div className="relative h-36 overflow-hidden">
+          <img
+            src={clinic.imageUrl}
+            alt={clinic.name}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        </div>
+      )}
+
+      {/* Card Body */}
       <div className="p-4">
-        <h3 className="text-base font-bold text-white mb-1 line-clamp-1 group-hover:theme-primary transition-colors">
+        {/* Top row: Type badge + Country flag + Favorite */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
+                color: 'var(--theme-accent)',
+              }}>
+              {TYPE_ICONS[clinic.type] || '🏒'} {getClinicTypeLabel(clinic.type)}
+            </span>
+            {clinic.featured && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400">
+                <Award size={9} /> Featured
+              </span>
+            )}
+            {clinic.isNew && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400">
+                New
+              </span>
+            )}
+            {hasLiveStream && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-500/20 text-red-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                <Video size={9} /> Live
+              </span>
+            )}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(clinic.id);
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shrink-0"
+          >
+            <Heart
+              size={16}
+              className={cn('transition-all', fav ? 'fill-red-500 text-red-500' : 'text-white/40')}
+            />
+          </button>
+        </div>
+
+        {/* Clinic Name */}
+        <h3 className="text-[15px] font-bold text-white mb-1 leading-tight line-clamp-2">
           {clinic.name}
         </h3>
-        <p className="text-xs text-slate-400 mb-3 line-clamp-2">{clinic.description}</p>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-slate-300">
-            <MapPin size={13} className="theme-primary shrink-0" />
-            <span className="text-xs truncate">{clinic.location.venue}, {clinic.location.city}</span>
+        {/* Description */}
+        <p className="text-xs text-slate-400 mb-3 line-clamp-2 leading-relaxed">{clinic.description}</p>
+
+        {/* Info rows */}
+        <div className="space-y-1.5 mb-3">
+          <div className="flex items-center gap-2">
+            <MapPin size={12} className="shrink-0" style={{ color: 'var(--theme-primary)' }} />
+            <span className="text-xs text-slate-300 truncate">
+              {clinic.location.venue !== 'Venue TBD' && clinic.location.venue !== 'Multiple Locations'
+                ? `${clinic.location.venue}, `
+                : ''}
+              {clinic.location.city}{clinic.location.state ? `, ${clinic.location.state}` : ''}
+            </span>
+            {distanceLabel && (
+              <span className="text-[10px] font-medium text-slate-500 shrink-0">{distanceLabel}</span>
+            )}
+            <span className="ml-auto text-sm shrink-0">{getCountryFlag(clinic.location.countryCode)}</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-300">
-            <Calendar size={13} className="theme-primary shrink-0" />
-            <span className="text-xs">{formatDateRange(clinic.dates.start, clinic.dates.end)}</span>
+          <div className="flex items-center gap-2">
+            <Calendar size={12} className="shrink-0" style={{ color: 'var(--theme-primary)' }} />
+            <span className="text-xs text-slate-300">{formatDateRange(clinic.dates.start, clinic.dates.end)}</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-300">
-            <Clock size={13} className="theme-primary shrink-0" />
-            <span className="text-xs">{clinic.duration} &middot; Starts {timeUntil(clinic.dates.start)}</span>
+          <div className="flex items-center gap-2">
+            <Clock size={12} className="shrink-0" style={{ color: 'var(--theme-primary)' }} />
+            <span className="text-xs text-slate-300">{clinic.duration}</span>
+            <span className="text-[10px] text-slate-500 ml-1">{timeUntil(clinic.dates.start)}</span>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-          <div>
-            <span className="text-lg font-bold text-white">{formatPrice(clinic.price.amount, clinic.price.currency)}</span>
-            {clinic.price.earlyBird && (
-              <span className="ml-1.5 text-[10px] text-emerald-400 font-medium">
-                Early bird available
-              </span>
+        {/* Footer: Price + Rating + Spots */}
+        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <span className="text-base font-bold" style={{ color: 'var(--theme-accent)' }}>
+              {clinic.price.amount > 0 ? formatPrice(clinic.price.amount, clinic.price.currency) : 'Free'}
+            </span>
+            {clinic.rating > 0 && (
+              <div className="flex items-center gap-0.5">
+                <Star size={11} className="fill-amber-400 text-amber-400" />
+                <span className="text-xs font-medium text-slate-300">{clinic.rating}</span>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              <Users size={13} className={getSpotsColor(clinic.spotsRemaining, clinic.maxParticipants)} />
-              <span className={cn('text-xs font-semibold', getSpotsColor(clinic.spotsRemaining, clinic.maxParticipants))}>
-                {clinic.spotsRemaining} spots
+              <Users size={12} className={getSpotsColor(clinic.spotsRemaining, clinic.maxParticipants)} />
+              <span className={cn('text-[11px] font-medium', getSpotsColor(clinic.spotsRemaining, clinic.maxParticipants))}>
+                {clinic.spotsRemaining} left
               </span>
             </div>
-            <ChevronRight size={16} className="text-slate-500" />
+            <ChevronRight size={14} className="text-slate-600" />
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Clinic, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig } from '@/types';
+import { calculateDistance } from '@/lib/geocoder';
 
 interface AppState {
   // View
@@ -80,6 +81,22 @@ interface AppState {
   setLocationEnabled: (enabled: boolean) => void;
   userLocation: { lat: number; lng: number } | null;
   setUserLocation: (loc: { lat: number; lng: number } | null) => void;
+  homeLocation: {
+    city: string;
+    state: string;
+    country: string;
+    lat: number;
+    lng: number;
+  } | null;
+  setHomeLocation: (loc: {
+    city: string;
+    state: string;
+    country: string;
+    lat: number;
+    lng: number;
+  } | null) => void;
+  /** Returns the best known location: GPS if available, else home location */
+  getEffectiveLocation: () => { lat: number; lng: number } | null;
   preferredCurrency: string;
   setPreferredCurrency: (currency: string) => void;
   apiKeys: {
@@ -252,9 +269,17 @@ export const useStore = create<AppState>()(
             case 'name':
               comparison = a.name.localeCompare(b.name);
               break;
-            case 'distance':
-              comparison = a.dates.start.localeCompare(b.dates.start);
+            case 'distance': {
+              const loc = get().getEffectiveLocation();
+              if (loc) {
+                const distA = calculateDistance(loc.lat, loc.lng, a.location.lat, a.location.lng);
+                const distB = calculateDistance(loc.lat, loc.lng, b.location.lat, b.location.lng);
+                comparison = distA - distB;
+              } else {
+                comparison = a.dates.start.localeCompare(b.dates.start);
+              }
               break;
+            }
           }
           return filters.sortOrder === 'asc' ? comparison : -comparison;
         });
@@ -393,6 +418,14 @@ export const useStore = create<AppState>()(
       setLocationEnabled: (enabled) => set({ locationEnabled: enabled }),
       userLocation: null,
       setUserLocation: (loc) => set({ userLocation: loc }),
+      homeLocation: null,
+      setHomeLocation: (loc) => set({ homeLocation: loc }),
+      getEffectiveLocation: () => {
+        const state = get();
+        if (state.userLocation) return state.userLocation;
+        if (state.homeLocation) return { lat: state.homeLocation.lat, lng: state.homeLocation.lng };
+        return null;
+      },
       preferredCurrency: 'USD',
       setPreferredCurrency: (currency) => set({ preferredCurrency: currency }),
       apiKeys: {
@@ -428,6 +461,7 @@ export const useStore = create<AppState>()(
         unreadCount: state.unreadCount,
         notificationsEnabled: state.notificationsEnabled,
         locationEnabled: state.locationEnabled,
+        homeLocation: state.homeLocation,
         preferredCurrency: state.preferredCurrency,
         apiKeys: state.apiKeys,
         autoRefreshInterval: state.autoRefreshInterval,

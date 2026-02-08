@@ -6,7 +6,7 @@ export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 // In-memory server-side cache (persists between warm invocations)
-let cachedResults: { data: unknown; timestamp: number } | null = null;
+let cachedResults: { data: unknown; timestamp: number; key: string } | null = null;
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 export async function GET(request: NextRequest) {
@@ -14,8 +14,19 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get('q') || undefined;
   const forceRefresh = searchParams.get('refresh') === 'true';
 
+  // Location params for tiered search
+  const userLat = parseFloat(searchParams.get('lat') || '0');
+  const userLng = parseFloat(searchParams.get('lng') || '0');
+  const userCity = searchParams.get('city') || undefined;
+  const userState = searchParams.get('state') || undefined;
+  const userCountry = searchParams.get('country') || undefined;
+
+  // Build a location-aware cache key so different locations get different results
+  const locationKey = userLat ? `${userLat.toFixed(1)},${userLng.toFixed(1)}` : 'global';
+  const cacheKey = `${query || '__all__'}:${locationKey}`;
+
   // Check server-side cache first — instant response
-  if (!forceRefresh && cachedResults && Date.now() - cachedResults.timestamp < CACHE_TTL) {
+  if (!forceRefresh && cachedResults && cachedResults.key === cacheKey && Date.now() - cachedResults.timestamp < CACHE_TTL) {
     return NextResponse.json(cachedResults.data, {
       headers: {
         'Cache-Control': 'public, max-age=900, stale-while-revalidate=1800',
@@ -34,6 +45,12 @@ export async function GET(request: NextRequest) {
     maxResultsPerSource: 50,
     timeout: 4000,   // 4 seconds per individual source
     maxConcurrent: 6, // 6 parallel fetches at a time
+    // Tiered location-aware search
+    userLat: userLat || undefined,
+    userLng: userLng || undefined,
+    userCity,
+    userState,
+    userCountry,
   };
 
   // HARD DEADLINE: This function MUST return within 50 seconds no matter what.
@@ -80,7 +97,7 @@ export async function GET(request: NextRequest) {
 
     // Cache results (even empty ones, to avoid repeated slow searches)
     if (results.clinics.length > 0) {
-      cachedResults = { data: responseData, timestamp: Date.now() };
+      cachedResults = { data: responseData, timestamp: Date.now(), key: cacheKey };
     }
 
     return NextResponse.json(responseData, {

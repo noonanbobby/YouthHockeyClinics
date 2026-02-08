@@ -43,12 +43,15 @@ export default function BottomNav() {
     router.push(item.href);
   };
 
-  // Also highlight "More" for sub-pages
   const isMoreActive = pathname === '/settings' || pathname === '/integrations' ||
     pathname === '/spending' || pathname === '/favorites';
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-xl border-t border-white/10 safe-area-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t safe-area-bottom"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--theme-nav-bg) 95%, transparent)',
+        borderColor: 'var(--theme-card-border)',
+      }}>
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const active = item.label === 'More' ? isMoreActive : isActive(item);
@@ -56,15 +59,14 @@ export default function BottomNav() {
             <button
               key={item.label}
               onClick={() => handleNav(item)}
-              className={cn(
-                'relative flex flex-col items-center justify-center w-16 h-full gap-0.5 transition-colors',
-                active ? 'theme-primary' : 'text-slate-500'
-              )}
+              className="relative flex flex-col items-center justify-center w-16 h-full gap-0.5 transition-colors"
+              style={{ color: active ? 'var(--theme-primary)' : '#64748b' }}
             >
               {active && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute -top-px left-3 right-3 h-0.5 theme-bg-primary rounded-full"
+                  className="absolute -top-px left-3 right-3 h-0.5 rounded-full"
+                  style={{ backgroundColor: 'var(--theme-primary)' }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
               )}

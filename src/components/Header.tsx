@@ -14,9 +14,15 @@ export default function Header() {
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-white/5">
+    <header className="sticky top-0 z-40 backdrop-blur-xl border-b"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--theme-header-bg) 95%, transparent)',
+        borderColor: 'var(--theme-card-border)',
+      }}>
+      {/* Radial glow at the top */}
+      <div className="absolute inset-0 theme-gradient-radial pointer-events-none" />
       <div className="safe-area-top" />
-      <div className="px-4 py-3">
+      <div className="relative px-4 py-3">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
@@ -28,13 +34,15 @@ export default function Header() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSearchOpen(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-colors"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
             >
               <Search size={18} className="text-slate-300" />
             </button>
             <button
               onClick={() => setFilterOpen(true)}
-              className="relative w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+              className="relative w-9 h-9 flex items-center justify-center rounded-full transition-colors"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
             >
               <SlidersHorizontal size={18} className="text-slate-300" />
               {filterCount > 0 && (
@@ -45,23 +53,20 @@ export default function Header() {
             </button>
             <button
               onClick={() => router.push(session ? '/settings' : '/login')}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors overflow-hidden"
+              className="w-9 h-9 flex items-center justify-center rounded-full overflow-hidden transition-colors"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
             >
               {session?.user?.image ? (
-                <img
-                  src={session.user.image}
-                  alt=""
-                  className="w-full h-full object-cover rounded-full"
-                />
+                <img src={session.user.image} alt="" className="w-full h-full object-cover rounded-full" />
               ) : (
-                <UserCircle size={18} className={session ? 'theme-primary' : 'text-slate-300'} />
+                <UserCircle size={18} style={{ color: session ? 'var(--theme-primary)' : '#94a3b8' }} />
               )}
             </button>
           </div>
         </div>
 
         {/* View Toggle */}
-        <div className="flex bg-white/5 rounded-xl p-1">
+        <div className="flex rounded-xl p-1" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' }}>
           {(['list', 'map'] as const).map((mode) => (
             <button
               key={mode}
@@ -74,8 +79,11 @@ export default function Header() {
               {viewMode === mode && (
                 <motion.div
                   layoutId="view-toggle"
-                  className="absolute inset-0 theme-bg-primary-20 theme-border-primary rounded-lg"
-                  style={{ borderWidth: 1 }}
+                  className="absolute inset-0 rounded-lg border"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                  }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
               )}

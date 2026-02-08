@@ -64,7 +64,8 @@ export default function FilterSheet() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 rounded-t-3xl max-h-[85vh] overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl max-h-[85vh] overflow-hidden"
+            style={{ backgroundColor: 'var(--theme-bg)' }}
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-1">
@@ -76,7 +77,7 @@ export default function FilterSheet() {
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-bold text-white">Filters</h2>
                 {count > 0 && (
-                  <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 text-xs font-semibold rounded-full">
+                  <span className="px-2 py-0.5 theme-bg-primary-20 text-white text-xs font-semibold rounded-full">
                     {count} active
                   </span>
                 )}
@@ -114,7 +115,7 @@ export default function FilterSheet() {
                       onChange={(e) =>
                         setFilter('dateRange', { ...filters.dateRange, start: e.target.value || null })
                       }
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong"
                     />
                   </div>
                   <div>
@@ -125,7 +126,7 @@ export default function FilterSheet() {
                       onChange={(e) =>
                         setFilter('dateRange', { ...filters.dateRange, end: e.target.value || null })
                       }
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong"
                     />
                   </div>
                 </div>
@@ -142,7 +143,7 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.ageGroups.includes(ag)
-                          ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
+                          ? 'border text-white'
                           : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                       )}
                     >
@@ -163,7 +164,7 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.skillLevels.includes(sl)
-                          ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
+                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
                           : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                       )}
                     >
@@ -184,7 +185,7 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.clinicTypes.includes(ct)
-                          ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
+                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
                           : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                       )}
                     >
@@ -201,7 +202,7 @@ export default function FilterSheet() {
                   <select
                     value={filters.country || ''}
                     onChange={(e) => setFilter('country', e.target.value || null)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 appearance-none"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong appearance-none"
                   >
                     <option value="">All Countries</option>
                     {countries.map((c) => (
@@ -224,7 +225,7 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.sortBy === opt.value
-                          ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
+                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
                           : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                       )}
                     >
@@ -240,7 +241,7 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.sortOrder === order
-                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
                           : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                       )}
                     >
@@ -258,7 +259,7 @@ export default function FilterSheet() {
                     onClick={() => setFilter('spotsAvailable', !filters.spotsAvailable)}
                     className={cn(
                       'w-11 h-6 rounded-full transition-colors relative',
-                      filters.spotsAvailable ? 'bg-sky-500' : 'bg-white/10'
+                      filters.spotsAvailable ? 'theme-bg-primary' : 'bg-white/10'
                     )}
                   >
                     <div
@@ -275,7 +276,7 @@ export default function FilterSheet() {
                     onClick={() => setFilter('featured', !filters.featured)}
                     className={cn(
                       'w-11 h-6 rounded-full transition-colors relative',
-                      filters.featured ? 'bg-sky-500' : 'bg-white/10'
+                      filters.featured ? 'theme-bg-primary' : 'bg-white/10'
                     )}
                   >
                     <div
@@ -290,10 +291,11 @@ export default function FilterSheet() {
             </div>
 
             {/* Footer */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-900 border-t border-white/5 safe-area-bottom">
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t safe-area-bottom"
+              style={{ backgroundColor: 'var(--theme-bg)', borderColor: 'var(--theme-card-border)' }}>
               <button
                 onClick={() => setFilterOpen(false)}
-                className="w-full py-3 bg-sky-500 hover:bg-sky-400 text-white font-semibold rounded-xl transition-colors"
+                className="w-full py-3 theme-bg-primary hover:opacity-90 text-white font-semibold rounded-xl transition-colors"
               >
                 Show {filteredClinics.length} Result{filteredClinics.length !== 1 ? 's' : ''}
               </button>
