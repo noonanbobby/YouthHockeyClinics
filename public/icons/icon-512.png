@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0c1929"/>
+      <stop offset="100%" style="stop-color:#1e3a5f"/>
+    </linearGradient>
+    <linearGradient id="ice" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38bdf8"/>
+      <stop offset="100%" style="stop-color:#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="102.4" fill="url(#bg)"/>
+  <g transform="translate(256, 256)">
+    <!-- Hockey stick -->
+    <line x1="-102.4" y1="-102.4" x2="40.96000000000001" y2="61.44" stroke="url(#ice)" stroke-width="20.48" stroke-linecap="round"/>
+    <line x1="40.96000000000001" y1="61.44" x2="102.4" y2="49.152" stroke="url(#ice)" stroke-width="25.6" stroke-linecap="round"/>
+    <!-- Puck -->
+    <ellipse cx="-20.480000000000004" cy="102.4" rx="49.152" ry="24.576" fill="#1e293b" stroke="#38bdf8" stroke-width="7.68"/>
+    <!-- Sparkle -->
+    <circle cx="81.92000000000002" cy="-122.88" r="10.24" fill="#38bdf8" opacity="0.8"/>
+    <circle cx="114.68800000000002" cy="-90.11200000000001" r="6.144" fill="#38bdf8" opacity="0.5"/>
+  </g>
+</svg>
