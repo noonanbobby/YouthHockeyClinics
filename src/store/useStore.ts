@@ -1,7 +1,35 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Clinic, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig } from '@/types';
+import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig } from '@/types';
 import { calculateDistance } from '@/lib/geocoder';
+
+/** Compute USA Hockey age group from a child's date of birth */
+export function getAgeGroupFromDOB(dob: string): AgeGroup {
+  const birthDate = new Date(dob);
+  const now = new Date();
+  // USA Hockey uses Sept 1 cutoff for the season year
+  const cutoffYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  const cutoff = new Date(cutoffYear, 8, 1);
+  const ageAtCutoff = Math.floor(
+    (cutoff.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  );
+  if (ageAtCutoff <= 8) return 'mites';
+  if (ageAtCutoff <= 10) return 'squirts';
+  if (ageAtCutoff <= 12) return 'peewee';
+  if (ageAtCutoff <= 14) return 'bantam';
+  if (ageAtCutoff <= 18) return 'midget';
+  return 'junior';
+}
+
+/** Get child's current age in years */
+export function getChildAge(dob: string): number {
+  const birth = new Date(dob);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 interface AppState {
   // View
@@ -57,6 +85,15 @@ interface AppState {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+
+  // Child Profiles
+  childProfiles: ChildProfile[];
+  activeChildId: string | null;
+  addChildProfile: (profile: Omit<ChildProfile, 'id' | 'createdAt'>) => void;
+  updateChildProfile: (id: string, updates: Partial<Omit<ChildProfile, 'id' | 'createdAt'>>) => void;
+  removeChildProfile: (id: string) => void;
+  setActiveChild: (id: string | null) => void;
+  getActiveChildAgeGroup: () => AgeGroup | null;
 
   // Registrations
   registrations: Registration[];
@@ -161,6 +198,23 @@ export const useStore = create<AppState>()(
               type: 'new_clinic',
             });
           }
+
+          // Check if any new clinic matches active child's age group
+          const activeAg = state.getActiveChildAgeGroup();
+          const activeChild = state.childProfiles.find((c) => c.id === state.activeChildId);
+          if (activeAg && activeChild) {
+            const matching = newClinics.filter(
+              (c) => c.ageGroups.includes(activeAg) || c.ageGroups.includes('all')
+            );
+            for (const mc of matching.slice(0, 3)) {
+              state.addNotification({
+                title: `Match for ${activeChild.name}!`,
+                body: `${mc.name} in ${mc.location.city} is perfect for ${activeChild.name}'s age group`,
+                clinicId: mc.id,
+                type: 'child_match',
+              });
+            }
+          }
         }
         // Re-apply filters
         setTimeout(() => get().applyFilters(), 0);
@@ -196,19 +250,25 @@ export const useStore = create<AppState>()(
         const { filters, clinics } = get();
         let result = [...clinics];
 
-        // Search
+        // Search (with basic fuzzy tolerance — ignores extra spaces, case)
         if (filters.searchQuery) {
-          const q = filters.searchQuery.toLowerCase();
-          result = result.filter(
-            (c) =>
-              c.name.toLowerCase().includes(q) ||
-              c.description.toLowerCase().includes(q) ||
-              c.location.city.toLowerCase().includes(q) ||
-              c.location.country.toLowerCase().includes(q) ||
-              c.location.venue.toLowerCase().includes(q) ||
-              c.tags.some((t) => t.toLowerCase().includes(q)) ||
-              c.coaches.some((coach) => coach.name.toLowerCase().includes(q))
-          );
+          const q = filters.searchQuery.toLowerCase().trim();
+          const words = q.split(/\s+/);
+          result = result.filter((c) => {
+            const haystack = [
+              c.name,
+              c.description,
+              c.location.city,
+              c.location.country,
+              c.location.state,
+              c.location.venue,
+              ...c.tags,
+              ...c.coaches.map((coach) => coach.name),
+            ]
+              .join(' ')
+              .toLowerCase();
+            return words.every((w) => haystack.includes(w));
+          });
         }
 
         // Date range
@@ -241,6 +301,11 @@ export const useStore = create<AppState>()(
         // Country
         if (filters.country) {
           result = result.filter((c) => c.location.country === filters.country);
+        }
+
+        // Max price
+        if (filters.maxPrice !== null && filters.maxPrice > 0) {
+          result = result.filter((c) => c.price.amount <= filters.maxPrice! || c.price.amount === 0);
         }
 
         // Spots available
@@ -294,6 +359,7 @@ export const useStore = create<AppState>()(
         if (filters.skillLevels.length > 0) count++;
         if (filters.clinicTypes.length > 0) count++;
         if (filters.country) count++;
+        if (filters.maxPrice !== null && filters.maxPrice > 0) count++;
         if (filters.spotsAvailable) count++;
         if (filters.featured) count++;
         return count;
@@ -358,6 +424,47 @@ export const useStore = create<AppState>()(
             unreadCount: state.unreadCount + 1,
           };
         }),
+
+      // Child Profiles
+      childProfiles: [],
+      activeChildId: null,
+      addChildProfile: (profile) =>
+        set((state) => {
+          const newProfile: ChildProfile = {
+            ...profile,
+            id: `child-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            createdAt: new Date().toISOString(),
+          };
+          const profiles = [...state.childProfiles, newProfile];
+          return {
+            childProfiles: profiles,
+            // Auto-set as active if it's the first child
+            activeChildId: state.childProfiles.length === 0 ? newProfile.id : state.activeChildId,
+          };
+        }),
+      updateChildProfile: (id, updates) =>
+        set((state) => ({
+          childProfiles: state.childProfiles.map((c) =>
+            c.id === id ? { ...c, ...updates } : c
+          ),
+        })),
+      removeChildProfile: (id) =>
+        set((state) => ({
+          childProfiles: state.childProfiles.filter((c) => c.id !== id),
+          activeChildId: state.activeChildId === id ? null : state.activeChildId,
+        })),
+      setActiveChild: (id) => {
+        set({ activeChildId: id });
+        // Re-apply filters when active child changes
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      getActiveChildAgeGroup: () => {
+        const state = get();
+        if (!state.activeChildId) return null;
+        const child = state.childProfiles.find((c) => c.id === state.activeChildId);
+        if (!child) return null;
+        return getAgeGroupFromDOB(child.dateOfBirth);
+      },
 
       // Registrations
       registrations: [],
@@ -471,6 +578,8 @@ export const useStore = create<AppState>()(
         daySmartConfig: state.daySmartConfig,
         liveBarnConfig: state.liveBarnConfig,
         teamThemeId: state.teamThemeId,
+        childProfiles: state.childProfiles,
+        activeChildId: state.activeChildId,
       }),
     }
   )

@@ -96,7 +96,15 @@ export interface NotificationItem {
   clinicId: string;
   timestamp: string;
   read: boolean;
-  type: 'new_clinic' | 'spots_low' | 'price_drop' | 'reminder';
+  type: 'new_clinic' | 'spots_low' | 'price_drop' | 'reminder' | 'registration_reminder' | 'child_match';
+}
+
+// Child profile for age-group defaults and per-child tracking
+export interface ChildProfile {
+  id: string;
+  name: string;
+  dateOfBirth: string; // ISO date (YYYY-MM-DD)
+  createdAt: string;
 }
 
 // Registration tracking
@@ -116,6 +124,7 @@ export interface Registration {
   notes: string;
   // Player info
   playerName?: string;
+  childId?: string;
 }
 
 // DaySmart/Dash integration

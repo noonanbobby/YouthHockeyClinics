@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore, getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
 import { requestNotificationPermission } from '@/hooks/useServiceWorker';
+import { getAgeGroupLabel } from '@/lib/utils';
 import {
   ArrowLeft,
   Key,
@@ -26,6 +27,11 @@ import {
   Navigation,
   Loader2,
   X,
+  UserPlus,
+  Users,
+  Baby,
+  Trash2,
+  Cake,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -51,6 +57,11 @@ export default function SettingsPage() {
     registrations,
     daySmartConfig,
     liveBarnConfig,
+    childProfiles,
+    activeChildId,
+    addChildProfile,
+    removeChildProfile,
+    setActiveChild,
   } = useStore();
   const { refresh } = useClinicSearch();
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -59,6 +70,11 @@ export default function SettingsPage() {
   const [homeInput, setHomeInput] = useState(homeLocation ? `${homeLocation.city}, ${homeLocation.state}` : '');
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
+
+  // Child profile form
+  const [childName, setChildName] = useState('');
+  const [childDob, setChildDob] = useState('');
+  const [showAddChild, setShowAddChild] = useState(false);
 
   const geocodeHome = useCallback(async (input: string) => {
     if (!input.trim()) return;
@@ -107,8 +123,6 @@ export default function SettingsPage() {
       const lng = pos.coords.longitude;
       setUserLocation({ lat, lng });
       setLocationEnabled(true);
-
-      // Reverse geocode to get city name
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?${new URLSearchParams({
           lat: lat.toString(), lon: lng.toString(), format: 'json',
@@ -143,6 +157,14 @@ export default function SettingsPage() {
     setApiKey(key, value);
     setSavedMessage(`${key} saved!`);
     setTimeout(() => setSavedMessage(''), 2000);
+  };
+
+  const handleAddChild = () => {
+    if (!childName.trim() || !childDob) return;
+    addChildProfile({ name: childName.trim(), dateOfBirth: childDob });
+    setChildName('');
+    setChildDob('');
+    setShowAddChild(false);
   };
 
   const apiKeyConfigs = [
@@ -182,7 +204,6 @@ export default function SettingsPage() {
   const upcomingRegs = registrations.filter(
     (r) => r.status !== 'cancelled' && r.endDate >= new Date().toISOString().split('T')[0]
   ).length;
-
   const totalSpent = registrations
     .filter((r) => r.status !== 'cancelled')
     .reduce((sum, r) => sum + r.price, 0);
@@ -221,8 +242,8 @@ export default function SettingsPage() {
             onClick={() => router.push('/registrations')}
             className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform"
           >
-            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center">
-              <CalendarCheck size={18} className="text-sky-400" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}>
+              <CalendarCheck size={18} style={{ color: 'var(--theme-primary)' }} />
             </div>
             <div className="text-left">
               <p className="text-sm font-semibold text-white">My Clinics</p>
@@ -279,16 +300,173 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* ━━━ CHILD PROFILES ━━━ */}
+        <div className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 rounded-2xl p-4 border border-violet-500/20 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                <Users size={20} className="text-violet-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">My Players</h3>
+                <p className="text-[10px] text-slate-400">
+                  {childProfiles.length === 0
+                    ? 'Add your child to personalize searches'
+                    : `${childProfiles.length} player${childProfiles.length > 1 ? 's' : ''}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAddChild(!showAddChild)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-violet-500/20 active:scale-90 transition-transform"
+            >
+              {showAddChild ? <X size={16} className="text-violet-300" /> : <UserPlus size={16} className="text-violet-300" />}
+            </button>
+          </div>
+
+          {/* Add child form */}
+          <AnimatePresence>
+            {showAddChild && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-black/20 rounded-xl p-3 mb-3 space-y-2">
+                  <input
+                    type="text"
+                    value={childName}
+                    onChange={(e) => setChildName(e.target.value)}
+                    placeholder="Child's first name"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50"
+                  />
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={childDob}
+                      onChange={(e) => setChildDob(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      min="2005-01-01"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:dark]"
+                    />
+                  </div>
+                  {childDob && childName && (
+                    <div className="flex items-center gap-2 text-[10px] text-violet-300">
+                      <Baby size={12} />
+                      <span>
+                        Age {getChildAge(childDob)} — {getAgeGroupLabel(getAgeGroupFromDOB(childDob))} division
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleAddChild}
+                    disabled={!childName.trim() || !childDob}
+                    className="w-full py-2.5 bg-violet-500/30 hover:bg-violet-500/40 text-violet-200 text-sm font-medium rounded-xl transition-colors disabled:opacity-40"
+                  >
+                    Add Player
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Child profiles list */}
+          {childProfiles.length > 0 && (
+            <div className="space-y-2">
+              {childProfiles.map((child) => {
+                const age = getChildAge(child.dateOfBirth);
+                const ageGroup = getAgeGroupFromDOB(child.dateOfBirth);
+                const isActive = child.id === activeChildId;
+                const childRegs = registrations.filter(
+                  (r) => r.childId === child.id && r.status !== 'cancelled' && r.endDate >= new Date().toISOString().split('T')[0]
+                );
+
+                return (
+                  <motion.div
+                    key={child.id}
+                    layout
+                    className={cn(
+                      'relative p-3 rounded-xl border transition-all cursor-pointer active:scale-[0.98]',
+                      isActive
+                        ? 'bg-violet-500/15 border-violet-500/30'
+                        : 'bg-black/20 border-white/5 hover:border-violet-500/20'
+                    )}
+                    onClick={() => setActiveChild(isActive ? null : child.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          'w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold',
+                          isActive ? 'bg-violet-500/30 text-violet-200' : 'bg-white/10 text-slate-300'
+                        )}>
+                          {child.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white">{child.name}</p>
+                            {isActive && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-violet-500/30 text-violet-300">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Cake size={10} /> Age {age}
+                            </span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-violet-400 font-medium">{getAgeGroupLabel(ageGroup)}</span>
+                            {childRegs.length > 0 && (
+                              <>
+                                <span className="text-slate-600">|</span>
+                                <span>{childRegs.length} upcoming</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Remove ${child.name}?`)) {
+                            removeChildProfile(child.id);
+                          }
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/20 transition-colors"
+                      >
+                        <Trash2 size={13} className="text-slate-500 hover:text-red-400" />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+
+          {childProfiles.length > 0 && (
+            <p className="text-[10px] text-slate-500 mt-2">
+              Tap a player to set as active. Clinics matching their age group will be highlighted.
+            </p>
+          )}
+        </div>
+
         {/* Team Color Theme */}
         <div className="bg-white/[0.03] rounded-2xl border border-white/5 p-4 mb-6">
           <TeamPicker />
         </div>
 
         {/* Search Status */}
-        <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 rounded-2xl p-4 border border-sky-500/20 mb-6">
+        <div className="rounded-2xl p-4 border mb-6"
+          style={{
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 10%, transparent), color-mix(in srgb, var(--theme-secondary) 10%, transparent))',
+            borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+          }}>
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
-              <Database size={20} className="text-sky-400" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
+              <Database size={20} style={{ color: 'var(--theme-primary)' }} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Search Engine Status</h3>
@@ -318,7 +496,11 @@ export default function SettingsPage() {
           )}
           <button
             onClick={() => refresh()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-sm font-medium rounded-xl transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+              color: 'var(--theme-accent)',
+            }}
           >
             <RefreshCw size={14} />
             Scan Now
@@ -430,11 +612,16 @@ export default function SettingsPage() {
                   key={minutes}
                   onClick={() => setAutoRefreshInterval(minutes)}
                   className={cn(
-                    'flex-1 py-2 text-xs font-medium rounded-lg transition-colors',
+                    'flex-1 py-2 text-xs font-medium rounded-lg transition-colors border',
                     autoRefreshInterval === minutes
-                      ? 'theme-bg-primary-20 theme-primary theme-border-primary'
-                      : 'bg-white/5 text-slate-400 border border-white/10'
+                      ? 'border-transparent'
+                      : 'bg-white/5 text-slate-400 border-white/10'
                   )}
+                  style={autoRefreshInterval === minutes ? {
+                    backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+                    color: 'var(--theme-accent)',
+                    borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                  } : undefined}
                 >
                   {minutes === 0 ? 'Off' : `${minutes}m`}
                 </button>
@@ -451,15 +638,16 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Push Notifications</p>
-                  <p className="text-xs text-slate-400">Alerts for new clinics</p>
+                  <p className="text-xs text-slate-400">Reminders, new clinics, price drops</p>
                 </div>
               </div>
               <button
                 onClick={handleNotificationToggle}
                 className={cn(
                   'w-11 h-6 rounded-full transition-colors relative',
-                  notificationsEnabled ? 'theme-bg-primary' : 'bg-white/10'
+                  notificationsEnabled ? '' : 'bg-white/10'
                 )}
+                style={notificationsEnabled ? { backgroundColor: 'var(--theme-primary)' } : undefined}
               >
                 <div
                   className={cn(
@@ -469,6 +657,18 @@ export default function SettingsPage() {
                 />
               </button>
             </div>
+            {notificationsEnabled && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
+                <p className="text-[10px] text-slate-500">You&apos;ll receive alerts for:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['New clinics found', 'Registration reminders', 'Spots running low', 'Price drops', 'Child age matches'].map((label) => (
+                    <span key={label} className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Home Location — Tiered Search */}
@@ -501,12 +701,13 @@ export default function SettingsPage() {
                   if (e.key === 'Enter') geocodeHome(homeInput);
                 }}
                 placeholder="Enter city (e.g. Fort Lauderdale, FL)"
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:theme-border-primary-strong"
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-green-500/50"
               />
               <button
                 onClick={() => geocodeHome(homeInput)}
                 disabled={isGeolocating || !homeInput.trim()}
-                className="px-3 py-2.5 theme-bg-primary text-white text-xs font-medium rounded-xl disabled:opacity-40 transition-colors"
+                className="px-3 py-2.5 text-white text-xs font-medium rounded-xl disabled:opacity-40 transition-colors"
+                style={{ backgroundColor: 'var(--theme-primary)' }}
               >
                 {isGeolocating ? <Loader2 size={14} className="animate-spin" /> : 'Set'}
               </button>
@@ -554,7 +755,11 @@ export default function SettingsPage() {
               <div className="mt-3 pt-3 border-t border-white/5">
                 <p className="text-[10px] text-slate-500 font-medium mb-1">SEARCH PRIORITY</p>
                 <div className="flex flex-wrap gap-1">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium theme-bg-primary-20 theme-primary">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+                      color: 'var(--theme-accent)',
+                    }}>
                     1. {homeLocation.city}
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-slate-300">
@@ -597,7 +802,11 @@ export default function SettingsPage() {
           </div>
 
           {/* PWA Install Instructions */}
-          <div className="bg-gradient-to-br from-sky-500/10 to-indigo-500/10 rounded-2xl border border-sky-500/20 p-4">
+          <div className="rounded-2xl border p-4"
+            style={{
+              background: 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 10%, transparent), color-mix(in srgb, var(--theme-secondary) 10%, transparent))',
+              borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+            }}>
             <div className="flex items-center gap-3 mb-3">
               <span className="text-2xl">📱</span>
               <div>
@@ -607,19 +816,19 @@ export default function SettingsPage() {
             </div>
             <ol className="space-y-2 text-xs text-slate-300">
               <li className="flex items-start gap-2">
-                <span className="text-sky-400 font-bold">1.</span>
+                <span className="font-bold" style={{ color: 'var(--theme-primary)' }}>1.</span>
                 <span>
                   Tap the <strong>Share</strong> button (box with arrow) in Safari
                 </span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-sky-400 font-bold">2.</span>
+                <span className="font-bold" style={{ color: 'var(--theme-primary)' }}>2.</span>
                 <span>
                   Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong>
                 </span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-sky-400 font-bold">3.</span>
+                <span className="font-bold" style={{ color: 'var(--theme-primary)' }}>3.</span>
                 <span>
                   Tap <strong>&quot;Add&quot;</strong> — the app icon will appear on your home screen
                 </span>

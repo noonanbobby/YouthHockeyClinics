@@ -3,6 +3,7 @@
 import { useStore } from '@/store/useStore';
 import { useServiceWorker } from '@/hooks/useServiceWorker';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
+import { useNotificationEngine } from '@/hooks/useNotificationEngine';
 import Header from '@/components/Header';
 import ListView from '@/components/ListView';
 import SearchOverlay from '@/components/SearchOverlay';
@@ -26,6 +27,7 @@ export default function Home() {
 
   useServiceWorker();
   useClinicSearch();
+  useNotificationEngine();
 
   return (
     <main className="min-h-screen bg-slate-950">
