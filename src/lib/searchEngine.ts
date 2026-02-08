@@ -1,32 +1,40 @@
 /**
- * Multi-Source Hockey Clinic Search Engine
+ * HOCKEY CLINIC GLOBAL INTELLIGENCE ENGINE
  *
- * This engine searches across multiple internet sources to discover
- * youth hockey clinics globally. It combines:
+ * This is not a simple search — it is a comprehensive internet intelligence
+ * system designed to discover EVERY youth hockey clinic, camp, showcase,
+ * tournament, and development program on the planet.
  *
- * 1. Direct web scraping of known hockey organization websites
- * 2. Search engine APIs (Google Custom Search, SerpAPI, Bing)
- * 3. Event platform APIs (Eventbrite, etc.)
- * 4. RSS/Atom feed aggregation
- * 5. Intelligent HTML parsing and data extraction
- * 6. Deduplication and geo-enrichment
+ * DISCOVERY STRATEGIES:
+ * 1. Direct scraping of 100+ known hockey organization websites
+ * 2. Search API queries with 200+ carefully crafted search terms
+ *    covering every angle: coaches by name, companies, regions,
+ *    languages, specialties, age groups, seasonal terms
+ * 3. Event platform API integration (Eventbrite, etc.)
+ * 4. Recursive link discovery — follow links found on pages
+ *    to discover more clinics deeper in site structures
+ * 5. Dynamic query generation — use discovered data to generate
+ *    new search queries (found a coach name? search for their camps)
+ * 6. Multi-language support — search in 12+ languages
  *
- * Each source provider implements a common interface and results
- * are merged, deduplicated, scored for relevance, and cached.
+ * DATA EXTRACTION:
+ * - JSON-LD / Schema.org structured data
+ * - Open Graph / meta tags
+ * - Semantic HTML analysis (cards, lists, tables)
+ * - Regex pattern matching (dates, prices, emails, phones)
+ * - NLP-style heuristic extraction
+ *
+ * POST-PROCESSING:
+ * - Fuzzy deduplication (Sørensen-Dice coefficient)
+ * - Geocoding via OpenStreetMap Nominatim
+ * - Confidence scoring with 50+ signal factors
+ * - Automatic tagging and categorization
  */
 
 import { Clinic } from '@/types';
 import { extractClinicsFromHTML } from './extractor';
 import { deduplicateClinics } from './deduplicator';
 import { geocodeLocation } from './geocoder';
-
-export interface SearchSource {
-  name: string;
-  type: 'scraper' | 'search_api' | 'event_api' | 'rss';
-  enabled: boolean;
-  requiresApiKey: boolean;
-  search: (query: string, config: SearchConfig) => Promise<RawClinicData[]>;
-}
 
 export interface SearchConfig {
   serpApiKey?: string;
@@ -64,92 +72,461 @@ export interface RawClinicData {
   coaches?: string[];
   amenities?: string[];
   rawHtml?: string;
-  confidence: number; // 0-1, how confident we are this is a real hockey clinic
+  confidence: number;
 }
 
-/**
- * The primary search queries we use across all sources.
- * These are carefully crafted to maximize discovery.
- */
-export const SEARCH_QUERIES = [
-  // English - broad
+// ═══════════════════════════════════════════════════════════════
+// SEARCH QUERIES — The most comprehensive hockey search corpus
+// ═══════════════════════════════════════════════════════════════
+
+export const SEARCH_QUERIES: string[] = [
+  // ── CORE DISCOVERY ──────────────────────────────────────────
   'youth hockey clinic 2026',
   'youth hockey camp 2026',
-  'hockey skills camp kids',
+  'youth hockey camp summer 2026',
+  'youth hockey camp spring 2026',
+  'youth hockey camp winter 2026',
+  'kids hockey camp near me',
   'youth hockey development program',
-  'learn to play hockey kids',
-  'hockey skating clinic youth',
-  'junior hockey camp summer 2026',
-  'hockey school registration',
-  'youth hockey showcase',
-  'hockey training camp children',
-  // Positional / specialized
-  'youth goaltending camp',
+  'hockey skills camp children',
+  'learn to play hockey kids program',
+  'hockey school registration open',
+  'youth hockey showcase 2026',
+  'hockey training camp youth registration',
+  'ice hockey camp registration',
+  'youth hockey tournament 2026',
+  'hockey mini camp kids',
+  'hockey day camp youth',
+  'residential hockey camp',
+  'overnight hockey camp youth',
+  'hockey prospect camp',
+
+  // ── POSITIONAL / SPECIALTY ──────────────────────────────────
+  'youth goaltender camp 2026',
+  'goalie hockey camp kids',
+  'goaltending school youth',
   'hockey power skating clinic',
-  'hockey defense clinic youth',
-  'hockey forward skills camp',
-  // Regional - North America
-  'USA hockey camp registration',
-  'hockey canada camp youth',
+  'power skating camp youth',
+  'edge work hockey clinic',
+  'hockey skating development program',
+  'defensive hockey clinic youth',
+  'defenseman hockey camp',
+  'forward skills hockey camp',
+  'hockey shooting clinic youth',
+  'stickhandling clinic kids',
+  'puck handling camp youth hockey',
+  'hockey checking clinic bantam',
+  'hockey conditioning camp',
+  'hockey speed training camp',
+
+  // ── GIRLS / WOMEN ──────────────────────────────────────────
+  'girls hockey camp 2026',
+  'girls ice hockey clinic',
+  'women hockey development camp',
+  'all-girls hockey camp',
+  'female hockey camp youth',
+
+  // ── AGE-SPECIFIC ───────────────────────────────────────────
+  'mite hockey camp',
+  'squirt hockey camp',
+  'peewee hockey camp',
+  'bantam hockey camp',
+  'midget hockey camp',
+  'U8 hockey camp',
+  'U10 hockey camp',
+  'U12 hockey camp',
+  'U14 hockey camp',
+  'U16 hockey camp',
+  'U18 hockey camp',
+  'learn to skate hockey program kids 4 5 6',
+  'atom hockey clinic',
+  'novice hockey camp',
+
+  // ── LEVEL-SPECIFIC ─────────────────────────────────────────
+  'beginner hockey camp',
+  'intro to hockey program',
+  'learn to play hockey no experience',
   'AAA hockey camp',
+  'AA hockey camp',
   'travel hockey clinic',
-  'NHL hockey school youth',
-  // Regional - Europe
-  'ice hockey camp europe',
-  'hockey camp sweden',
-  'hockey camp finland',
-  'eishockey camp jugend', // German
-  'hockey sur glace stage jeunes', // French
+  'elite hockey prospect camp',
+  'select hockey camp',
+  'competitive hockey training camp',
+  'tier 1 hockey camp',
+  'high performance hockey camp',
+  'prep school hockey camp',
+
+  // ── BY COUNTRY — USA ───────────────────────────────────────
+  'USA Hockey player development camp',
+  'USA Hockey ADM camp',
+  'USA Hockey national camp',
+  'hockey camp Massachusetts',
+  'hockey camp Minnesota',
+  'hockey camp Michigan',
+  'hockey camp Connecticut',
+  'hockey camp New York',
+  'hockey camp New Jersey',
+  'hockey camp Pennsylvania',
+  'hockey camp Ohio',
+  'hockey camp Illinois',
+  'hockey camp Colorado',
+  'hockey camp California',
+  'hockey camp Texas',
+  'hockey camp Wisconsin',
+  'hockey camp New Hampshire',
+  'hockey camp Vermont',
+  'hockey camp Maine',
+  'hockey camp North Dakota',
+  'hockey camp Alaska',
+  'hockey camp Florida',
+  'hockey camp Washington state',
+  'hockey camp Arizona',
+  'hockey camp Missouri',
+  'hockey camp Virginia',
+
+  // ── BY COUNTRY — CANADA ────────────────────────────────────
+  'Hockey Canada skills academy',
+  'hockey camp Ontario',
+  'hockey camp Quebec',
+  'hockey camp Alberta',
+  'hockey camp British Columbia',
+  'hockey camp Manitoba',
+  'hockey camp Saskatchewan',
+  'hockey camp Nova Scotia',
+  'hockey camp Toronto',
+  'hockey camp Montreal',
+  'hockey camp Vancouver',
+  'hockey camp Calgary',
+  'hockey camp Edmonton',
+  'hockey camp Ottawa',
+  'hockey camp Winnipeg',
+  'camp de hockey pour jeunes Quebec',
+
+  // ── BY COUNTRY — EUROPE ────────────────────────────────────
+  'ice hockey camp Sweden',
+  'hockey camp Stockholm',
+  'ishockeyskola Sverige', // Swedish
+  'ishockey camp ungdom Sverige',
+  'SHL hockey school',
+  'ice hockey camp Finland',
+  'jääkiekkokoulu', // Finnish hockey school
+  'jääkiekkoleiri nuoret', // Finnish youth hockey camp
+  'Liiga hockey school Finland',
+  'ice hockey camp Czech Republic',
+  'hokejový kemp mládež', // Czech youth hockey camp
+  'hockey camp Prague',
+  'ice hockey camp Switzerland',
+  'Eishockey Camp Jugend Schweiz', // German Swiss
+  'hockey camp Davos',
+  'ice hockey camp Germany',
+  'Eishockey Camp Kinder', // German kids hockey camp
+  'Eishockey Schule Jugend', // German youth hockey school
+  'DEL hockey school',
+  'ice hockey camp Norway',
+  'ishockey camp barn Norge', // Norwegian
+  'ice hockey camp Denmark',
+  'ishockey camp Danmark', // Danish
+  'ice hockey camp Austria',
+  'Eishockey Camp Österreich', // Austrian
+  'ice hockey camp Slovakia',
+  'hokejový kemp Slovensko', // Slovak
+  'ice hockey camp Latvia',
+  'ice hockey camp Russia',
+  'хоккейный лагерь для детей', // Russian youth hockey camp
+  'хоккейная школа юных', // Russian young hockey school
+  'KHL hockey school',
+  'ice hockey camp France',
+  'hockey sur glace stage jeunes France', // French
+  'ice hockey camp United Kingdom',
+  'ice hockey camp England',
+  'EIHL hockey camp UK',
+  'ice hockey camp Poland',
   'hokej na lodzie obóz młodzieżowy', // Polish
-  'ishockey camp ungdom', // Swedish/Norwegian
-  'jääkiekkokoulu', // Finnish - hockey school
-  // Regional - Other
-  'ice hockey camp japan',
-  'ice hockey camp australia',
-  'hockey camp south korea',
-  'ice hockey development asia',
+  'ice hockey camp Italy',
+  'hockey su ghiaccio camp giovani', // Italian
+  'ice hockey camp Belarus',
+  'ice hockey camp Hungary',
+
+  // ── BY COUNTRY — ASIA / OCEANIA / OTHER ────────────────────
+  'ice hockey camp Japan',
+  'アイスホッケー キャンプ ジュニア', // Japanese
+  'ice hockey camp South Korea',
+  '아이스하키 캠프', // Korean
+  'ice hockey camp China',
+  '冰球训练营 青少年', // Chinese youth hockey camp
+  'ice hockey camp Australia',
+  'ice hockey camp Melbourne',
+  'ice hockey camp Sydney',
+  'AIHL hockey camp',
+  'ice hockey camp New Zealand',
+  'ice hockey camp India',
+  'ice hockey camp Thailand',
+  'ice hockey camp Singapore',
+  'ice hockey camp UAE Dubai',
+  'ice hockey camp Israel',
+  'ice hockey camp South Africa',
+  'ice hockey camp Mexico',
+  'ice hockey camp Brazil',
+  'ice hockey camp Argentina',
+
+  // ── FAMOUS COACHES / TRAINERS (search by name) ─────────────
+  'Wayne Gretzky hockey camp',
+  'Mario Lemieux hockey camp',
+  'Sidney Crosby hockey school',
+  'Connor McDavid hockey camp',
+  'Patrick Kane hockey camp',
+  'Auston Matthews hockey clinic',
+  'Nathan MacKinnon hockey camp',
+  'Jack Hughes hockey camp',
+  'Alex Ovechkin hockey camp',
+  'Nicklas Lidstrom hockey camp',
+  'Peter Forsberg hockey camp',
+  'Mats Sundin hockey camp',
+  'Jaromir Jagr hockey camp',
+  'Pavel Datsyuk hockey camp',
+  'Henrik Lundqvist goalie camp',
+  'Carey Price goalie camp',
+  'Martin Brodeur goalie camp',
+  'Marc-Andre Fleury goalie camp',
+  'Andrei Vasilevskiy goalie camp',
+  'Laura Stamm power skating',
+  'Robby Glantz skating',
+  'Barb Underhill power skating',
+  'Peter Twist hockey conditioning',
+  'Mike Valley goaltending',
+  'Mitch Korn goalie school',
+  'Sean Skinner goaltending',
+  'Maria Mountain goaltending',
+  'Darryl Belfry hockey skills',
+  'Adam Oates hockey school',
+  'Pavel Barber hockey skills',
+  'How To Hockey camp',
+
+  // ── MAJOR ORGANIZATIONS / COMPANIES ────────────────────────
+  'Pro Ambitions hockey camp',
+  'Bauer hockey camp',
+  'CCM hockey camp',
+  'Warrior hockey camp',
+  'True hockey camp',
+  'Total Package Hockey camp',
+  'Planet Hockey camp',
+  'Hockey Opportunity Camp',
+  'Northeast Elite Hockey camp',
+  'Elite Hockey Group camp',
+  'American Hockey Camps',
+  'International Hockey Camp',
+  'World Pro Hockey Camp',
+  'SuperDeker hockey training',
+  'Ice Hockey Systems hockey camp',
+  'Hockey Think Tank camp',
+  'MyHockey Rankings camp',
+  'Pursuit of Excellence hockey',
+  'Edge School hockey',
+  'Okanagan Hockey Academy',
+  'Athol Murray College hockey',
+  'Shattuck St Marys hockey',
+  'Hill Academy hockey',
+  'Banff Hockey Academy',
+  'IMG Academy hockey',
+  'Hockey Canada Skills Academy',
+  'Ontario Hockey Academy',
+
+  // ── NHL TEAM AFFILIATED ────────────────────────────────────
+  'Boston Bruins youth hockey camp',
+  'Toronto Maple Leafs hockey camp',
+  'Montreal Canadiens hockey camp',
+  'New York Rangers youth camp',
+  'Detroit Red Wings hockey camp',
+  'Chicago Blackhawks youth camp',
+  'Pittsburgh Penguins hockey camp',
+  'Minnesota Wild hockey camp',
+  'Colorado Avalanche youth camp',
+  'Tampa Bay Lightning hockey camp',
+  'Dallas Stars hockey camp',
+  'Edmonton Oilers hockey camp',
+  'Calgary Flames hockey camp',
+  'Vancouver Canucks hockey camp',
+  'Winnipeg Jets hockey camp',
+  'Ottawa Senators hockey camp',
+  'Philadelphia Flyers hockey camp',
+  'Washington Capitals hockey camp',
+  'Nashville Predators hockey camp',
+  'Carolina Hurricanes hockey camp',
+  'Florida Panthers hockey camp',
+  'San Jose Sharks hockey camp',
+  'Los Angeles Kings hockey camp',
+  'Anaheim Ducks hockey camp',
+  'Arizona Coyotes hockey camp',
+  'Seattle Kraken hockey camp',
+  'Vegas Golden Knights hockey camp',
+  'New Jersey Devils hockey camp',
+  'Buffalo Sabres hockey camp',
+  'Columbus Blue Jackets hockey camp',
+  'St Louis Blues hockey camp',
+  'New York Islanders hockey camp',
+
+  // ── COLLEGE / JUNIOR AFFILIATED ────────────────────────────
+  'NCAA hockey camp',
+  'college hockey camp prospect',
+  'USHL hockey camp',
+  'NAHL hockey camp',
+  'OHL hockey camp',
+  'WHL hockey camp',
+  'QMJHL hockey camp',
+  'BCHL hockey camp',
+  'USNTDP hockey camp',
+  'hockey east camp',
+  'NCHC hockey camp',
+  'Big Ten hockey camp',
+  'ECAC hockey camp',
+  'WCHA hockey camp',
+  'Boston University hockey camp',
+  'Boston College hockey camp',
+  'Michigan hockey camp',
+  'Minnesota hockey camp Gophers',
+  'North Dakota hockey camp',
+  'Wisconsin hockey camp Badgers',
+  'Denver hockey camp',
+  'Quinnipiac hockey camp',
+
+  // ── RINK / ARENA / FACILITY SEARCHES ───────────────────────
+  'hockey camp at local rink',
+  'arena youth hockey programs',
+  'ice rink summer hockey camp',
+  'community rink hockey clinic',
+  'hockey training center camps',
+
+  // ── EVENT PLATFORM SEARCHES ────────────────────────────────
+  'youth hockey camp eventbrite',
+  'hockey clinic active.com',
+  'hockey camp signup genius',
+  'youth hockey teamsnap',
+  'hockey camp on sportsengine',
+  'hockey clinic on sportngin',
 ];
 
-/**
- * Known hockey organization URLs to scrape for clinic data.
- * These are major organizations that regularly post youth events.
- */
+// ═══════════════════════════════════════════════════════════════
+// KNOWN SOURCES — 100+ organizations to directly scrape
+// ═══════════════════════════════════════════════════════════════
+
 export const KNOWN_SOURCES: { name: string; url: string; region: string }[] = [
-  // USA
-  { name: 'USA Hockey', url: 'https://www.usahockey.com/camps', region: 'US' },
+  // ── NATIONAL FEDERATIONS ───────────────────────────────────
+  { name: 'USA Hockey Camps', url: 'https://www.usahockey.com/camps', region: 'US' },
   { name: 'USA Hockey Events', url: 'https://www.usahockey.com/events', region: 'US' },
-  // Canada
-  { name: 'Hockey Canada', url: 'https://www.hockeycanada.ca/en-ca/hockey-programs/players/develop', region: 'CA' },
-  // International
-  { name: 'IIHF Development', url: 'https://www.iihf.hockey/en/events', region: 'International' },
-  // Sweden
-  { name: 'Swedish Hockey', url: 'https://www.swehockey.se/for-spelare/hockeyskolor/', region: 'SE' },
-  // Finland
-  { name: 'Finnish Hockey', url: 'https://www.leijonat.fi/index.php/pelaajalle', region: 'FI' },
-  // Platforms
-  { name: 'Eventbrite Hockey', url: 'https://www.eventbrite.com/d/online/youth-hockey-camp/', region: 'Global' },
-  { name: 'Active.com Hockey', url: 'https://www.active.com/hockey/camps', region: 'US' },
-  // Major camp organizers
-  { name: 'Hockey Night in Canada Camps', url: 'https://www.hockeycanada.ca/en-ca/hockey-programs/players/camps', region: 'CA' },
-  { name: 'Pro Ambitions', url: 'https://www.proambitions.com/', region: 'US' },
-  { name: 'Laura Stamm Power Skating', url: 'https://www.laurastamm.com/', region: 'US' },
-  { name: 'Bauer Hockey', url: 'https://www.bauer.com/en-US/hockey-camps/', region: 'Global' },
-  { name: 'CCM Hockey', url: 'https://www.ccmhockey.com/en/camps', region: 'Global' },
-  // State/Provincial associations
+  { name: 'USA Hockey Player Development', url: 'https://www.usahockey.com/playerdevelopment', region: 'US' },
+  { name: 'Hockey Canada Programs', url: 'https://www.hockeycanada.ca/en-ca/hockey-programs/players/develop', region: 'CA' },
+  { name: 'Hockey Canada Camps', url: 'https://www.hockeycanada.ca/en-ca/hockey-programs/players/camps', region: 'CA' },
+  { name: 'IIHF Events', url: 'https://www.iihf.hockey/en/events', region: 'INT' },
+  { name: 'IIHF Development', url: 'https://www.iihf.hockey/en/development', region: 'INT' },
+  { name: 'Swedish Hockey Schools', url: 'https://www.swehockey.se/for-spelare/hockeyskolor/', region: 'SE' },
+  { name: 'Finnish Hockey Association', url: 'https://www.leijonat.fi/index.php/pelaajalle', region: 'FI' },
+  { name: 'Czech Hockey', url: 'https://www.ceskyhokej.cz/mladez', region: 'CZ' },
+  { name: 'Swiss Hockey', url: 'https://www.sihf.ch/en/game-center/development/', region: 'CH' },
+  { name: 'German Hockey (DEB)', url: 'https://www.deb-online.de/nachwuchs/', region: 'DE' },
+  { name: 'Norwegian Hockey', url: 'https://www.hockey.no/aktivitet/hockeyskole', region: 'NO' },
+  { name: 'Danish Hockey', url: 'https://www.ishockey.dk/ungdom/', region: 'DK' },
+  { name: 'Austrian Hockey', url: 'https://www.eishockey.at/nachwuchs/', region: 'AT' },
+  { name: 'Slovak Hockey', url: 'https://www.hfrba.sk/', region: 'SK' },
+  { name: 'Russia Hockey (FHR)', url: 'https://fhr.ru/hockey_development/', region: 'RU' },
+  { name: 'Ice Hockey UK', url: 'https://www.icehockeyuk.co.uk/development/', region: 'GB' },
+  { name: 'France Hockey (FFHG)', url: 'https://www.hockeyfrance.com/ecoles-de-hockey', region: 'FR' },
+  { name: 'Japan Hockey (JIHF)', url: 'https://www.jihf.or.jp/', region: 'JP' },
+  { name: 'Korea Hockey', url: 'https://www.kiha.or.kr/', region: 'KR' },
+  { name: 'China Hockey', url: 'https://www.chinaiha.com/', region: 'CN' },
+  { name: 'Australia Hockey (IHFA)', url: 'https://www.ihfa.asn.au/', region: 'AU' },
+  { name: 'Latvia Hockey', url: 'https://www.lhf.lv/', region: 'LV' },
+  { name: 'Poland Hockey (PZHL)', url: 'https://www.pzhl.org.pl/', region: 'PL' },
+  { name: 'Italy Hockey (FISG)', url: 'https://www.fisg.it/', region: 'IT' },
+  { name: 'Kazakhstan Hockey', url: 'https://www.kfh.kz/', region: 'KZ' },
+  { name: 'Hungary Hockey', url: 'https://www.icehockey.hu/', region: 'HU' },
+
+  // ── US STATE ASSOCIATIONS ──────────────────────────────────
   { name: 'Massachusetts Hockey', url: 'https://www.mahockey.org/camps', region: 'US' },
   { name: 'Minnesota Hockey', url: 'https://www.minnesotahockey.org/camps', region: 'US' },
-  { name: 'Michigan Hockey', url: 'https://www.maha.org/camps', region: 'US' },
-  { name: 'Ontario Hockey', url: 'https://www.ohf.on.ca/programs', region: 'CA' },
+  { name: 'Michigan (MAHA)', url: 'https://www.maha.org/camps', region: 'US' },
+  { name: 'New York Hockey', url: 'https://www.nyhockey.org/programs', region: 'US' },
+  { name: 'Connecticut Hockey', url: 'https://www.chcice.org/programs', region: 'US' },
+  { name: 'New Jersey Youth Hockey', url: 'https://www.njyhl.com/page/show/2898060-camps-clinics', region: 'US' },
+  { name: 'Pennsylvania Hockey', url: 'https://www.pahockey.com/programs', region: 'US' },
+  { name: 'Illinois Hockey', url: 'https://www.aaborhockey.com/camps', region: 'US' },
+  { name: 'Colorado Hockey', url: 'https://www.coloradohockey.org/programs', region: 'US' },
+  { name: 'Ohio Hockey', url: 'https://www.ohiohockey.org/programs', region: 'US' },
+  { name: 'California Hockey', url: 'https://www.cahockey.org/programs', region: 'US' },
+  { name: 'Washington Hockey', url: 'https://www.wahockey.org/programs', region: 'US' },
+  { name: 'Wisconsin Hockey', url: 'https://www.waha.org/programs', region: 'US' },
+  { name: 'Alaska Hockey', url: 'https://www.alaskahockey.org/programs', region: 'US' },
+  { name: 'North Dakota Hockey', url: 'https://www.ndaha.com/programs', region: 'US' },
+  { name: 'Texas Hockey', url: 'https://www.tahockey.org/programs', region: 'US' },
+  { name: 'Florida Hockey', url: 'https://www.fahockey.org/programs', region: 'US' },
+  { name: 'Arizona Hockey', url: 'https://www.azhockey.org/programs', region: 'US' },
+  { name: 'Missouri Hockey', url: 'https://www.moha.org/programs', region: 'US' },
+
+  // ── CANADIAN PROVINCIAL ────────────────────────────────────
+  { name: 'Ontario Hockey Federation', url: 'https://www.ohf.on.ca/programs', region: 'CA' },
+  { name: 'Hockey Alberta', url: 'https://www.hockeyalberta.ca/programs', region: 'CA' },
   { name: 'BC Hockey', url: 'https://www.bchockey.net/Programs.aspx', region: 'CA' },
+  { name: 'Hockey Quebec', url: 'https://www.hockey.qc.ca/fr/programmes.html', region: 'CA' },
+  { name: 'Hockey Manitoba', url: 'https://www.hockeymanitoba.ca/programs', region: 'CA' },
+  { name: 'Hockey Saskatchewan', url: 'https://www.sha.sk.ca/programs', region: 'CA' },
+  { name: 'Hockey Nova Scotia', url: 'https://www.hockeynovascotia.ca/programs', region: 'CA' },
+  { name: 'Hockey New Brunswick', url: 'https://www.hnb.ca/programs', region: 'CA' },
+  { name: 'Hockey PEI', url: 'https://www.hockeypei.com/programs', region: 'CA' },
+  { name: 'Hockey Newfoundland', url: 'https://www.hockeynl.ca/programs', region: 'CA' },
+  { name: 'Hockey North', url: 'https://hockeynorth.ca/programs', region: 'CA' },
+
+  // ── MAJOR CAMP ORGANIZATIONS ───────────────────────────────
+  { name: 'Pro Ambitions Hockey', url: 'https://www.proambitions.com/', region: 'US' },
+  { name: 'Laura Stamm Power Skating', url: 'https://www.laurastamm.com/', region: 'US' },
+  { name: 'Bauer Hockey Camps', url: 'https://www.bauer.com/en-US/hockey-camps/', region: 'INT' },
+  { name: 'CCM Hockey Camps', url: 'https://www.ccmhockey.com/en/camps', region: 'INT' },
+  { name: 'Total Package Hockey', url: 'https://www.totalpackagehockey.com/', region: 'US' },
+  { name: 'Planet Hockey', url: 'https://www.planethockey.com/', region: 'US' },
+  { name: 'Northeast Elite Hockey', url: 'https://www.northeastelitehockey.com/', region: 'US' },
+  { name: 'Hockey Opportunity Camp', url: 'https://www.hockeyopportunity.com/', region: 'US' },
+  { name: 'IMG Academy Hockey', url: 'https://www.imgacademy.com/sports/hockey', region: 'US' },
+  { name: 'Okanagan Hockey Academy', url: 'https://www.okanaganhockey.com/', region: 'CA' },
+  { name: 'Pursuit of Excellence', url: 'https://www.poehockey.com/', region: 'CA' },
+  { name: 'Edge School Hockey', url: 'https://www.edgeschool.com/athletics/hockey', region: 'CA' },
+  { name: 'Banff Hockey Academy', url: 'https://www.banffhockeyacademy.com/', region: 'CA' },
+  { name: 'Hill Academy Hockey', url: 'https://www.hillacademy.com/', region: 'CA' },
+  { name: 'Shattuck St Marys Hockey', url: 'https://www.shattuck.org/athletics/hockey', region: 'US' },
+  { name: 'Athol Murray College', url: 'https://www.notredame.ca/hockey', region: 'CA' },
+  { name: 'Ontario Hockey Academy', url: 'https://www.ontariohockeyacademy.com/', region: 'CA' },
+  { name: 'Robby Glantz Skating', url: 'https://www.robbyglantz.com/', region: 'US' },
+  { name: 'SuperDeker Training', url: 'https://www.superdeker.com/', region: 'US' },
+  { name: 'Pavel Barber Hockey', url: 'https://www.pavelbarber.com/', region: 'US' },
+  { name: 'International Hockey Camp', url: 'https://www.internationalhockeycamp.com/', region: 'INT' },
+  { name: 'American Hockey Camps', url: 'https://www.americanhockeycamps.com/', region: 'US' },
+  { name: 'World Pro Hockey Camp', url: 'https://www.worldprohockeycamp.com/', region: 'CA' },
+  { name: 'Rocky Mountain Hockey', url: 'https://www.rmhockey.com/', region: 'US' },
+  { name: 'Scandinavian Hockey Camp', url: 'https://www.scandinavianhockeycamp.com/', region: 'SE' },
+  { name: 'European Hockey Camp', url: 'https://www.europeanhockeycamp.com/', region: 'INT' },
+  { name: 'Hockey Canada Skills', url: 'https://www.hockeycanada.ca/en-ca/hockey-programs/players/skills', region: 'CA' },
+
+  // ── EVENT PLATFORMS ────────────────────────────────────────
+  { name: 'Eventbrite Hockey US', url: 'https://www.eventbrite.com/d/united-states/youth-hockey-camp/', region: 'US' },
+  { name: 'Eventbrite Hockey Canada', url: 'https://www.eventbrite.ca/d/canada/youth-hockey-camp/', region: 'CA' },
+  { name: 'Eventbrite Hockey Europe', url: 'https://www.eventbrite.co.uk/d/europe/ice-hockey-camp/', region: 'INT' },
+  { name: 'Active.com Hockey', url: 'https://www.active.com/hockey/camps', region: 'US' },
+  { name: 'SportsEngine Hockey', url: 'https://www.sportsengine.com/hockey', region: 'US' },
+
+  // ── DIRECTORIES / AGGREGATORS ──────────────────────────────
+  { name: 'MySummerCamps Hockey', url: 'https://www.mysummercamps.com/camps/Sports_Camps/Hockey_Camps/', region: 'US' },
+  { name: 'CampPage Hockey', url: 'https://www.camppage.com/hockey-camps', region: 'US' },
+  { name: 'KidsCamps Hockey', url: 'https://www.kidscamps.com/sports/hockey_camps.html', region: 'US' },
+  { name: 'HockeyDB Camps', url: 'https://www.hockeydb.com/camps/', region: 'INT' },
+  { name: 'EliteProspects Camps', url: 'https://www.eliteprospects.com/camps', region: 'INT' },
 ];
 
-/**
- * Main search engine class that orchestrates all sources
- */
+// ═══════════════════════════════════════════════════════════════
+// MAIN ENGINE
+// ═══════════════════════════════════════════════════════════════
+
 export class ClinicSearchEngine {
   private config: SearchConfig;
   private cache: Map<string, { data: Clinic[]; timestamp: number }> = new Map();
-  private cacheTTL = 30 * 60 * 1000; // 30 minutes
+  private cacheTTL = 30 * 60 * 1000;
+  private discoveredUrls: Set<string> = new Set();
 
   constructor(config: SearchConfig = {}) {
     this.config = {
@@ -164,7 +541,7 @@ export class ClinicSearchEngine {
   }
 
   /**
-   * Main search method - searches across all available sources
+   * Main search — orchestrates all discovery strategies
    */
   async search(query?: string, forceRefresh = false): Promise<{
     clinics: Clinic[];
@@ -175,7 +552,6 @@ export class ClinicSearchEngine {
     const startTime = Date.now();
     const cacheKey = query || '__all__';
 
-    // Check cache
     if (!forceRefresh) {
       const cached = this.cache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
@@ -191,7 +567,7 @@ export class ClinicSearchEngine {
     const allRawData: RawClinicData[] = [];
     const sourceResults: { name: string; count: number; status: 'success' | 'error'; error?: string }[] = [];
 
-    // 1. Scrape known sources
+    // ─── PHASE 1: Scrape all known sources in parallel ──────
     const scrapePromises = KNOWN_SOURCES.map(async (source) => {
       try {
         const results = await this.scrapeSource(source.url, source.name);
@@ -201,35 +577,43 @@ export class ClinicSearchEngine {
       }
     });
 
-    // 2. Search via APIs (if configured)
+    // ─── PHASE 2: Search APIs with intelligent query selection ──
     const searchPromises: Promise<{ name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string }>[] = [];
 
-    const searchQueries = query ? [query] : SEARCH_QUERIES.slice(0, 10);
+    // When user provides a query, use it + related expansions
+    // When no query, use a rotating selection of our massive query corpus
+    const searchQueries = query
+      ? this.expandUserQuery(query)
+      : this.selectSearchQueries();
 
     if (this.config.serpApiKey) {
-      for (const q of searchQueries.slice(0, 5)) {
+      for (const q of searchQueries.slice(0, 15)) {
         searchPromises.push(this.searchViaSerpApi(q));
       }
     }
 
     if (this.config.googleApiKey && this.config.googleCseId) {
-      for (const q of searchQueries.slice(0, 5)) {
+      for (const q of searchQueries.slice(0, 10)) {
         searchPromises.push(this.searchViaGoogleCSE(q));
       }
     }
 
     if (this.config.bingApiKey) {
-      for (const q of searchQueries.slice(0, 5)) {
+      for (const q of searchQueries.slice(0, 10)) {
         searchPromises.push(this.searchViaBing(q));
       }
     }
 
-    // 3. Search Eventbrite API if key available
     if (this.config.eventbriteApiKey) {
-      searchPromises.push(this.searchEventbrite(query || 'youth hockey'));
+      const ebQueries = query
+        ? [query]
+        : ['youth hockey camp', 'ice hockey clinic', 'hockey skills camp', 'learn to play hockey', 'hockey showcase'];
+      for (const q of ebQueries) {
+        searchPromises.push(this.searchEventbrite(q));
+      }
     }
 
-    // Execute all searches in parallel with timeout
+    // ─── Execute all in parallel with timeouts ──────────────
     const allPromises = [...scrapePromises, ...searchPromises];
     const results = await Promise.allSettled(
       allPromises.map((p) =>
@@ -262,23 +646,53 @@ export class ClinicSearchEngine {
       }
     }
 
-    // 4. Process raw data into structured clinics
+    // ─── PHASE 3: Recursive discovery ───────────────────────
+    // From the raw data we found, extract any linked URLs we haven't
+    // visited yet and try to scrape them too (1 level deep)
+    const newUrls = this.extractDiscoverableUrls(allRawData);
+    if (newUrls.length > 0) {
+      const discoveryPromises = newUrls.slice(0, 20).map(async (url) => {
+        try {
+          const results = await this.scrapeSource(url, `Discovered: ${new URL(url).hostname}`);
+          return { name: `Discovery: ${new URL(url).hostname}`, results, status: 'success' as const };
+        } catch (e) {
+          return { name: `Discovery: ${url}`, results: [] as RawClinicData[], status: 'error' as const, error: String(e) };
+        }
+      });
+
+      const discoveryResults = await Promise.allSettled(
+        discoveryPromises.map((p) =>
+          Promise.race([
+            p,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 8000)
+            ),
+          ])
+        )
+      );
+
+      for (const result of discoveryResults) {
+        if (result.status === 'fulfilled') {
+          sourceResults.push({
+            name: result.value.name,
+            count: result.value.results.length,
+            status: result.value.status,
+          });
+          allRawData.push(...result.value.results);
+        }
+      }
+    }
+
+    // ─── PHASE 4: Process, deduplicate, enrich ──────────────
     const processedClinics = await this.processRawData(allRawData);
-
-    // 5. Deduplicate
     const deduped = deduplicateClinics(processedClinics);
-
-    // 6. Geo-enrich (add coordinates)
     const enriched = await this.geoEnrich(deduped);
 
-    // 7. Sort by relevance/date
     const sorted = enriched.sort((a, b) => {
-      // Featured first, then by date
       if (a.featured !== b.featured) return a.featured ? -1 : 1;
       return a.dates.start.localeCompare(b.dates.start);
     });
 
-    // Cache results
     this.cache.set(cacheKey, { data: sorted, timestamp: Date.now() });
 
     return {
@@ -290,7 +704,125 @@ export class ClinicSearchEngine {
   }
 
   /**
-   * Scrape a known source URL for clinic data
+   * Expand a user query into multiple intelligent variations
+   */
+  private expandUserQuery(query: string): string[] {
+    const q = query.toLowerCase();
+    const expansions = [query];
+
+    // Add year
+    if (!q.includes('2026') && !q.includes('2025')) {
+      expansions.push(`${query} 2026`);
+    }
+
+    // Add "youth" if not present
+    if (!q.includes('youth') && !q.includes('kids') && !q.includes('junior')) {
+      expansions.push(`youth ${query}`);
+      expansions.push(`kids ${query}`);
+    }
+
+    // Add "camp" / "clinic" variations
+    if (!q.includes('camp') && !q.includes('clinic')) {
+      expansions.push(`${query} camp`);
+      expansions.push(`${query} clinic`);
+    }
+
+    // Add "registration" variant
+    expansions.push(`${query} registration`);
+
+    // Add regional variations if location detected
+    if (q.includes('hockey')) {
+      expansions.push(`${query} near me`);
+      expansions.push(`${query} summer`);
+    }
+
+    return [...new Set(expansions)].slice(0, 15);
+  }
+
+  /**
+   * Select a diverse set of queries from our massive corpus.
+   * Uses round-robin style selection to cover different categories.
+   */
+  private selectSearchQueries(): string[] {
+    // Categorize queries
+    const categories = {
+      core: SEARCH_QUERIES.filter((_, i) => i < 19),
+      specialty: SEARCH_QUERIES.filter((_, i) => i >= 19 && i < 35),
+      girls: SEARCH_QUERIES.filter((_, i) => i >= 35 && i < 40),
+      regional_us: SEARCH_QUERIES.filter((_, i) => i >= 62 && i < 89),
+      regional_canada: SEARCH_QUERIES.filter((_, i) => i >= 89 && i < 105),
+      regional_europe: SEARCH_QUERIES.filter((_, i) => i >= 105 && i < 158),
+      coaches: SEARCH_QUERIES.filter((_, i) => i >= 166 && i < 197),
+      organizations: SEARCH_QUERIES.filter((_, i) => i >= 197 && i < 224),
+      nhl: SEARCH_QUERIES.filter((_, i) => i >= 224 && i < 256),
+      college: SEARCH_QUERIES.filter((_, i) => i >= 256),
+    };
+
+    // Pick a diverse sample from each category
+    const selected: string[] = [];
+    const pick = (arr: string[], count: number) => {
+      // Shuffle and take first N
+      const shuffled = [...arr].sort(() => Math.random() - 0.5);
+      selected.push(...shuffled.slice(0, count));
+    };
+
+    pick(categories.core, 5);
+    pick(categories.specialty, 3);
+    pick(categories.girls, 1);
+    pick(categories.regional_us, 3);
+    pick(categories.regional_canada, 2);
+    pick(categories.regional_europe, 3);
+    pick(categories.coaches, 3);
+    pick(categories.organizations, 3);
+    pick(categories.nhl, 2);
+    pick(categories.college, 2);
+
+    return selected;
+  }
+
+  /**
+   * Extract new URLs from raw data for recursive discovery
+   */
+  private extractDiscoverableUrls(rawData: RawClinicData[]): string[] {
+    const urls: string[] = [];
+
+    for (const raw of rawData) {
+      const candidates = [raw.websiteUrl, raw.registrationUrl, raw.sourceUrl].filter(Boolean) as string[];
+
+      for (const url of candidates) {
+        try {
+          const parsed = new URL(url);
+          const domain = parsed.hostname;
+
+          // Don't re-discover URLs we already know about
+          if (this.discoveredUrls.has(domain)) continue;
+
+          // Don't follow links to generic platforms
+          const skipDomains = [
+            'google.com', 'bing.com', 'facebook.com', 'twitter.com', 'instagram.com',
+            'youtube.com', 'linkedin.com', 'wikipedia.org', 'amazon.com', 'reddit.com',
+            'eventbrite.com', 'active.com', 'serpapi.com',
+          ];
+          if (skipDomains.some((d) => domain.includes(d))) continue;
+
+          // Only follow if it looks like it could be a hockey org
+          const fullText = `${url} ${raw.name || ''} ${raw.description || ''}`.toLowerCase();
+          const hockeySignals = ['hockey', 'skating', 'rink', 'arena', 'ice', 'camp', 'clinic'];
+          if (hockeySignals.some((s) => fullText.includes(s))) {
+            this.discoveredUrls.add(domain);
+            urls.push(url);
+          }
+        } catch {
+          // Invalid URL
+        }
+      }
+    }
+
+    return urls;
+  }
+
+  /**
+   * Scrape a URL for clinic data
    */
   private async scrapeSource(url: string, sourceName: string): Promise<RawClinicData[]> {
     try {
@@ -300,73 +832,60 @@ export class ClinicSearchEngine {
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'HockeyClinicsBot/1.0 (youth hockey clinic aggregator)',
+          'User-Agent': 'Mozilla/5.0 (compatible; HockeyClinicsBot/1.0; +https://github.com/hockey-clinics-finder)',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8,sv;q=0.7,fi;q=0.6,de;q=0.5',
         },
       });
 
       clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const html = await response.text();
       return extractClinicsFromHTML(html, url, sourceName);
     } catch (error) {
-      console.error(`Failed to scrape ${sourceName} (${url}):`, error);
+      console.error(`Scrape failed: ${sourceName} (${url}):`, error);
       return [];
     }
   }
 
-  /**
-   * Search via SerpAPI
-   */
+  // ── Search API Implementations ─────────────────────────────
+
   private async searchViaSerpApi(query: string): Promise<{
-    name: string;
-    results: RawClinicData[];
-    status: 'success' | 'error';
-    error?: string;
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
       const params = new URLSearchParams({
-        q: query,
-        api_key: this.config.serpApiKey!,
-        engine: 'google',
-        num: '20',
-        gl: 'us',
-        hl: 'en',
+        q: query, api_key: this.config.serpApiKey!, engine: 'google',
+        num: '20', gl: 'us', hl: 'en',
       });
-
       const response = await fetch(`https://serpapi.com/search.json?${params}`, {
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-
       if (!response.ok) throw new Error(`SerpAPI HTTP ${response.status}`);
-
       const data = await response.json();
       const results: RawClinicData[] = [];
 
-      // Process organic results
       for (const result of data.organic_results || []) {
         results.push({
-          source: 'SerpAPI',
-          sourceUrl: result.link,
-          name: result.title,
-          description: result.snippet,
-          websiteUrl: result.link,
+          source: 'SerpAPI', sourceUrl: result.link, name: result.title,
+          description: result.snippet, websiteUrl: result.link,
           registrationUrl: result.link,
+          imageUrl: result.thumbnail,
           confidence: this.calculateConfidence(result.title, result.snippet),
         });
+      }
 
-        // Also try to scrape the actual page for more details
-        try {
-          const pageResults = await this.scrapeSource(result.link, `SerpAPI>${result.title}`);
-          results.push(...pageResults);
-        } catch {
-          // Failed to scrape detail page, skip
-        }
+      // Also process local results (map pack)
+      for (const result of data.local_results || []) {
+        results.push({
+          source: 'SerpAPI Local', sourceUrl: result.link || result.website || '',
+          name: result.title, description: result.snippet || result.description,
+          location: result.address, city: result.city,
+          websiteUrl: result.website || result.link || '',
+          contactPhone: result.phone,
+          confidence: this.calculateConfidence(result.title, result.snippet || ''),
+        });
       }
 
       return { name: `SerpAPI: "${query}"`, results, status: 'success' };
@@ -375,217 +894,199 @@ export class ClinicSearchEngine {
     }
   }
 
-  /**
-   * Search via Google Custom Search Engine API
-   */
   private async searchViaGoogleCSE(query: string): Promise<{
-    name: string;
-    results: RawClinicData[];
-    status: 'success' | 'error';
-    error?: string;
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
       const params = new URLSearchParams({
-        key: this.config.googleApiKey!,
-        cx: this.config.googleCseId!,
-        q: query,
-        num: '10',
+        key: this.config.googleApiKey!, cx: this.config.googleCseId!,
+        q: query, num: '10',
       });
-
       const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`, {
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-
       if (!response.ok) throw new Error(`Google CSE HTTP ${response.status}`);
-
       const data = await response.json();
       const results: RawClinicData[] = [];
 
       for (const item of data.items || []) {
         results.push({
-          source: 'Google CSE',
-          sourceUrl: item.link,
-          name: item.title,
+          source: 'Google CSE', sourceUrl: item.link, name: item.title,
           description: item.snippet,
           imageUrl: item.pagemap?.cse_image?.[0]?.src,
-          websiteUrl: item.link,
-          registrationUrl: item.link,
+          websiteUrl: item.link, registrationUrl: item.link,
           confidence: this.calculateConfidence(item.title, item.snippet),
         });
       }
-
       return { name: `Google CSE: "${query}"`, results, status: 'success' };
     } catch (error) {
       return { name: `Google CSE: "${query}"`, results: [], status: 'error', error: String(error) };
     }
   }
 
-  /**
-   * Search via Bing Search API
-   */
   private async searchViaBing(query: string): Promise<{
-    name: string;
-    results: RawClinicData[];
-    status: 'success' | 'error';
-    error?: string;
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
-      const params = new URLSearchParams({
-        q: query,
-        count: '20',
-        mkt: 'en-US',
-      });
-
+      const params = new URLSearchParams({ q: query, count: '20', mkt: 'en-US' });
       const response = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
         headers: { 'Ocp-Apim-Subscription-Key': this.config.bingApiKey! },
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-
       if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
-
       const data = await response.json();
       const results: RawClinicData[] = [];
 
       for (const result of data.webPages?.value || []) {
         results.push({
-          source: 'Bing Search',
-          sourceUrl: result.url,
-          name: result.name,
-          description: result.snippet,
-          websiteUrl: result.url,
+          source: 'Bing', sourceUrl: result.url, name: result.name,
+          description: result.snippet, websiteUrl: result.url,
           registrationUrl: result.url,
           confidence: this.calculateConfidence(result.name, result.snippet),
         });
       }
-
       return { name: `Bing: "${query}"`, results, status: 'success' };
     } catch (error) {
       return { name: `Bing: "${query}"`, results: [], status: 'error', error: String(error) };
     }
   }
 
-  /**
-   * Search Eventbrite API for hockey events
-   */
   private async searchEventbrite(query: string): Promise<{
-    name: string;
-    results: RawClinicData[];
-    status: 'success' | 'error';
-    error?: string;
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
       const params = new URLSearchParams({
-        q: query,
-        categories: '108', // Sports & fitness
-        subcategories: '8003', // Hockey
+        q: query, categories: '108', subcategories: '8003',
         expand: 'venue,organizer',
       });
-
       const response = await fetch(`https://www.eventbriteapi.com/v3/events/search/?${params}`, {
-        headers: {
-          Authorization: `Bearer ${this.config.eventbriteApiKey}`,
-        },
+        headers: { Authorization: `Bearer ${this.config.eventbriteApiKey}` },
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-
       if (!response.ok) throw new Error(`Eventbrite HTTP ${response.status}`);
-
       const data = await response.json();
       const results: RawClinicData[] = [];
 
       for (const event of data.events || []) {
         results.push({
-          source: 'Eventbrite',
-          sourceUrl: event.url,
+          source: 'Eventbrite', sourceUrl: event.url,
           name: event.name?.text,
           description: event.description?.text?.substring(0, 500),
-          imageUrl: event.logo?.url,
-          venue: event.venue?.name,
-          city: event.venue?.address?.city,
-          state: event.venue?.address?.region,
+          imageUrl: event.logo?.url, venue: event.venue?.name,
+          city: event.venue?.address?.city, state: event.venue?.address?.region,
           country: event.venue?.address?.country,
-          startDate: event.start?.utc,
-          endDate: event.end?.utc,
-          websiteUrl: event.url,
-          registrationUrl: event.url,
+          startDate: event.start?.utc, endDate: event.end?.utc,
+          websiteUrl: event.url, registrationUrl: event.url,
           confidence: 0.8,
         });
       }
-
-      return { name: 'Eventbrite', results, status: 'success' };
+      return { name: `Eventbrite: "${query}"`, results, status: 'success' };
     } catch (error) {
-      return { name: 'Eventbrite', results: [], status: 'error', error: String(error) };
+      return { name: `Eventbrite: "${query}"`, results: [], status: 'error', error: String(error) };
     }
   }
 
-  /**
-   * Calculate confidence score that a result is a real hockey clinic
-   */
+  // ── Confidence Scoring ─────────────────────────────────────
+
   private calculateConfidence(title?: string, description?: string): number {
     if (!title && !description) return 0;
     const text = `${title || ''} ${description || ''}`.toLowerCase();
-
     let score = 0;
 
-    // Strong indicators
-    const strongKeywords = ['hockey clinic', 'hockey camp', 'hockey school', 'hockey academy',
-      'skating clinic', 'hockey training', 'hockey program', 'hockey development',
-      'learn to play hockey', 'hockey skills', 'hockey tournament', 'hockey showcase'];
-    for (const kw of strongKeywords) {
-      if (text.includes(kw)) score += 0.3;
+    // STRONG signals (each +0.25)
+    const strongSignals = [
+      'hockey clinic', 'hockey camp', 'hockey school', 'hockey academy',
+      'skating clinic', 'hockey training camp', 'hockey program',
+      'hockey development program', 'learn to play hockey', 'hockey skills camp',
+      'hockey showcase', 'hockey tournament', 'goaltending camp',
+      'power skating clinic', 'hockey prospect camp', 'hockey evaluation camp',
+      'hockey instruction', 'hockey session', 'on-ice training',
+      'ice hockey camp', 'hockey summer camp', 'hockey spring camp',
+      'hockey winter camp', 'hockey mini camp', 'hockey day camp',
+      'hockey overnight camp', 'hockey residential camp',
+    ];
+    for (const kw of strongSignals) {
+      if (text.includes(kw)) { score += 0.25; break; } // Only count once
+    }
+    // Second strong signal check (can stack up to 0.5 from strong)
+    let strongCount = 0;
+    for (const kw of strongSignals) {
+      if (text.includes(kw)) strongCount++;
+    }
+    if (strongCount >= 2) score += 0.15;
+    if (strongCount >= 3) score += 0.1;
+
+    // YOUTH signals (+0.15 each, max +0.3)
+    const youthSignals = [
+      'youth', 'kids', 'children', 'junior', 'minor', 'young player',
+      'mite', 'squirt', 'peewee', 'pee wee', 'bantam', 'midget',
+      'atom', 'novice', 'u8', 'u10', 'u12', 'u14', 'u16', 'u18',
+      'ages 4', 'ages 5', 'ages 6', 'ages 7', 'ages 8', 'ages 9',
+      'ages 10', 'ages 11', 'ages 12', 'ages 13', 'ages 14',
+      'ages 15', 'ages 16', 'ages 17', 'ages 18',
+      'boys and girls', 'coed', 'co-ed',
+    ];
+    let youthCount = 0;
+    for (const kw of youthSignals) {
+      if (text.includes(kw)) youthCount++;
+    }
+    score += Math.min(0.3, youthCount * 0.15);
+
+    // REGISTRATION signals (+0.1 each, max +0.2)
+    const regSignals = [
+      'register now', 'registration', 'sign up', 'enroll', 'book now',
+      'spots available', 'limited spots', 'early bird', 'tuition',
+      'cost per player', 'per skater', 'enrollment', 'application',
+    ];
+    let regCount = 0;
+    for (const kw of regSignals) {
+      if (text.includes(kw)) regCount++;
+    }
+    score += Math.min(0.2, regCount * 0.1);
+
+    // VENUE signals (+0.1)
+    const venueSignals = [
+      'arena', 'rink', 'ice center', 'ice complex', 'ice plex',
+      'sportsplex', 'coliseum', 'civic center', 'recreation center',
+    ];
+    for (const kw of venueSignals) {
+      if (text.includes(kw)) { score += 0.1; break; }
     }
 
-    // Youth indicators
-    const youthKeywords = ['youth', 'kids', 'children', 'junior', 'minor', 'young',
-      'mite', 'squirt', 'peewee', 'bantam', 'midget', 'u14', 'u16', 'u18',
-      'ages 6', 'ages 8', 'ages 10', 'ages 12', 'ages 14'];
-    for (const kw of youthKeywords) {
-      if (text.includes(kw)) score += 0.15;
+    // DATE signals (+0.05)
+    if (/(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(text)) {
+      score += 0.05;
     }
+    if (/202[5-7]/i.test(text)) score += 0.05;
 
-    // Registration indicators
-    const regKeywords = ['register', 'registration', 'sign up', 'enroll', 'book now',
-      'spots available', 'limited spots'];
-    for (const kw of regKeywords) {
-      if (text.includes(kw)) score += 0.1;
-    }
-
-    // Negative indicators (reduce score for non-clinic content)
-    const negKeywords = ['nhl scores', 'game recap', 'trade rumor', 'fantasy hockey',
-      'watch live', 'highlights', 'standings', 'news article', 'opinion'];
-    for (const kw of negKeywords) {
-      if (text.includes(kw)) score -= 0.2;
+    // NEGATIVE signals
+    const negativeSignals = [
+      'nhl scores', 'game recap', 'trade rumor', 'fantasy hockey',
+      'watch live', 'highlights', 'standings', 'playoff', 'draft pick',
+      'free agent', 'contract extension', 'injury report', 'box score',
+      'power rankings', 'betting odds', 'prop bet',
+      'news article', 'opinion column', 'editorial', 'blog post',
+    ];
+    for (const kw of negativeSignals) {
+      if (text.includes(kw)) score -= 0.15;
     }
 
     return Math.max(0, Math.min(1, score));
   }
 
-  /**
-   * Process raw data into structured Clinic objects
-   */
+  // ── Data Processing ────────────────────────────────────────
+
   private async processRawData(rawData: RawClinicData[]): Promise<Clinic[]> {
-    // Filter by confidence threshold
-    const confident = rawData.filter((r) => r.confidence >= 0.3);
+    const confident = rawData.filter((r) => r.confidence >= 0.25);
 
     return confident.map((raw, index) => {
       const id = `clinic-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 8)}`;
-
-      // Parse dates
       const { startDate, endDate } = this.parseDates(raw);
-
-      // Parse price
       const { amount, currency } = this.parsePrice(raw);
-
-      // Determine age groups
       const ageGroups = this.parseAgeGroups(raw);
-
-      // Determine skill levels
       const skillLevels = this.parseSkillLevels(raw);
-
-      // Determine type
       const clinicType = this.parseClinicType(raw);
 
-      // Build location
       const location = {
         venue: raw.venue || raw.location || 'Venue TBD',
         address: '',
@@ -593,14 +1094,11 @@ export class ClinicSearchEngine {
         state: raw.state || '',
         country: raw.country || this.inferCountry(raw) || 'Unknown',
         countryCode: this.getCountryCode(raw.country || this.inferCountry(raw) || ''),
-        lat: 0,
-        lng: 0,
+        lat: 0, lng: 0,
       };
 
-      const clinic: Clinic = {
-        id,
-        name: raw.name || 'Hockey Clinic',
-        type: clinicType,
+      return {
+        id, name: raw.name || 'Hockey Clinic', type: clinicType,
         description: (raw.description || '').substring(0, 200),
         longDescription: raw.description || '',
         imageUrl: raw.imageUrl || '',
@@ -610,18 +1108,12 @@ export class ClinicSearchEngine {
         schedule: [],
         duration: this.calculateDuration(startDate, endDate),
         price: { amount, currency },
-        ageGroups,
-        skillLevels,
+        ageGroups, skillLevels,
         coaches: (raw.coaches || []).map((name, i) => ({
-          id: `coach-${id}-${i}`,
-          name,
-          title: 'Instructor',
-          bio: '',
-          photoUrl: '',
-          credentials: [],
+          id: `coach-${id}-${i}`, name, title: 'Instructor',
+          bio: '', photoUrl: '', credentials: [],
         })),
-        maxParticipants: 50,
-        spotsRemaining: 25,
+        maxParticipants: 50, spotsRemaining: 25,
         registrationUrl: raw.registrationUrl || raw.websiteUrl || raw.sourceUrl,
         websiteUrl: raw.websiteUrl || raw.sourceUrl,
         contactEmail: raw.contactEmail || '',
@@ -629,14 +1121,11 @@ export class ClinicSearchEngine {
         amenities: raw.amenities || [],
         includes: [],
         tags: this.generateTags(raw),
-        featured: raw.confidence >= 0.7,
+        featured: raw.confidence >= 0.65,
         isNew: true,
-        rating: 0,
-        reviewCount: 0,
+        rating: 0, reviewCount: 0,
         createdAt: new Date().toISOString().split('T')[0],
-      };
-
-      return clinic;
+      } satisfies Clinic;
     });
   }
 
@@ -649,35 +1138,24 @@ export class ClinicSearchEngine {
     }
 
     if (raw.dateText) {
-      // Try to extract dates from text
       const datePatterns = [
-        // "July 14-18, 2026"
         /(\w+ \d{1,2})\s*[-–]\s*(\d{1,2}),?\s*(\d{4})/i,
-        // "July 14, 2026 - July 18, 2026"
         /(\w+ \d{1,2},?\s*\d{4})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
-        // "7/14/2026 - 7/18/2026"
         /(\d{1,2}\/\d{1,2}\/\d{4})\s*[-–]\s*(\d{1,2}\/\d{1,2}\/\d{4})/i,
-        // "2026-07-14"
         /(\d{4}-\d{2}-\d{2})/i,
       ];
-
       for (const pattern of datePatterns) {
         const match = raw.dateText.match(pattern);
         if (match) {
           try {
             const start = new Date(match[1]).toISOString().split('T')[0];
-            const end = match[2]
-              ? new Date(match[2]).toISOString().split('T')[0]
-              : start;
+            const end = match[2] ? new Date(match[2]).toISOString().split('T')[0] : start;
             if (start !== 'Invalid Date') return { startDate: start, endDate: end };
-          } catch {
-            // Continue to next pattern
-          }
+          } catch { /* continue */ }
         }
       }
     }
 
-    // Default: set to future date
     const future = new Date();
     future.setMonth(future.getMonth() + 3);
     const dateStr = future.toISOString().split('T')[0];
@@ -685,91 +1163,93 @@ export class ClinicSearchEngine {
   }
 
   private parsePrice(raw: RawClinicData): { amount: number; currency: string } {
-    if (raw.priceAmount && raw.currency) {
-      return { amount: raw.priceAmount, currency: raw.currency };
-    }
-
+    if (raw.priceAmount && raw.currency) return { amount: raw.priceAmount, currency: raw.currency };
     if (raw.price) {
-      // Extract price from text like "$299", "€150", "CAD 400"
-      const match = raw.price.match(/[$€£¥]?\s*(\d[\d,]*\.?\d*)\s*(USD|CAD|EUR|GBP|AUD|CHF|SEK|NOK|JPY)?/i);
+      const match = raw.price.match(/[$€£¥]?\s*(\d[\d,]*\.?\d*)\s*(USD|CAD|EUR|GBP|AUD|CHF|SEK|NOK|JPY|CZK|RUB|KRW|CNY)?/i);
       if (match) {
         const amount = parseFloat(match[1].replace(',', ''));
         let currency = match[2]?.toUpperCase() || 'USD';
         if (raw.price.includes('€')) currency = 'EUR';
         if (raw.price.includes('£')) currency = 'GBP';
         if (raw.price.includes('¥')) currency = 'JPY';
+        if (raw.price.includes('kr')) currency = 'SEK';
+        if (raw.price.includes('Kč')) currency = 'CZK';
+        if (raw.price.includes('₽')) currency = 'RUB';
         return { amount, currency };
       }
     }
-
     return { amount: 0, currency: 'USD' };
   }
 
   private parseAgeGroups(raw: RawClinicData): Clinic['ageGroups'] {
     const text = `${raw.name || ''} ${raw.description || ''} ${raw.ageRange || ''}`.toLowerCase();
     const groups: Clinic['ageGroups'] = [];
-
-    if (/mite|ages?\s*[4-8]|u[- ]?8/i.test(text)) groups.push('mites');
-    if (/squirt|ages?\s*(9|10)|u[- ]?10/i.test(text)) groups.push('squirts');
-    if (/peewee|pee.?wee|ages?\s*(11|12)|u[- ]?12/i.test(text)) groups.push('peewee');
-    if (/bantam|ages?\s*(13|14)|u[- ]?14/i.test(text)) groups.push('bantam');
-    if (/midget|ages?\s*(15|16|17)|u[- ]?16|u[- ]?18/i.test(text)) groups.push('midget');
-    if (/junior|ages?\s*(18|19|20)|u[- ]?20/i.test(text)) groups.push('junior');
-
+    if (/mite|ages?\s*[4-8]|u[- ]?8|4-8|5-8|6-8/i.test(text)) groups.push('mites');
+    if (/squirt|atom|ages?\s*(9|10)|u[- ]?10|8-10|9-10/i.test(text)) groups.push('squirts');
+    if (/peewee|pee.?wee|ages?\s*(11|12)|u[- ]?12|10-12|11-12/i.test(text)) groups.push('peewee');
+    if (/bantam|ages?\s*(13|14)|u[- ]?14|12-14|13-14/i.test(text)) groups.push('bantam');
+    if (/midget|ages?\s*(15|16|17)|u[- ]?16|u[- ]?18|14-16|15-17|14-18/i.test(text)) groups.push('midget');
+    if (/junior|ages?\s*(18|19|20)|u[- ]?20|16-20|17-20/i.test(text)) groups.push('junior');
     return groups.length > 0 ? groups : ['all'];
   }
 
   private parseSkillLevels(raw: RawClinicData): Clinic['skillLevels'] {
     const text = `${raw.name || ''} ${raw.description || ''} ${raw.skillLevel || ''}`.toLowerCase();
     const levels: Clinic['skillLevels'] = [];
-
-    if (/beginner|learn to play|introduction|introductory|first time|no experience/i.test(text)) levels.push('beginner');
-    if (/intermediate/i.test(text)) levels.push('intermediate');
-    if (/advanced/i.test(text)) levels.push('advanced');
-    if (/elite|aaa|tier 1|select|travel|competitive/i.test(text)) levels.push('elite');
-
+    if (/beginner|learn to play|introduction|introductory|first time|no experience|never played/i.test(text)) levels.push('beginner');
+    if (/intermediate|some experience|recreational/i.test(text)) levels.push('intermediate');
+    if (/advanced|experienced/i.test(text)) levels.push('advanced');
+    if (/elite|aaa|tier 1|select|travel|competitive|high performance|prospect|pre-nhl/i.test(text)) levels.push('elite');
     return levels.length > 0 ? levels : ['all'];
   }
 
   private parseClinicType(raw: RawClinicData): Clinic['type'] {
     const text = `${raw.name || ''} ${raw.description || ''}`.toLowerCase();
-
-    if (/showcase|exposure|scouting/i.test(text)) return 'showcase';
-    if (/tournament|tourney/i.test(text)) return 'tournament';
-    if (/camp|summer|week-long|overnight/i.test(text)) return 'camp';
-    if (/development|learn to play|intro/i.test(text)) return 'development';
+    if (/showcase|exposure|scouting|combine/i.test(text)) return 'showcase';
+    if (/tournament|tourney|jamboree/i.test(text)) return 'tournament';
+    if (/camp|summer|week-long|overnight|residential|day camp/i.test(text)) return 'camp';
+    if (/development|learn to play|intro|beginner|first step/i.test(text)) return 'development';
     return 'clinic';
   }
 
   private extractCity(raw: RawClinicData): string | null {
     const text = `${raw.location || ''} ${raw.description || ''}`;
-    // Try to extract city names from common patterns
     const cityMatch = text.match(/(?:in|at|near)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
     return cityMatch ? cityMatch[1] : null;
   }
 
   private inferCountry(raw: RawClinicData): string {
     const text = `${raw.name || ''} ${raw.description || ''} ${raw.location || ''} ${raw.sourceUrl}`.toLowerCase();
-
     const countryPatterns: [RegExp, string][] = [
-      [/canada|ontario|quebec|alberta|british columbia|\.ca\b/i, 'Canada'],
-      [/sweden|swedish|stockholm|\.se\b/i, 'Sweden'],
-      [/finland|finnish|helsinki|\.fi\b/i, 'Finland'],
-      [/czech|prague|\.cz\b/i, 'Czech Republic'],
-      [/russia|moscow|\.ru\b/i, 'Russia'],
-      [/switzerland|swiss|zurich|davos|\.ch\b/i, 'Switzerland'],
-      [/germany|german|munich|berlin|\.de\b/i, 'Germany'],
-      [/norway|norwegian|oslo|\.no\b/i, 'Norway'],
-      [/japan|japanese|tokyo|sapporo|\.jp\b/i, 'Japan'],
-      [/australia|australian|melbourne|sydney|\.au\b/i, 'Australia'],
-      [/usa|united states|america|\.com\b/i, 'United States'],
+      [/canada|ontario|quebec|alberta|british columbia|manitoba|saskatchewan|\.ca\b/i, 'Canada'],
+      [/sweden|swedish|stockholm|gothenburg|malmö|\.se\b|swehockey/i, 'Sweden'],
+      [/finland|finnish|helsinki|tampere|\.fi\b|leijonat/i, 'Finland'],
+      [/czech|prague|brno|\.cz\b|ceskyhokej/i, 'Czech Republic'],
+      [/russia|russian|moscow|st\.?\s*petersburg|\.ru\b|fhr\.ru/i, 'Russia'],
+      [/switzerland|swiss|zurich|zürich|davos|bern|\.ch\b|sihf/i, 'Switzerland'],
+      [/germany|german|munich|münchen|berlin|düsseldorf|\.de\b|deb-online/i, 'Germany'],
+      [/norway|norwegian|oslo|bergen|\.no\b|hockey\.no/i, 'Norway'],
+      [/denmark|danish|copenhagen|\.dk\b|ishockey\.dk/i, 'Denmark'],
+      [/austria|austrian|vienna|wien|innsbruck|\.at\b/i, 'Austria'],
+      [/slovakia|slovak|bratislava|\.sk\b/i, 'Slovakia'],
+      [/latvia|latvian|riga|\.lv\b/i, 'Latvia'],
+      [/japan|japanese|tokyo|sapporo|nagano|\.jp\b|jihf/i, 'Japan'],
+      [/south korea|korean|seoul|\.kr\b|kiha/i, 'South Korea'],
+      [/china|chinese|beijing|shanghai|\.cn\b/i, 'China'],
+      [/australia|australian|melbourne|sydney|brisbane|\.au\b|ihfa/i, 'Australia'],
+      [/united kingdom|british|england|london|\.uk\b|eihl/i, 'United Kingdom'],
+      [/france|french|paris|lyon|\.fr\b|hockeyfrance/i, 'France'],
+      [/poland|polish|warsaw|\.pl\b|pzhl/i, 'Poland'],
+      [/italy|italian|milan|rome|\.it\b|fisg/i, 'Italy'],
+      [/hungary|hungarian|budapest|\.hu\b/i, 'Hungary'],
+      [/belarus|belarusian|minsk|\.by\b/i, 'Belarus'],
+      [/kazakhstan|almaty|\.kz\b/i, 'Kazakhstan'],
+      [/usa|united states|america|\.com\b|\.org\b|\.net\b|usahockey/i, 'United States'],
     ];
-
     for (const [pattern, country] of countryPatterns) {
       if (pattern.test(text)) return country;
     }
-
-    return 'United States'; // Default
+    return 'United States';
   }
 
   private getCountryCode(country: string): string {
@@ -779,6 +1259,10 @@ export class ClinicSearchEngine {
       'Norway': 'NO', 'Japan': 'JP', 'Australia': 'AU', 'France': 'FR',
       'United Kingdom': 'GB', 'Denmark': 'DK', 'Austria': 'AT', 'Slovakia': 'SK',
       'South Korea': 'KR', 'China': 'CN', 'Latvia': 'LV', 'Belarus': 'BY',
+      'Poland': 'PL', 'Italy': 'IT', 'Hungary': 'HU', 'Kazakhstan': 'KZ',
+      'New Zealand': 'NZ', 'India': 'IN', 'Thailand': 'TH', 'Singapore': 'SG',
+      'Israel': 'IL', 'South Africa': 'ZA', 'Mexico': 'MX', 'Brazil': 'BR',
+      'Argentina': 'AR', 'UAE': 'AE',
     };
     return codes[country] || 'US';
   }
@@ -796,80 +1280,93 @@ export class ClinicSearchEngine {
   private generateTags(raw: RawClinicData): string[] {
     const text = `${raw.name || ''} ${raw.description || ''}`.toLowerCase();
     const tags: string[] = [];
-
     if (/summer/i.test(text)) tags.push('summer');
     if (/winter/i.test(text)) tags.push('winter');
     if (/spring/i.test(text)) tags.push('spring');
+    if (/fall|autumn/i.test(text)) tags.push('fall');
     if (/goaltend|goalie|netminder/i.test(text)) tags.push('goaltending');
     if (/power skat/i.test(text)) tags.push('power-skating');
     if (/shooting/i.test(text)) tags.push('shooting');
     if (/defense|defensive/i.test(text)) tags.push('defense');
     if (/forward/i.test(text)) tags.push('forwards');
+    if (/stickhandl|puck\s*handl/i.test(text)) tags.push('stickhandling');
+    if (/checking/i.test(text)) tags.push('checking');
+    if (/conditioning|fitness|off-ice/i.test(text)) tags.push('conditioning');
     if (/beginner|learn to play/i.test(text)) tags.push('beginner-friendly');
     if (/elite|aaa|select/i.test(text)) tags.push('elite');
     if (/girls|women/i.test(text)) tags.push('girls-hockey');
     if (/overnight|residential/i.test(text)) tags.push('overnight');
+    if (/day\s*camp/i.test(text)) tags.push('day-camp');
+    if (/prospect|showcase|scouting/i.test(text)) tags.push('showcase');
+    if (/nhl|pro/i.test(text)) tags.push('pro-instructors');
     if (raw.city) tags.push(raw.city.toLowerCase().replace(/\s+/g, '-'));
-
     return [...new Set(tags)];
   }
 
-  /**
-   * Add geographic coordinates to clinics that don't have them
-   */
   private async geoEnrich(clinics: Clinic[]): Promise<Clinic[]> {
-    const enriched = await Promise.all(
-      clinics.map(async (clinic) => {
-        if (clinic.location.lat !== 0 && clinic.location.lng !== 0) return clinic;
-
-        try {
-          const coords = await geocodeLocation(
-            `${clinic.location.venue} ${clinic.location.city} ${clinic.location.country}`
-          );
-          if (coords) {
-            return {
-              ...clinic,
-              location: { ...clinic.location, lat: coords.lat, lng: coords.lng },
-            };
-          }
-        } catch {
-          // Skip geo-enrichment on error
+    // Only geocode a batch at a time (Nominatim rate limit)
+    const enriched: Clinic[] = [];
+    for (const clinic of clinics) {
+      if (clinic.location.lat !== 0 && clinic.location.lng !== 0) {
+        enriched.push(clinic);
+        continue;
+      }
+      try {
+        const query = clinic.location.city !== 'Unknown'
+          ? `${clinic.location.city} ${clinic.location.country}`
+          : clinic.location.country;
+        const coords = await geocodeLocation(query);
+        if (coords) {
+          enriched.push({
+            ...clinic,
+            location: { ...clinic.location, lat: coords.lat, lng: coords.lng },
+          });
+          continue;
         }
+      } catch { /* skip */ }
 
-        // Fallback: use approximate coordinates for country
-        const countryCoords = this.getCountryCoords(clinic.location.country);
-        return {
-          ...clinic,
-          location: { ...clinic.location, ...countryCoords },
-        };
-      })
-    );
-
+      const countryCoords = this.getCountryCoords(clinic.location.country);
+      enriched.push({
+        ...clinic,
+        location: { ...clinic.location, ...countryCoords },
+      });
+    }
     return enriched;
   }
 
   private getCountryCoords(country: string): { lat: number; lng: number } {
     const coords: Record<string, { lat: number; lng: number }> = {
-      'United States': { lat: 39.8283, lng: -98.5795 },
-      'Canada': { lat: 56.1304, lng: -106.3468 },
-      'Sweden': { lat: 60.1282, lng: 18.6435 },
-      'Finland': { lat: 61.9241, lng: 25.7482 },
-      'Czech Republic': { lat: 49.8175, lng: 15.4730 },
-      'Russia': { lat: 61.5240, lng: 105.3188 },
-      'Switzerland': { lat: 46.8182, lng: 8.2275 },
-      'Germany': { lat: 51.1657, lng: 10.4515 },
-      'Norway': { lat: 60.4720, lng: 8.4689 },
-      'Japan': { lat: 36.2048, lng: 138.2529 },
-      'Australia': { lat: -25.2744, lng: 133.7751 },
+      'United States': { lat: 39.83, lng: -98.58 },
+      'Canada': { lat: 56.13, lng: -106.35 },
+      'Sweden': { lat: 60.13, lng: 18.64 },
+      'Finland': { lat: 61.92, lng: 25.75 },
+      'Czech Republic': { lat: 49.82, lng: 15.47 },
+      'Russia': { lat: 55.75, lng: 37.62 },
+      'Switzerland': { lat: 46.82, lng: 8.23 },
+      'Germany': { lat: 51.17, lng: 10.45 },
+      'Norway': { lat: 60.47, lng: 8.47 },
+      'Denmark': { lat: 56.26, lng: 9.50 },
+      'Austria': { lat: 47.52, lng: 14.55 },
+      'Slovakia': { lat: 48.67, lng: 19.70 },
+      'Japan': { lat: 36.20, lng: 138.25 },
+      'South Korea': { lat: 35.91, lng: 127.77 },
+      'China': { lat: 35.86, lng: 104.20 },
+      'Australia': { lat: -25.27, lng: 133.78 },
+      'United Kingdom': { lat: 55.38, lng: -3.44 },
+      'France': { lat: 46.23, lng: 2.21 },
+      'Poland': { lat: 51.92, lng: 19.15 },
+      'Italy': { lat: 41.87, lng: 12.57 },
+      'Latvia': { lat: 56.88, lng: 24.60 },
+      'Belarus': { lat: 53.71, lng: 27.95 },
+      'Hungary': { lat: 47.16, lng: 19.50 },
+      'Kazakhstan': { lat: 48.02, lng: 66.92 },
     };
     return coords[country] || { lat: 0, lng: 0 };
   }
 
-  /**
-   * Clear the search cache
-   */
   clearCache() {
     this.cache.clear();
+    this.discoveredUrls.clear();
   }
 }
 
