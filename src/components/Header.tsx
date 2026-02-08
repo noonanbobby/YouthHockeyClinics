@@ -1,13 +1,17 @@
 'use client';
 
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, UserCircle } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
   const { setSearchOpen, setFilterOpen, activeFilterCount, viewMode, setViewMode } = useStore();
   const filterCount = activeFilterCount();
+  const { data: session } = useSession();
+  const router = useRouter();
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-white/5">
@@ -37,6 +41,20 @@ export default function Header() {
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-sky-500 text-white text-[10px] font-bold rounded-full px-1">
                   {filterCount}
                 </span>
+              )}
+            </button>
+            <button
+              onClick={() => router.push(session ? '/settings' : '/login')}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors overflow-hidden"
+            >
+              {session?.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt=""
+                  className="w-full h-full object-cover rounded-full"
+                />
+              ) : (
+                <UserCircle size={18} className={session ? 'text-sky-400' : 'text-slate-300'} />
               )}
             </button>
           </div>

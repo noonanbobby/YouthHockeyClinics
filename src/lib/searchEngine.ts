@@ -44,6 +44,7 @@ export interface SearchConfig {
   eventbriteApiKey?: string;
   maxResultsPerSource?: number;
   timeout?: number;
+  maxConcurrent?: number; // Max parallel fetches
 }
 
 export interface RawClinicData {
@@ -523,7 +524,7 @@ export const KNOWN_SOURCES: { name: string; url: string; region: string }[] = [
 // ═══════════════════════════════════════════════════════════════
 
 export class ClinicSearchEngine {
-  private config: SearchConfig;
+  private config: SearchConfig & { maxConcurrent: number };
   private cache: Map<string, { data: Clinic[]; timestamp: number }> = new Map();
   private cacheTTL = 30 * 60 * 1000;
   private discoveredUrls: Set<string> = new Set();
@@ -531,7 +532,8 @@ export class ClinicSearchEngine {
   constructor(config: SearchConfig = {}) {
     this.config = {
       maxResultsPerSource: 50,
-      timeout: 15000,
+      timeout: 5000,
+      maxConcurrent: 8,
       ...config,
     };
   }
@@ -541,7 +543,45 @@ export class ClinicSearchEngine {
   }
 
   /**
-   * Main search — orchestrates all discovery strategies
+   * Execute promises in batches to control concurrency
+   */
+  private async runBatched<T>(
+    tasks: (() => Promise<T>)[],
+    batchSize: number,
+    timeBudget?: number,
+  ): Promise<PromiseSettledResult<T>[]> {
+    const results: PromiseSettledResult<T>[] = [];
+    const startTime = Date.now();
+
+    for (let i = 0; i < tasks.length; i += batchSize) {
+      // Check global time budget — if we're running low, stop launching new batches
+      if (timeBudget && Date.now() - startTime > timeBudget) {
+        // Mark remaining as rejected (timed out)
+        for (let j = i; j < tasks.length; j++) {
+          results.push({ status: 'rejected', reason: new Error('Global time budget exceeded') });
+        }
+        break;
+      }
+
+      const batch = tasks.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map((task) =>
+          Promise.race([
+            task(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Source timeout')), this.config.timeout)
+            ),
+          ])
+        )
+      );
+      results.push(...batchResults);
+    }
+    return results;
+  }
+
+  /**
+   * Main search — orchestrates all discovery strategies.
+   * Designed to complete within 45 seconds on Vercel serverless.
    */
   async search(query?: string, forceRefresh = false): Promise<{
     clinics: Clinic[];
@@ -550,6 +590,7 @@ export class ClinicSearchEngine {
     searchDuration: number;
   }> {
     const startTime = Date.now();
+    const GLOBAL_BUDGET = 45000; // 45 seconds max — leave headroom for Vercel's 60s limit
     const cacheKey = query || '__all__';
 
     if (!forceRefresh) {
@@ -567,8 +608,13 @@ export class ClinicSearchEngine {
     const allRawData: RawClinicData[] = [];
     const sourceResults: { name: string; count: number; status: 'success' | 'error'; error?: string }[] = [];
 
-    // ─── PHASE 1: Scrape all known sources in parallel ──────
-    const scrapePromises = KNOWN_SOURCES.map(async (source) => {
+    // ─── Build task list ─────────────────────────────────────
+    type TaskResult = { name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string };
+
+    // PHASE 1 tasks: Scrape known sources
+    // Prioritize the most important sources first
+    const prioritySources = KNOWN_SOURCES.slice(0, 30); // Top 30 most important
+    const scrapeTasks: (() => Promise<TaskResult>)[] = prioritySources.map((source) => async () => {
       try {
         const results = await this.scrapeSource(source.url, source.name);
         return { name: source.name, results, status: 'success' as const };
@@ -577,53 +623,47 @@ export class ClinicSearchEngine {
       }
     });
 
-    // ─── PHASE 2: Search APIs with intelligent query selection ──
-    const searchPromises: Promise<{ name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string }>[] = [];
-
-    // When user provides a query, use it + related expansions
-    // When no query, use a rotating selection of our massive query corpus
+    // PHASE 2 tasks: Search API queries
+    const searchTasks: (() => Promise<TaskResult>)[] = [];
     const searchQueries = query
       ? this.expandUserQuery(query)
       : this.selectSearchQueries();
 
     if (this.config.serpApiKey) {
-      for (const q of searchQueries.slice(0, 15)) {
-        searchPromises.push(this.searchViaSerpApi(q));
+      for (const q of searchQueries.slice(0, 8)) {
+        searchTasks.push(() => this.searchViaSerpApi(q));
       }
     }
 
     if (this.config.googleApiKey && this.config.googleCseId) {
-      for (const q of searchQueries.slice(0, 10)) {
-        searchPromises.push(this.searchViaGoogleCSE(q));
+      for (const q of searchQueries.slice(0, 5)) {
+        searchTasks.push(() => this.searchViaGoogleCSE(q));
       }
     }
 
     if (this.config.bingApiKey) {
-      for (const q of searchQueries.slice(0, 10)) {
-        searchPromises.push(this.searchViaBing(q));
+      for (const q of searchQueries.slice(0, 5)) {
+        searchTasks.push(() => this.searchViaBing(q));
       }
     }
 
     if (this.config.eventbriteApiKey) {
       const ebQueries = query
         ? [query]
-        : ['youth hockey camp', 'ice hockey clinic', 'hockey skills camp', 'learn to play hockey', 'hockey showcase'];
+        : ['youth hockey camp', 'ice hockey clinic', 'hockey skills camp'];
       for (const q of ebQueries) {
-        searchPromises.push(this.searchEventbrite(q));
+        searchTasks.push(() => this.searchEventbrite(q));
       }
     }
 
-    // ─── Execute all in parallel with timeouts ──────────────
-    const allPromises = [...scrapePromises, ...searchPromises];
-    const results = await Promise.allSettled(
-      allPromises.map((p) =>
-        Promise.race([
-          p,
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), this.config.timeout)
-          ),
-        ])
-      )
+    // ─── Execute: API searches first (fastest), then scrapes ──
+    // API searches are typically faster than full page scrapes
+    const allTasks = [...searchTasks, ...scrapeTasks];
+
+    const results = await this.runBatched(
+      allTasks,
+      this.config.maxConcurrent,
+      GLOBAL_BUDGET - 10000, // Leave 10s for post-processing
     );
 
     for (const result of results) {
@@ -638,7 +678,7 @@ export class ClinicSearchEngine {
         allRawData.push(...r.results);
       } else {
         sourceResults.push({
-          name: 'unknown',
+          name: 'timeout',
           count: 0,
           status: 'error',
           error: result.reason?.message || 'Unknown error',
@@ -646,39 +686,30 @@ export class ClinicSearchEngine {
       }
     }
 
-    // ─── PHASE 3: Recursive discovery ───────────────────────
-    // From the raw data we found, extract any linked URLs we haven't
-    // visited yet and try to scrape them too (1 level deep)
-    const newUrls = this.extractDiscoverableUrls(allRawData);
-    if (newUrls.length > 0) {
-      const discoveryPromises = newUrls.slice(0, 20).map(async (url) => {
-        try {
-          const results = await this.scrapeSource(url, `Discovered: ${new URL(url).hostname}`);
-          return { name: `Discovery: ${new URL(url).hostname}`, results, status: 'success' as const };
-        } catch (e) {
-          return { name: `Discovery: ${url}`, results: [] as RawClinicData[], status: 'error' as const, error: String(e) };
-        }
-      });
+    // ─── PHASE 3: Skip recursive discovery if running low on time ──
+    const timeRemaining = GLOBAL_BUDGET - (Date.now() - startTime);
+    if (timeRemaining > 15000) {
+      const newUrls = this.extractDiscoverableUrls(allRawData);
+      if (newUrls.length > 0) {
+        const discoveryTasks = newUrls.slice(0, 5).map((url) => async (): Promise<TaskResult> => {
+          try {
+            const r = await this.scrapeSource(url, `Discovered: ${new URL(url).hostname}`);
+            return { name: `Discovery: ${new URL(url).hostname}`, results: r, status: 'success' };
+          } catch (e) {
+            return { name: `Discovery: ${url}`, results: [], status: 'error', error: String(e) };
+          }
+        });
 
-      const discoveryResults = await Promise.allSettled(
-        discoveryPromises.map((p) =>
-          Promise.race([
-            p,
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout')), 8000)
-            ),
-          ])
-        )
-      );
-
-      for (const result of discoveryResults) {
-        if (result.status === 'fulfilled') {
-          sourceResults.push({
-            name: result.value.name,
-            count: result.value.results.length,
-            status: result.value.status,
-          });
-          allRawData.push(...result.value.results);
+        const discoveryResults = await this.runBatched(discoveryTasks, 5, 8000);
+        for (const result of discoveryResults) {
+          if (result.status === 'fulfilled') {
+            sourceResults.push({
+              name: result.value.name,
+              count: result.value.results.length,
+              status: result.value.status,
+            });
+            allRawData.push(...result.value.results);
+          }
         }
       }
     }
@@ -686,7 +717,12 @@ export class ClinicSearchEngine {
     // ─── PHASE 4: Process, deduplicate, enrich ──────────────
     const processedClinics = await this.processRawData(allRawData);
     const deduped = deduplicateClinics(processedClinics);
-    const enriched = await this.geoEnrich(deduped);
+
+    // Only geocode if we have time left (geocoding is slow, 1 req/sec)
+    const geoTimeRemaining = GLOBAL_BUDGET - (Date.now() - startTime);
+    const enriched = geoTimeRemaining > 5000
+      ? await this.geoEnrich(deduped.slice(0, 20)) // Only geocode top 20
+      : deduped;
 
     const sorted = enriched.sort((a, b) => {
       if (a.featured !== b.featured) return a.featured ? -1 : 1;
@@ -836,15 +872,23 @@ export class ClinicSearchEngine {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8,sv;q=0.7,fi;q=0.6,de;q=0.5',
         },
+        redirect: 'follow',
       });
 
       clearTimeout(timeoutId);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+      // Limit response body to 2MB to avoid hanging on huge pages
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > 2 * 1024 * 1024) throw new Error('Page too large');
+
       const html = await response.text();
+      // Skip if the page is absurdly large (would slow down cheerio parsing)
+      if (html.length > 2 * 1024 * 1024) return [];
+
       return extractClinicsFromHTML(html, url, sourceName);
-    } catch (error) {
-      console.error(`Scrape failed: ${sourceName} (${url}):`, error);
+    } catch {
+      // Silently fail — expected for many sources (timeouts, 403s, etc.)
       return [];
     }
   }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import BottomNav from '@/components/BottomNav';
+import Providers from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: 'Hockey Clinics Finder - Youth Hockey Camps Worldwide',
@@ -41,8 +42,10 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-slate-950 text-white antialiased font-sans">
-        {children}
-        <BottomNav />
+        <Providers>
+          {children}
+          <BottomNav />
+        </Providers>
       </body>
     </html>
   );

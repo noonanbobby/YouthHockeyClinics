@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSearchEngine, SearchConfig } from '@/lib/searchEngine';
 
+// Vercel serverless function config — extend timeout to max allowed
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 // In-memory server-side cache
 let cachedResults: { data: unknown; timestamp: number } | null = null;
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -29,7 +33,8 @@ export async function GET(request: NextRequest) {
       bingApiKey: process.env.BING_API_KEY || searchParams.get('bingApiKey') || undefined,
       eventbriteApiKey: process.env.EVENTBRITE_API_KEY || searchParams.get('eventbriteApiKey') || undefined,
       maxResultsPerSource: 50,
-      timeout: 12000,
+      timeout: 5000, // 5 seconds per source — fast enough for Vercel
+      maxConcurrent: 8, // Limit concurrent fetches to avoid overwhelming serverless
     };
 
     const engine = createSearchEngine(config);
