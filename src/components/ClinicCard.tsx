@@ -3,7 +3,7 @@
 import { Clinic } from '@/types';
 import { formatDateRange, formatPrice, getClinicTypeLabel, getSpotsColor, getCountryFlag, cn, timeUntil } from '@/lib/utils';
 import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video, Award } from 'lucide-react';
-import { useStore } from '@/store/useStore';
+import { useStore, getAgeGroupFromDOB } from '@/store/useStore';
 import { calculateDistance } from '@/lib/geocoder';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -22,7 +22,14 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 export default function ClinicCard({ clinic, index }: ClinicCardProps) {
-  const { toggleFavorite, isFavorite, liveBarnConfig, getEffectiveLocation } = useStore();
+  const {
+    toggleFavorite,
+    isFavorite,
+    liveBarnConfig,
+    getEffectiveLocation,
+    childProfiles,
+    activeChildId,
+  } = useStore();
   const router = useRouter();
   const fav = isFavorite(clinic.id);
 
@@ -44,6 +51,13 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     distanceLabel = mi < 100 ? `${Math.round(mi)} mi` : `${Math.round(mi).toLocaleString()} mi`;
   }
 
+  // Child age group match
+  const activeChild = childProfiles.find((c) => c.id === activeChildId);
+  const childAgeGroup = activeChild ? getAgeGroupFromDOB(activeChild.dateOfBirth) : null;
+  const isAgeMatch = childAgeGroup
+    ? clinic.ageGroups.includes(childAgeGroup) || clinic.ageGroups.includes('all')
+    : false;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -53,14 +67,14 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
       className="group relative rounded-2xl overflow-hidden border border-white/[0.06] hover:border-[var(--theme-primary)]/30 transition-all duration-300 cursor-pointer active:scale-[0.98]"
       style={{ backgroundColor: 'var(--theme-card-bg, rgba(15,23,42,0.8))' }}
     >
-      {/* Top accent strip with gradient */}
-      <div className={cn('relative h-3', hasImage ? '' : '')}>
-        <div className="absolute inset-0 bg-gradient-to-r opacity-80" style={{
+      {/* Top accent strip */}
+      <div className="relative h-3">
+        <div className="absolute inset-0 opacity-80" style={{
           backgroundImage: `linear-gradient(to right, var(--theme-primary), var(--theme-secondary))`
         }} />
       </div>
 
-      {/* Image - only if available */}
+      {/* Image */}
       {hasImage && (
         <div className="relative h-36 overflow-hidden">
           <img
@@ -74,9 +88,9 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
 
       {/* Card Body */}
       <div className="p-4">
-        {/* Top row: Type badge + Country flag + Favorite */}
+        {/* Top row: badges */}
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
@@ -92,6 +106,11 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
             {clinic.isNew && (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400">
                 New
+              </span>
+            )}
+            {isAgeMatch && activeChild && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-violet-500/15 text-violet-300">
+                Fits {activeChild.name}
               </span>
             )}
             {hasLiveStream && (

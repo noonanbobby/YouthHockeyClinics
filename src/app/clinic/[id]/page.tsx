@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { calculateDistance } from '@/lib/geocoder';
+import { HockeyLoadingScreen } from '@/components/HockeyLoader';
 
 export default function ClinicDetailPage() {
   const { id } = useParams();
@@ -104,11 +105,7 @@ export default function ClinicDetailPage() {
   if (!clinic) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-950">
-        <div className="text-center">
-          <div className="w-10 h-10 border-2 rounded-full animate-spin mx-auto mb-4"
-            style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }} />
-          <p className="text-slate-400">Loading clinic details...</p>
-        </div>
+        <HockeyLoadingScreen message="Loading clinic details..." />
       </div>
     );
   }

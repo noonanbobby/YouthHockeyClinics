@@ -2,84 +2,108 @@
 
 import { useStore } from '@/store/useStore';
 import ClinicCard from './ClinicCard';
-import { RefreshCw, Key, Wifi, Loader2, Globe, Radio, ArrowRight } from 'lucide-react';
+import { HockeyLoader, ClinicListSkeleton } from './HockeyLoader';
+import { RefreshCw, Key, ArrowRight, MapPin, UserPlus } from 'lucide-react';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
 export default function ListView() {
-  const { filteredClinics, isLoading, isRefreshing, error, lastUpdated, searchMeta } = useStore();
+  const {
+    filteredClinics,
+    isLoading,
+    isRefreshing,
+    error,
+    lastUpdated,
+    searchMeta,
+    homeLocation,
+    childProfiles,
+  } = useStore();
   const { refresh } = useClinicSearch();
   const router = useRouter();
 
   const hasApiKeys = searchMeta?.hasApiKeys &&
     (searchMeta.hasApiKeys.serpApi || searchMeta.hasApiKeys.googleCse || searchMeta.hasApiKeys.bing);
 
-  // Loading state
+  // Check if user needs onboarding (no location AND no children)
+  const needsSetup = !homeLocation && childProfiles.length === 0;
+
+  // Loading state — hockey-themed
   if (isLoading && filteredClinics.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-6">
-        <div className="absolute inset-0 theme-gradient-radial pointer-events-none" />
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          className="mb-4"
-        >
-          <Globe size={48} style={{ color: 'var(--theme-primary)' }} />
-        </motion.div>
-        <h3 className="text-lg font-bold text-white mb-2">Scanning the Internet</h3>
-        <p className="text-sm text-slate-400 text-center max-w-xs mb-4">
-          Searching hockey organizations, event platforms, and training centers worldwide...
-        </p>
-        <div className="flex items-center gap-2 text-xs text-slate-500 mb-6">
-          <Radio size={12} className="animate-pulse" style={{ color: 'var(--theme-primary)' }} />
-          <span>This may take up to 30 seconds on first load</span>
+      <div className="relative px-4 py-6 pb-24">
+        <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
+
+        {/* Hockey loader + scanning message */}
+        <div className="flex flex-col items-center py-8 mb-6 relative z-10">
+          <HockeyLoader size="lg" message="Scanning rinks worldwide..." />
+          <div className="mt-6 space-y-2 w-full max-w-sm">
+            {['USA Hockey', 'Hockey Canada', 'IIHF', 'European Leagues', 'Event Platforms'].map(
+              (source, i) => (
+                <motion.div
+                  key={source}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: [0.3, 0.7, 0.3] }}
+                  transition={{ delay: i * 0.4, duration: 2, repeat: Infinity }}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' }}
+                >
+                  <motion.span
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear', delay: i * 0.3 }}
+                    className="text-sm"
+                  >
+                    🏒
+                  </motion.span>
+                  <span className="text-xs text-slate-400">Searching {source}...</span>
+                </motion.div>
+              )
+            )}
+          </div>
         </div>
-        <div className="mt-2 space-y-2 w-full max-w-sm">
-          {['USA Hockey', 'Hockey Canada', 'IIHF', 'Eventbrite', 'Swedish Hockey'].map(
-            (source, i) => (
-              <motion.div
-                key={source}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.3 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' }}
-              >
-                <Loader2 size={12} className="animate-spin" style={{ color: 'var(--theme-primary)' }} />
-                <span className="text-xs text-slate-400">Searching {source}...</span>
-              </motion.div>
-            )
-          )}
-        </div>
+
+        {/* Skeleton cards preview */}
+        <ClinicListSkeleton count={3} />
       </div>
     );
   }
 
-  // Error or no results state
+  // Empty / error state — hockey-themed
   if (filteredClinics.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6">
-        <div className="absolute inset-0 theme-gradient-radial pointer-events-none" />
+      <div className="flex flex-col items-center justify-center py-12 px-6">
+        <div className="fixed inset-0 theme-gradient-radial pointer-events-none" />
         {error ? (
-          <>
-            <Wifi size={48} className="text-slate-600 mb-4" />
+          <div className="relative z-10 text-center">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="mb-4"
+            >
+              <span className="text-6xl">🥅</span>
+            </motion.div>
             <h3 className="text-lg font-bold text-white mb-2">
-              {error.includes('timed out') ? 'Search Timed Out' : 'No Results Yet'}
+              {error.includes('timed out') ? 'Shot Blocked!' : 'Empty Net'}
             </h3>
             <p className="text-sm text-slate-400 text-center max-w-xs mb-2">{error}</p>
-          </>
+          </div>
         ) : (
-          <>
-            <Globe size={48} className="text-slate-600 mb-4" />
+          <div className="relative z-10 text-center">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="mb-4"
+            >
+              <span className="text-6xl">🏒</span>
+            </motion.div>
             <h3 className="text-lg font-bold text-white mb-2">No Clinics Found</h3>
             <p className="text-sm text-slate-400 text-center max-w-xs mb-2">
               Try adjusting your filters or adding search API keys for more results.
             </p>
-          </>
+          </div>
         )}
 
-        <div className="w-full max-w-sm mt-6 space-y-3">
+        <div className="relative z-10 w-full max-w-sm mt-4 space-y-3">
           {!hasApiKeys && (
             <div className="p-4 rounded-2xl border"
               style={{
@@ -95,8 +119,11 @@ export default function ListView() {
               </p>
               <button
                 onClick={() => router.push('/settings')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors theme-bg-primary-20 hover:opacity-90"
-                style={{ color: 'var(--theme-primary)' }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+                  color: 'var(--theme-primary)',
+                }}
               >
                 Add API Keys <ArrowRight size={14} />
               </button>
@@ -109,7 +136,7 @@ export default function ListView() {
             className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 theme-bg-primary text-white hover:opacity-90"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Scanning...' : 'Try Again'}
+            {isRefreshing ? 'Scanning...' : 'Drop the Puck'}
           </button>
         </div>
       </div>
@@ -118,8 +145,59 @@ export default function ListView() {
 
   return (
     <div className="relative px-4 py-4 pb-24 space-y-3">
-      {/* Radial glow */}
       <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
+
+      {/* Welcome / setup card for new users */}
+      {needsSetup && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 rounded-2xl p-4 border overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 12%, transparent), color-mix(in srgb, var(--theme-secondary) 8%, transparent))',
+            borderColor: 'color-mix(in srgb, var(--theme-primary) 25%, transparent)',
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">👋</span>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-white mb-1">Welcome to Noonan Hockey!</h3>
+              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                Personalize your experience to find the perfect clinics for your player.
+              </p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-black/20 rounded-xl text-left active:scale-[0.98] transition-transform"
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
+                    <UserPlus size={14} style={{ color: 'var(--theme-primary)' }} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-white">Add Your Player</p>
+                    <p className="text-[10px] text-slate-500">Name & DOB for age-matched results</p>
+                  </div>
+                  <ArrowRight size={12} className="text-slate-500 ml-auto" />
+                </button>
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-black/20 rounded-xl text-left active:scale-[0.98] transition-transform"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center">
+                    <MapPin size={14} className="text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-white">Set Home Location</p>
+                    <p className="text-[10px] text-slate-500">Local clinics show up first</p>
+                  </div>
+                  <ArrowRight size={12} className="text-slate-500 ml-auto" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Status bar */}
       <div className="relative z-10 flex items-center justify-between">

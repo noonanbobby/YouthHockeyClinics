@@ -8,16 +8,14 @@ import Header from '@/components/Header';
 import ListView from '@/components/ListView';
 import SearchOverlay from '@/components/SearchOverlay';
 import FilterSheet from '@/components/FilterSheet';
+import { HockeyLoadingScreen } from '@/components/HockeyLoader';
 import dynamic from 'next/dynamic';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-[calc(100vh-180px)] bg-slate-900">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-slate-400">Loading map...</p>
-      </div>
+    <div className="flex items-center justify-center h-[calc(100vh-220px)] bg-slate-950">
+      <HockeyLoadingScreen message="Loading map..." />
     </div>
   ),
 });
