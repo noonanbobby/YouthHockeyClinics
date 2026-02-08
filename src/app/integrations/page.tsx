@@ -24,6 +24,113 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
+function CredentialForm({
+  email,
+  setEmail,
+  password,
+  setPassword,
+  showPassword,
+  setShowPassword,
+  placeholder,
+}: {
+  email: string;
+  setEmail: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  showPassword: boolean;
+  setShowPassword: (v: boolean) => void;
+  placeholder: string;
+}) {
+  return (
+    <>
+      <div>
+        <label className="text-xs font-medium text-white block mb-1">Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={`Your ${placeholder} email`}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-white block mb-1">Password</label>
+        <div className="relative">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={`Your ${placeholder} password`}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 pr-10 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+          />
+          <button
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+          >
+            {showPassword ? <EyeOff size={14} className="text-slate-500" /> : <Eye size={14} className="text-slate-500" />}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function IntegrationCard({
+  icon: Icon,
+  title,
+  subtitle,
+  connected,
+  connectedText,
+  color,
+  expanded,
+  onToggle,
+  children,
+}: {
+  id: string;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
+  title: string;
+  subtitle: string;
+  connected: boolean;
+  connectedText: string;
+  color: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4"
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', connected ? 'bg-emerald-500/10' : `bg-${color}-500/10`)}>
+            <Icon size={20} className={connected ? 'text-emerald-400' : `text-${color}-400`} />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-white">{title}</p>
+            <p className="text-xs text-slate-400">
+              {connected ? (
+                <span className="text-emerald-400 flex items-center gap-1"><Wifi size={10} /> {connectedText}</span>
+              ) : (
+                <span className="flex items-center gap-1"><WifiOff size={10} /> {subtitle}</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <ChevronRight size={18} className={cn('text-slate-500 transition-transform', expanded && 'rotate-90')} />
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+            <div className="px-4 pb-4 space-y-4">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function IntegrationsPage() {
   const router = useRouter();
   const {
@@ -322,107 +429,6 @@ export default function IntegrationsPage() {
     setConnectionStatus('Email scanning disconnected.');
   };
 
-  // Shared credential form component
-  const CredentialForm = ({
-    email,
-    setEmail,
-    password,
-    setPassword,
-    showPassword,
-    setShowPassword,
-    placeholder,
-  }: {
-    email: string;
-    setEmail: (v: string) => void;
-    password: string;
-    setPassword: (v: string) => void;
-    showPassword: boolean;
-    setShowPassword: (v: boolean) => void;
-    placeholder: string;
-  }) => (
-    <>
-      <div>
-        <label className="text-xs font-medium text-white block mb-1">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder={`Your ${placeholder} email`}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-white block mb-1">Password</label>
-        <div className="relative">
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={`Your ${placeholder} password`}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 pr-10 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
-          />
-          <button
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
-          >
-            {showPassword ? <EyeOff size={14} className="text-slate-500" /> : <Eye size={14} className="text-slate-500" />}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-
-  const IntegrationCard = ({
-    id,
-    icon: Icon,
-    title,
-    subtitle,
-    connected,
-    connectedText,
-    color,
-    children,
-  }: {
-    id: string;
-    icon: React.ComponentType<{ size?: number | string; className?: string }>;
-    title: string;
-    subtitle: string;
-    connected: boolean;
-    connectedText: string;
-    color: string;
-    children: React.ReactNode;
-  }) => (
-    <div className="bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden">
-      <button
-        onClick={() => setExpandedSection(expandedSection === id ? null : id)}
-        className="w-full flex items-center justify-between p-4"
-      >
-        <div className="flex items-center gap-3">
-          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', connected ? 'bg-emerald-500/10' : `bg-${color}-500/10`)}>
-            <Icon size={20} className={connected ? 'text-emerald-400' : `text-${color}-400`} />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-white">{title}</p>
-            <p className="text-xs text-slate-400">
-              {connected ? (
-                <span className="text-emerald-400 flex items-center gap-1"><Wifi size={10} /> {connectedText}</span>
-              ) : (
-                <span className="flex items-center gap-1"><WifiOff size={10} /> {subtitle}</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <ChevronRight size={18} className={cn('text-slate-500 transition-transform', expandedSection === id && 'rotate-90')} />
-      </button>
-      <AnimatePresence>
-        {expandedSection === id && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
-            <div className="px-4 pb-4 space-y-4">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="safe-area-top" />
@@ -468,6 +474,8 @@ export default function IntegrationsPage() {
             connected={iceHockeyProConfig.connected}
             connectedText={`Connected — ${iceHockeyProConfig.playerName}`}
             color="blue"
+            expanded={expandedSection === 'icehockeypro'}
+            onToggle={() => setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')}
           >
             <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
               <div className="flex items-start gap-2">
@@ -571,6 +579,8 @@ export default function IntegrationsPage() {
             connected={daySmartConfig.connected}
             connectedText={`Connected — ${daySmartConfig.facilityName}`}
             color="orange"
+            expanded={expandedSection === 'dash'}
+            onToggle={() => setExpandedSection(expandedSection === 'dash' ? null : 'dash')}
           >
             <div className="p-3 bg-orange-500/10 rounded-xl border border-orange-500/20">
               <div className="flex items-start gap-2">
@@ -659,6 +669,8 @@ export default function IntegrationsPage() {
             connected={liveBarnConfig.connected}
             connectedText={`Connected — ${liveBarnConfig.venues.length} venues`}
             color="red"
+            expanded={expandedSection === 'livebarn'}
+            onToggle={() => setExpandedSection(expandedSection === 'livebarn' ? null : 'livebarn')}
           >
             <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
               <div className="flex items-start gap-2">
@@ -743,6 +755,8 @@ export default function IntegrationsPage() {
             connected={emailScanConfig.connected}
             connectedText={`Connected — ${emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'} · ${emailScanConfig.scanFrequency}`}
             color="violet"
+            expanded={expandedSection === 'email'}
+            onToggle={() => setExpandedSection(expandedSection === 'email' ? null : 'email')}
           >
             <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
               <div className="flex items-start gap-2">
