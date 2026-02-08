@@ -254,6 +254,25 @@ export default function FilterSheet() {
               {/* Toggles */}
               <div className="space-y-3">
                 <label className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-white">🥅 Goalie Clinics Only</span>
+                  </div>
+                  <button
+                    onClick={() => setFilter('goalieOnly', !filters.goalieOnly)}
+                    className={cn(
+                      'w-11 h-6 rounded-full transition-colors relative',
+                      filters.goalieOnly ? 'theme-bg-primary' : 'bg-white/10'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform',
+                        filters.goalieOnly ? 'translate-x-[22px]' : 'translate-x-0.5'
+                      )}
+                    />
+                  </button>
+                </label>
+                <label className="flex items-center justify-between">
                   <span className="text-sm text-white">Spots Available Only</span>
                   <button
                     onClick={() => setFilter('spotsAvailable', !filters.spotsAvailable)}

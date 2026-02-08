@@ -83,6 +83,7 @@ export interface FilterState {
   clinicTypes: ClinicType[];
   country: string | null;
   maxPrice: number | null;
+  goalieOnly: boolean;
   spotsAvailable: boolean;
   featured: boolean;
   sortBy: 'date' | 'price' | 'rating' | 'distance' | 'name';
@@ -99,11 +100,14 @@ export interface NotificationItem {
   type: 'new_clinic' | 'spots_low' | 'price_drop' | 'reminder' | 'registration_reminder' | 'child_match';
 }
 
+export type PlayerPosition = 'player' | 'goalie';
+
 // Child profile for age-group defaults and per-child tracking
 export interface ChildProfile {
   id: string;
   name: string;
   dateOfBirth: string; // ISO date (YYYY-MM-DD)
+  position: PlayerPosition;
   createdAt: string;
 }
 
@@ -120,7 +124,7 @@ export interface Registration {
   currency: string;
   registeredAt: string;
   status: 'confirmed' | 'pending' | 'waitlisted' | 'cancelled';
-  source: 'manual' | 'dash';
+  source: 'manual' | 'dash' | 'icehockeypro';
   notes: string;
   // Player info
   playerName?: string;
@@ -152,6 +156,15 @@ export interface DaySmartActivity {
   spotsAvailable: number;
 }
 
+// IceHockeyPro integration
+export interface IceHockeyProConfig {
+  email: string;
+  password: string;
+  connected: boolean;
+  lastSync: string | null;
+  playerName: string;
+}
+
 // LiveBarn integration
 export interface LiveBarnConfig {
   email: string;
@@ -178,6 +191,14 @@ export interface MonthlySpend {
     amount: number;
     date: string;
   }[];
+}
+
+// Email scanning configuration
+export interface EmailScanConfig {
+  provider: 'gmail' | 'outlook' | 'none';
+  connected: boolean;
+  lastScan: string | null;
+  scanFrequency: 'hourly' | 'daily' | 'manual';
 }
 
 export type ViewMode = 'list' | 'map';

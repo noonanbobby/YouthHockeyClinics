@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig } from '@/types';
+import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig, IceHockeyProConfig, EmailScanConfig } from '@/types';
 import { calculateDistance } from '@/lib/geocoder';
 
 /** Compute USA Hockey age group from a child's date of birth */
@@ -111,6 +111,14 @@ interface AppState {
   liveBarnConfig: LiveBarnConfig;
   setLiveBarnConfig: (config: Partial<LiveBarnConfig>) => void;
 
+  // IceHockeyPro integration
+  iceHockeyProConfig: IceHockeyProConfig;
+  setIceHockeyProConfig: (config: Partial<IceHockeyProConfig>) => void;
+
+  // Email scanning
+  emailScanConfig: EmailScanConfig;
+  setEmailScanConfig: (config: Partial<EmailScanConfig>) => void;
+
   // Settings / API keys
   notificationsEnabled: boolean;
   setNotificationsEnabled: (enabled: boolean) => void;
@@ -166,6 +174,7 @@ const defaultFilters: FilterState = {
   clinicTypes: [],
   country: null,
   maxPrice: null,
+  goalieOnly: false,
   spotsAvailable: false,
   featured: false,
   sortBy: 'date',
@@ -308,6 +317,14 @@ export const useStore = create<AppState>()(
           result = result.filter((c) => c.price.amount <= filters.maxPrice! || c.price.amount === 0);
         }
 
+        // Goalie-specific
+        if (filters.goalieOnly) {
+          result = result.filter((c) => {
+            const text = `${c.name} ${c.description} ${c.tags.join(' ')}`.toLowerCase();
+            return text.includes('goalie') || text.includes('goaltend') || text.includes('goaltending') || text.includes('netminder');
+          });
+        }
+
         // Spots available
         if (filters.spotsAvailable) {
           result = result.filter((c) => c.spotsRemaining > 0);
@@ -360,6 +377,7 @@ export const useStore = create<AppState>()(
         if (filters.clinicTypes.length > 0) count++;
         if (filters.country) count++;
         if (filters.maxPrice !== null && filters.maxPrice > 0) count++;
+        if (filters.goalieOnly) count++;
         if (filters.spotsAvailable) count++;
         if (filters.featured) count++;
         return count;
@@ -518,6 +536,31 @@ export const useStore = create<AppState>()(
           liveBarnConfig: { ...state.liveBarnConfig, ...config },
         })),
 
+      // IceHockeyPro
+      iceHockeyProConfig: {
+        email: '',
+        password: '',
+        connected: false,
+        lastSync: null,
+        playerName: '',
+      },
+      setIceHockeyProConfig: (config) =>
+        set((state) => ({
+          iceHockeyProConfig: { ...state.iceHockeyProConfig, ...config },
+        })),
+
+      // Email scanning
+      emailScanConfig: {
+        provider: 'none',
+        connected: false,
+        lastScan: null,
+        scanFrequency: 'daily',
+      },
+      setEmailScanConfig: (config) =>
+        set((state) => ({
+          emailScanConfig: { ...state.emailScanConfig, ...config },
+        })),
+
       // Settings
       notificationsEnabled: true,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
@@ -580,6 +623,8 @@ export const useStore = create<AppState>()(
         teamThemeId: state.teamThemeId,
         childProfiles: state.childProfiles,
         activeChildId: state.activeChildId,
+        iceHockeyProConfig: state.iceHockeyProConfig,
+        emailScanConfig: state.emailScanConfig,
       }),
     }
   )

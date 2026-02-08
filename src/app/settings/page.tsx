@@ -74,6 +74,7 @@ export default function SettingsPage() {
   // Child profile form
   const [childName, setChildName] = useState('');
   const [childDob, setChildDob] = useState('');
+  const [childPosition, setChildPosition] = useState<'player' | 'goalie'>('player');
   const [showAddChild, setShowAddChild] = useState(false);
 
   const geocodeHome = useCallback(async (input: string) => {
@@ -161,9 +162,10 @@ export default function SettingsPage() {
 
   const handleAddChild = () => {
     if (!childName.trim() || !childDob) return;
-    addChildProfile({ name: childName.trim(), dateOfBirth: childDob });
+    addChildProfile({ name: childName.trim(), dateOfBirth: childDob, position: childPosition });
     setChildName('');
     setChildDob('');
+    setChildPosition('player');
     setShowAddChild(false);
   };
 
@@ -352,11 +354,31 @@ export default function SettingsPage() {
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:dark]"
                     />
                   </div>
+                  {/* Position selector */}
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Position</label>
+                    <div className="flex gap-2">
+                      {(['player', 'goalie'] as const).map((pos) => (
+                        <button
+                          key={pos}
+                          onClick={() => setChildPosition(pos)}
+                          className={cn(
+                            'flex-1 py-2 text-xs font-medium rounded-xl border transition-all',
+                            childPosition === pos
+                              ? 'bg-violet-500/20 border-violet-500/40 text-violet-200'
+                              : 'bg-white/5 border-white/10 text-slate-400'
+                          )}
+                        >
+                          {pos === 'player' ? '🏒 Player' : '🥅 Goalie'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {childDob && childName && (
                     <div className="flex items-center gap-2 text-[10px] text-violet-300">
                       <Baby size={12} />
                       <span>
-                        Age {getChildAge(childDob)} — {getAgeGroupLabel(getAgeGroupFromDOB(childDob))} division
+                        Age {getChildAge(childDob)} — {getAgeGroupLabel(getAgeGroupFromDOB(childDob))} division · {childPosition === 'goalie' ? '🥅 Goalie' : '🏒 Player'}
                       </span>
                     </div>
                   )}
@@ -418,6 +440,8 @@ export default function SettingsPage() {
                             </span>
                             <span className="text-slate-600">|</span>
                             <span className="text-violet-400 font-medium">{getAgeGroupLabel(ageGroup)}</span>
+                            <span className="text-slate-600">|</span>
+                            <span>{child.position === 'goalie' ? '🥅 Goalie' : '🏒 Player'}</span>
                             {childRegs.length > 0 && (
                               <>
                                 <span className="text-slate-600">|</span>
