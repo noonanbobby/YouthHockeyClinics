@@ -65,6 +65,11 @@ export interface Clinic {
   rating: number;
   reviewCount: number;
   createdAt: string;
+  // LiveBarn integration
+  liveBarnUrl?: string;
+  hasLiveStream?: boolean;
+  // Source tracking
+  source?: string;
 }
 
 export interface FilterState {
@@ -92,6 +97,78 @@ export interface NotificationItem {
   timestamp: string;
   read: boolean;
   type: 'new_clinic' | 'spots_low' | 'price_drop' | 'reminder';
+}
+
+// Registration tracking
+export interface Registration {
+  id: string;
+  clinicId: string;
+  clinicName: string;
+  venue: string;
+  city: string;
+  startDate: string;
+  endDate: string;
+  price: number;
+  currency: string;
+  registeredAt: string;
+  status: 'confirmed' | 'pending' | 'waitlisted' | 'cancelled';
+  source: 'manual' | 'dash';
+  notes: string;
+  // Player info
+  playerName?: string;
+}
+
+// DaySmart/Dash integration
+export interface DaySmartConfig {
+  email: string;
+  password: string;
+  facilityId: string; // Baptist Ice Plex
+  facilityName: string;
+  connected: boolean;
+  lastSync: string | null;
+}
+
+export interface DaySmartActivity {
+  id: string;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  price: number;
+  category: string;
+  registered: boolean;
+  spotsAvailable: number;
+}
+
+// LiveBarn integration
+export interface LiveBarnConfig {
+  email: string;
+  password: string;
+  connected: boolean;
+  venues: LiveBarnVenue[];
+}
+
+export interface LiveBarnVenue {
+  id: string;
+  name: string;
+  surfaceName: string;
+  isLive: boolean;
+  streamUrl: string;
+}
+
+// Spending tracking
+export interface MonthlySpend {
+  month: string; // "2026-01"
+  total: number;
+  currency: string;
+  registrations: {
+    clinicName: string;
+    amount: number;
+    date: string;
+  }[];
 }
 
 export type ViewMode = 'list' | 'map';

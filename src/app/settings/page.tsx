@@ -17,6 +17,12 @@ import {
   Eye,
   EyeOff,
   Info,
+  Heart,
+  CalendarCheck,
+  DollarSign,
+  Plug,
+  Video,
+  Calendar,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -37,6 +43,9 @@ export default function SettingsPage() {
     searchMeta,
     lastUpdated,
     clinics,
+    registrations,
+    daySmartConfig,
+    liveBarnConfig,
   } = useStore();
   const { refresh } = useClinicSearch();
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -109,6 +118,13 @@ export default function SettingsPage() {
   ];
 
   const configuredKeyCount = Object.values(apiKeys).filter((v) => v).length;
+  const upcomingRegs = registrations.filter(
+    (r) => r.status !== 'cancelled' && r.endDate >= new Date().toISOString().split('T')[0]
+  ).length;
+
+  const totalSpent = registrations
+    .filter((r) => r.status !== 'cancelled')
+    .reduce((sum, r) => sum + r.price, 0);
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -124,6 +140,83 @@ export default function SettingsPage() {
           </button>
           <h1 className="text-xl font-bold text-white">Settings</h1>
         </div>
+
+        {/* Quick Links */}
+        <div className="grid grid-cols-2 gap-2 mb-6">
+          <button
+            onClick={() => router.push('/favorites')}
+            className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-xl bg-pink-500/10 flex items-center justify-center">
+              <Heart size={18} className="text-pink-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Saved</p>
+              <p className="text-[10px] text-slate-400">Favorites</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/registrations')}
+            className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center">
+              <CalendarCheck size={18} className="text-sky-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">My Clinics</p>
+              <p className="text-[10px] text-slate-400">{upcomingRegs} upcoming</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/spending')}
+            className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign size={18} className="text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Spending</p>
+              <p className="text-[10px] text-slate-400">${totalSpent.toLocaleString()}</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/integrations')}
+            className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-2xl border border-white/5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
+              <Plug size={18} className="text-purple-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Integrations</p>
+              <p className="text-[10px] text-slate-400">
+                {daySmartConfig.connected || liveBarnConfig.connected
+                  ? `${[daySmartConfig.connected && 'Dash', liveBarnConfig.connected && 'LiveBarn'].filter(Boolean).join(', ')}`
+                  : 'Connect accounts'}
+              </p>
+            </div>
+          </button>
+        </div>
+
+        {/* Integration status badges */}
+        {(daySmartConfig.connected || liveBarnConfig.connected) && (
+          <div className="flex gap-2 mb-6 overflow-x-auto">
+            {daySmartConfig.connected && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full shrink-0">
+                <Calendar size={12} className="text-orange-400" />
+                <span className="text-[10px] text-orange-300 font-medium">Dash Connected</span>
+              </div>
+            )}
+            {liveBarnConfig.connected && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full shrink-0">
+                <Video size={12} className="text-red-400" />
+                <span className="text-[10px] text-red-300 font-medium">LiveBarn Active</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search Status */}
         <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 rounded-2xl p-4 border border-sky-500/20 mb-6">
@@ -349,14 +442,14 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">About</p>
-                <p className="text-xs text-slate-400">Hockey Clinics Finder v1.0</p>
+                <p className="text-xs text-slate-400">Hockey Clinics Finder v2.0</p>
               </div>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              This app scans the internet in real-time to discover youth hockey clinics, camps,
-              showcases, and development programs worldwide. It aggregates data from hockey
-              organization websites, event platforms, and search engines to provide the most
-              comprehensive listing of youth hockey opportunities globally.
+              The all-in-one hockey hub. Scans the internet in real-time to discover youth hockey
+              clinics, camps, showcases, and development programs worldwide. Integrates with Dash
+              by DaySmart for local rink management and LiveBarn for live streaming. Track your
+              registrations, spending, and never miss an opportunity.
             </p>
             <div className="mt-3 pt-3 border-t border-white/5">
               <p className="text-[10px] text-slate-600">

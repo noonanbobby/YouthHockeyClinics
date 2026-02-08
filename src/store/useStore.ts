@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Clinic, FilterState, NotificationItem, ViewMode } from '@/types';
+import { Clinic, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig } from '@/types';
 
 interface AppState {
   // View
@@ -56,6 +56,22 @@ interface AppState {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+
+  // Registrations
+  registrations: Registration[];
+  addRegistration: (reg: Omit<Registration, 'id' | 'registeredAt'>) => void;
+  updateRegistration: (id: string, updates: Partial<Registration>) => void;
+  removeRegistration: (id: string) => void;
+
+  // DaySmart / Dash integration
+  daySmartConfig: DaySmartConfig;
+  setDaySmartConfig: (config: Partial<DaySmartConfig>) => void;
+  daySmartSyncing: boolean;
+  setDaySmartSyncing: (syncing: boolean) => void;
+
+  // LiveBarn integration
+  liveBarnConfig: LiveBarnConfig;
+  setLiveBarnConfig: (config: Partial<LiveBarnConfig>) => void;
 
   // Settings / API keys
   notificationsEnabled: boolean;
@@ -314,6 +330,58 @@ export const useStore = create<AppState>()(
           };
         }),
 
+      // Registrations
+      registrations: [],
+      addRegistration: (reg) =>
+        set((state) => ({
+          registrations: [
+            {
+              ...reg,
+              id: `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              registeredAt: new Date().toISOString(),
+            },
+            ...state.registrations,
+          ],
+        })),
+      updateRegistration: (id, updates) =>
+        set((state) => ({
+          registrations: state.registrations.map((r) =>
+            r.id === id ? { ...r, ...updates } : r
+          ),
+        })),
+      removeRegistration: (id) =>
+        set((state) => ({
+          registrations: state.registrations.filter((r) => r.id !== id),
+        })),
+
+      // DaySmart / Dash
+      daySmartConfig: {
+        email: '',
+        password: '',
+        facilityId: '',
+        facilityName: 'Baptist Health IcePlex',
+        connected: false,
+        lastSync: null,
+      },
+      setDaySmartConfig: (config) =>
+        set((state) => ({
+          daySmartConfig: { ...state.daySmartConfig, ...config },
+        })),
+      daySmartSyncing: false,
+      setDaySmartSyncing: (syncing) => set({ daySmartSyncing: syncing }),
+
+      // LiveBarn
+      liveBarnConfig: {
+        email: '',
+        password: '',
+        connected: false,
+        venues: [],
+      },
+      setLiveBarnConfig: (config) =>
+        set((state) => ({
+          liveBarnConfig: { ...state.liveBarnConfig, ...config },
+        })),
+
       // Settings
       notificationsEnabled: true,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
@@ -357,6 +425,9 @@ export const useStore = create<AppState>()(
         autoRefreshInterval: state.autoRefreshInterval,
         filters: state.filters,
         lastUpdated: state.lastUpdated,
+        registrations: state.registrations,
+        daySmartConfig: state.daySmartConfig,
+        liveBarnConfig: state.liveBarnConfig,
       }),
     }
   )

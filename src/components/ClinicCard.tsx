@@ -2,7 +2,7 @@
 
 import { Clinic } from '@/types';
 import { formatDateRange, formatPrice, getClinicTypeLabel, getClinicTypeColor, getSpotsColor, getCountryFlag, cn, timeUntil } from '@/lib/utils';
-import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight } from 'lucide-react';
+import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -13,9 +13,17 @@ interface ClinicCardProps {
 }
 
 export default function ClinicCard({ clinic, index }: ClinicCardProps) {
-  const { toggleFavorite, isFavorite } = useStore();
+  const { toggleFavorite, isFavorite, liveBarnConfig } = useStore();
   const router = useRouter();
   const fav = isFavorite(clinic.id);
+
+  // Check if this clinic's venue has a LiveBarn stream
+  const hasLiveStream = clinic.hasLiveStream || (
+    liveBarnConfig.connected &&
+    liveBarnConfig.venues.some(
+      (v) => v.isLive && clinic.location.venue.toLowerCase().includes(v.name.toLowerCase().split(' ')[0])
+    )
+  );
 
   return (
     <motion.div
@@ -67,6 +75,15 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
             )}
           />
         </button>
+
+        {/* Live Stream Badge */}
+        {hasLiveStream && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-red-500/90 backdrop-blur-sm rounded-full px-2 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <Video size={10} className="text-white" />
+            <span className="text-[9px] font-bold text-white uppercase tracking-wider">Live</span>
+          </div>
+        )}
 
         {/* Rating */}
         <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-1">
