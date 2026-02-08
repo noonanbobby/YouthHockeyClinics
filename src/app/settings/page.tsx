@@ -27,6 +27,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import TeamPicker from '@/components/TeamPicker';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -218,6 +219,11 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Team Color Theme */}
+        <div className="bg-white/[0.03] rounded-2xl border border-white/5 p-4 mb-6">
+          <TeamPicker />
+        </div>
+
         {/* Search Status */}
         <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 rounded-2xl p-4 border border-sky-500/20 mb-6">
           <div className="flex items-center gap-3 mb-3">
@@ -366,7 +372,7 @@ export default function SettingsPage() {
                   className={cn(
                     'flex-1 py-2 text-xs font-medium rounded-lg transition-colors',
                     autoRefreshInterval === minutes
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                      ? 'theme-bg-primary-20 theme-primary theme-border-primary'
                       : 'bg-white/5 text-slate-400 border border-white/10'
                   )}
                 >
@@ -392,7 +398,7 @@ export default function SettingsPage() {
                 onClick={handleNotificationToggle}
                 className={cn(
                   'w-11 h-6 rounded-full transition-colors relative',
-                  notificationsEnabled ? 'bg-sky-500' : 'bg-white/10'
+                  notificationsEnabled ? 'theme-bg-primary' : 'bg-white/10'
                 )}
               >
                 <div
@@ -421,7 +427,7 @@ export default function SettingsPage() {
                 onClick={handleLocationToggle}
                 className={cn(
                   'w-11 h-6 rounded-full transition-colors relative',
-                  locationEnabled ? 'bg-sky-500' : 'bg-white/10'
+                  locationEnabled ? 'theme-bg-primary' : 'bg-white/10'
                 )}
               >
                 <div
@@ -442,14 +448,14 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">About</p>
-                <p className="text-xs text-slate-400">Hockey Clinics Finder v2.0</p>
+                <p className="text-xs text-slate-400">Noonan Hockey v2.0</p>
               </div>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              The all-in-one hockey hub. Scans the internet in real-time to discover youth hockey
-              clinics, camps, showcases, and development programs worldwide. Integrates with Dash
-              by DaySmart for local rink management and LiveBarn for live streaming. Track your
-              registrations, spending, and never miss an opportunity.
+              Noonan Hockey — your all-in-one hockey hub. Scans the internet in real-time to discover
+              youth hockey clinics, camps, showcases, and development programs worldwide. Integrates
+              with Dash by DaySmart for local rink management and LiveBarn for live streaming. Track
+              your registrations, spending, and never miss an opportunity.
             </p>
             <div className="mt-3 pt-3 border-t border-white/5">
               <p className="text-[10px] text-slate-600">

@@ -1,6 +1,6 @@
 {
-  "name": "Hockey Clinics Finder",
-  "short_name": "HockeyFind",
+  "name": "Noonan Hockey",
+  "short_name": "Noonan",
   "description": "Discover youth hockey clinics and camps worldwide",
   "start_url": "/",
   "display": "standalone",

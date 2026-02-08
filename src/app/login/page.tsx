@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-sky-500 to-blue-600 mb-5 shadow-lg shadow-sky-500/20">
             <span className="text-4xl">🏒</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Hockey Clinics</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Noonan Hockey</h1>
           <p className="text-sm text-slate-400">
             The world&apos;s most comprehensive hockey clinic finder
           </p>

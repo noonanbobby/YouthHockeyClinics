@@ -93,6 +93,10 @@ interface AppState {
   autoRefreshInterval: number; // minutes
   setAutoRefreshInterval: (minutes: number) => void;
 
+  // Theme / Branding
+  teamThemeId: string; // NHL team id, 'default' for sky blue
+  setTeamTheme: (teamId: string) => void;
+
   // UI
   isFilterOpen: boolean;
   setFilterOpen: (open: boolean) => void;
@@ -405,6 +409,10 @@ export const useStore = create<AppState>()(
       autoRefreshInterval: 30,
       setAutoRefreshInterval: (minutes) => set({ autoRefreshInterval: minutes }),
 
+      // Theme / Branding
+      teamThemeId: 'default',
+      setTeamTheme: (teamId) => set({ teamThemeId: teamId }),
+
       // UI
       isFilterOpen: false,
       setFilterOpen: (open) => set({ isFilterOpen: open }),
@@ -428,6 +436,7 @@ export const useStore = create<AppState>()(
         registrations: state.registrations,
         daySmartConfig: state.daySmartConfig,
         liveBarnConfig: state.liveBarnConfig,
+        teamThemeId: state.teamThemeId,
       }),
     }
   )

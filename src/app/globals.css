@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* NHL Team Theme Variables — set dynamically by ThemeProvider */
+:root {
+  --theme-primary: #0ea5e9;
+  --theme-secondary: #0284c7;
+  --theme-accent: #38bdf8;
+  --theme-bg: #020617;
+}
+
+/* Theme utility classes */
+.theme-primary { color: var(--theme-primary); }
+.theme-bg-primary { background-color: var(--theme-primary); }
+.theme-bg-primary-10 { background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent); }
+.theme-bg-primary-20 { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
+.theme-bg-primary-30 { background-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+.theme-border-primary { border-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+.theme-accent { color: var(--theme-accent); }
+.theme-ring { --tw-ring-color: var(--theme-primary); }
+
 /* Safe area for iPhone notch and home indicator */
 .safe-area-top {
   padding-top: env(safe-area-inset-top);

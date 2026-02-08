@@ -4,17 +4,17 @@ import BottomNav from '@/components/BottomNav';
 import Providers from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'Hockey Clinics Finder - Youth Hockey Camps Worldwide',
+  title: 'Noonan Hockey - Youth Hockey Clinics & Camps Worldwide',
   description:
     'Discover youth hockey clinics, camps, showcases, and development programs worldwide. Real-time internet scanning for the most comprehensive hockey opportunity listing.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'HockeyFind',
+    title: 'Noonan Hockey',
   },
   openGraph: {
-    title: 'Hockey Clinics Finder',
+    title: 'Noonan Hockey',
     description: 'Discover youth hockey clinics worldwide',
     type: 'website',
   },

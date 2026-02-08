@@ -24,14 +24,14 @@ export default function ListView() {
           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
           className="mb-4"
         >
-          <Globe size={48} className="text-sky-400" />
+          <Globe size={48} className="theme-primary" />
         </motion.div>
         <h3 className="text-lg font-bold text-white mb-2">Scanning the Internet</h3>
         <p className="text-sm text-slate-400 text-center max-w-xs mb-4">
           Searching hockey organizations, event platforms, and training centers worldwide...
         </p>
         <div className="flex items-center gap-2 text-xs text-slate-500 mb-6">
-          <Radio size={12} className="animate-pulse text-sky-400" />
+          <Radio size={12} className="animate-pulse theme-primary" />
           <span>This may take up to 30 seconds on first load</span>
         </div>
         <div className="mt-2 space-y-2 w-full max-w-sm">
@@ -44,7 +44,7 @@ export default function ListView() {
                 transition={{ delay: i * 0.3 }}
                 className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg"
               >
-                <Loader2 size={12} className="animate-spin text-sky-400" />
+                <Loader2 size={12} className="animate-spin theme-primary" />
                 <span className="text-xs text-slate-400">Searching {source}...</span>
               </motion.div>
             )
@@ -103,7 +103,7 @@ export default function ListView() {
           <button
             onClick={() => refresh()}
             disabled={isRefreshing}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-3 theme-bg-primary-20 hover:opacity-90 theme-primary text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
             {isRefreshing ? 'Scanning...' : 'Try Again'}

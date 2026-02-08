@@ -35,6 +35,7 @@ import { Clinic } from '@/types';
 import { extractClinicsFromHTML } from './extractor';
 import { deduplicateClinics } from './deduplicator';
 import { geocodeLocation } from './geocoder';
+import SEED_CLINICS from './seedClinics';
 
 export interface SearchConfig {
   serpApiKey?: string;
@@ -716,7 +717,21 @@ export class ClinicSearchEngine {
 
     // ─── PHASE 4: Process, deduplicate, enrich ──────────────
     const processedClinics = await this.processRawData(allRawData);
-    const deduped = deduplicateClinics(processedClinics);
+
+    // Always include curated seed clinics — filter by query if provided
+    let seedResults = SEED_CLINICS;
+    if (query) {
+      const q = query.toLowerCase();
+      seedResults = SEED_CLINICS.filter((c) => {
+        const text = `${c.name} ${c.description} ${c.location.city} ${c.location.state} ${c.location.country} ${c.tags.join(' ')}`.toLowerCase();
+        return q.split(/\s+/).some((word) => text.includes(word));
+      });
+    }
+    sourceResults.push({ name: 'Curated Database', count: seedResults.length, status: 'success' });
+
+    // Combine seed + scraped, then deduplicate
+    const combined = [...seedResults, ...processedClinics];
+    const deduped = deduplicateClinics(combined);
 
     // Only geocode if we have time left (geocoding is slow, 1 req/sec)
     const geoTimeRemaining = GLOBAL_BUDGET - (Date.now() - startTime);

@@ -21,7 +21,7 @@ export default function Header() {
           <div>
             <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
               <span className="text-2xl">🏒</span>
-              Hockey Clinics
+              Noonan Hockey
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">Discover youth hockey worldwide</p>
           </div>
@@ -38,7 +38,7 @@ export default function Header() {
             >
               <SlidersHorizontal size={18} className="text-slate-300" />
               {filterCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-sky-500 text-white text-[10px] font-bold rounded-full px-1">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center theme-bg-primary text-white text-[10px] font-bold rounded-full px-1">
                   {filterCount}
                 </span>
               )}
@@ -54,7 +54,7 @@ export default function Header() {
                   className="w-full h-full object-cover rounded-full"
                 />
               ) : (
-                <UserCircle size={18} className={session ? 'text-sky-400' : 'text-slate-300'} />
+                <UserCircle size={18} className={session ? 'theme-primary' : 'text-slate-300'} />
               )}
             </button>
           </div>
@@ -74,7 +74,8 @@ export default function Header() {
               {viewMode === mode && (
                 <motion.div
                   layoutId="view-toggle"
-                  className="absolute inset-0 bg-sky-500/20 border border-sky-500/30 rounded-lg"
+                  className="absolute inset-0 theme-bg-primary-20 theme-border-primary rounded-lg"
+                  style={{ borderWidth: 1 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
               )}

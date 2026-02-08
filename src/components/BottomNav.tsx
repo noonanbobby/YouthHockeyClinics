@@ -58,13 +58,13 @@ export default function BottomNav() {
               onClick={() => handleNav(item)}
               className={cn(
                 'relative flex flex-col items-center justify-center w-16 h-full gap-0.5 transition-colors',
-                active ? 'text-sky-400' : 'text-slate-500'
+                active ? 'theme-primary' : 'text-slate-500'
               )}
             >
               {active && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute -top-px left-3 right-3 h-0.5 bg-sky-400 rounded-full"
+                  className="absolute -top-px left-3 right-3 h-0.5 theme-bg-primary rounded-full"
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
               )}
@@ -76,7 +76,7 @@ export default function BottomNav() {
                   </span>
                 )}
                 {item.label === 'My Clinics' && upcomingCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 flex items-center justify-center bg-sky-500 text-white text-[10px] font-bold rounded-full px-1">
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 flex items-center justify-center theme-bg-primary text-white text-[10px] font-bold rounded-full px-1">
                     {upcomingCount}
                   </span>
                 )}

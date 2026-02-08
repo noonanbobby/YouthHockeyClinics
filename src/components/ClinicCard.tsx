@@ -31,7 +31,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
       onClick={() => router.push(`/clinic/${clinic.id}`)}
-      className="group relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl overflow-hidden border border-white/5 hover:border-sky-500/20 transition-all duration-300 cursor-pointer active:scale-[0.98]"
+      className="group relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl overflow-hidden border border-white/5 hover:theme-border-primary transition-all duration-300 cursor-pointer active:scale-[0.98]"
     >
       {/* Image */}
       <div className="relative h-44 overflow-hidden">
@@ -101,22 +101,22 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="text-base font-bold text-white mb-1 line-clamp-1 group-hover:text-sky-300 transition-colors">
+        <h3 className="text-base font-bold text-white mb-1 line-clamp-1 group-hover:theme-primary transition-colors">
           {clinic.name}
         </h3>
         <p className="text-xs text-slate-400 mb-3 line-clamp-2">{clinic.description}</p>
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-slate-300">
-            <MapPin size={13} className="text-sky-400 shrink-0" />
+            <MapPin size={13} className="theme-primary shrink-0" />
             <span className="text-xs truncate">{clinic.location.venue}, {clinic.location.city}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-300">
-            <Calendar size={13} className="text-sky-400 shrink-0" />
+            <Calendar size={13} className="theme-primary shrink-0" />
             <span className="text-xs">{formatDateRange(clinic.dates.start, clinic.dates.end)}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-300">
-            <Clock size={13} className="text-sky-400 shrink-0" />
+            <Clock size={13} className="theme-primary shrink-0" />
             <span className="text-xs">{clinic.duration} &middot; Starts {timeUntil(clinic.dates.start)}</span>
           </div>
         </div>
