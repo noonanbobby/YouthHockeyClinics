@@ -7,10 +7,26 @@
    Set dynamically by ThemeProvider.tsx
    ═══════════════════════════════════════════════ */
 
+/* Light mode defaults */
 :root {
   --theme-primary: #0ea5e9;
   --theme-secondary: #0284c7;
   --theme-accent: #38bdf8;
+  --theme-bg: #f8fafc;
+  --theme-header-bg: #ffffff;
+  --theme-card-bg: #ffffff;
+  --theme-card-border: rgba(0, 0, 0, 0.08);
+  --theme-card-hover: rgba(0, 0, 0, 0.04);
+  --theme-surface: #f1f5f9;
+  --theme-nav-bg: #ffffff;
+  --theme-glow: rgba(14, 165, 233, 0.15);
+  --theme-text: #0f172a;
+  --theme-text-secondary: #475569;
+  --theme-text-muted: #94a3b8;
+}
+
+/* Dark mode overrides */
+.dark {
   --theme-bg: #020617;
   --theme-header-bg: #020617;
   --theme-card-bg: rgba(15, 23, 42, 0.8);
@@ -19,12 +35,19 @@
   --theme-surface: rgba(15, 23, 42, 0.9);
   --theme-nav-bg: #020617;
   --theme-glow: rgba(14, 165, 233, 0.4);
+  --theme-text: #ffffff;
+  --theme-text-secondary: #94a3b8;
+  --theme-text-muted: #64748b;
 }
 
 /* ─── Core Theme Utilities ─────────────────────── */
 .theme-primary { color: var(--theme-primary); }
 .theme-secondary { color: var(--theme-secondary); }
 .theme-accent { color: var(--theme-accent); }
+
+.theme-text { color: var(--theme-text); }
+.theme-text-secondary { color: var(--theme-text-secondary); }
+.theme-text-muted { color: var(--theme-text-muted); }
 
 .theme-bg { background-color: var(--theme-bg); }
 .theme-bg-primary { background-color: var(--theme-primary); }
@@ -71,8 +94,8 @@
 /* ─── Scrollbar ────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+::-webkit-scrollbar-thumb { background: var(--theme-card-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-card-hover); }
 
 /* ─── Global Overrides ─────────────────────────── */
 html {
@@ -102,8 +125,8 @@ body {
 }
 
 /* ─── Form Elements ────────────────────────────── */
-select option { background: var(--theme-bg); color: white; }
-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+select option { background: var(--theme-bg); color: var(--theme-text); }
+.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
 
 /* ─── Animations ───────────────────────────────── */
 main { animation: fadeIn 0.2s ease-out; }
@@ -114,7 +137,7 @@ main { animation: fadeIn 0.2s ease-out; }
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background: linear-gradient(90deg, var(--theme-card-hover) 25%, var(--theme-card-border) 50%, var(--theme-card-hover) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

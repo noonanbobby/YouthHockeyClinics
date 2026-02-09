@@ -12,7 +12,6 @@ import {
   EyeOff,
   Check,
   AlertCircle,
-  Video,
   Calendar,
   ChevronRight,
   Zap,
@@ -25,8 +24,6 @@ import {
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LiveBarnVenue } from '@/types';
-import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 
 function CredentialForm({
   email,
@@ -143,8 +140,6 @@ export default function IntegrationsPage() {
     setDaySmartConfig,
     daySmartSyncing,
     setDaySmartSyncing,
-    liveBarnConfig,
-    setLiveBarnConfig,
     iceHockeyProConfig,
     setIceHockeyProConfig,
     emailScanConfig,
@@ -157,12 +152,9 @@ export default function IntegrationsPage() {
 
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showDashPassword, setShowDashPassword] = useState(false);
-  const [showLiveBarnPassword, setShowLiveBarnPassword] = useState(false);
   const [showIhpPassword, setShowIhpPassword] = useState(false);
   const [dashEmail, setDashEmail] = useState(daySmartConfig.email);
   const [dashPassword, setDashPassword] = useState(daySmartConfig.password);
-  const [lbEmail, setLbEmail] = useState(liveBarnConfig.email);
-  const [lbPassword, setLbPassword] = useState(liveBarnConfig.password);
   const [ihpEmail, setIhpEmail] = useState(iceHockeyProConfig.email);
   const [ihpPassword, setIhpPassword] = useState(iceHockeyProConfig.password);
   const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(
@@ -170,7 +162,6 @@ export default function IntegrationsPage() {
   );
   const [connectionStatus, setConnectionStatus] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [liveBarnLaunchVenue, setLiveBarnLaunchVenue] = useState<LiveBarnVenue | null>(null);
 
   // Get linked children names for display
   const getLinkedChildNames = () => {
@@ -282,53 +273,6 @@ export default function IntegrationsPage() {
     setDashEmail('');
     setDashPassword('');
     setConnectionStatus('Disconnected from Dash.');
-  };
-
-  // --- LiveBarn ---
-  const handleLiveBarnConnect = async () => {
-    if (!lbEmail || !lbPassword) {
-      setConnectionStatus('Please enter your LiveBarn email and password');
-      return;
-    }
-    setConnectionStatus('Connecting to LiveBarn...');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setLiveBarnConfig({
-      email: lbEmail,
-      password: lbPassword,
-      connected: true,
-      venues: [
-        {
-          id: 'lb-baptist-iceplex-1',
-          name: 'Baptist Health IcePlex',
-          surfaceName: 'Rink 1 - Panthers',
-          isLive: true,
-          streamUrl: 'https://livebarn.com/en/venue/baptist-health-iceplex/1',
-        },
-        {
-          id: 'lb-baptist-iceplex-2',
-          name: 'Baptist Health IcePlex',
-          surfaceName: 'Rink 2 - Community',
-          isLive: false,
-          streamUrl: 'https://livebarn.com/en/venue/baptist-health-iceplex/2',
-        },
-      ],
-    });
-
-    addNotification({
-      title: 'LiveBarn Connected',
-      body: 'Live stream access enabled for Baptist Health IcePlex',
-      clinicId: '',
-      type: 'new_clinic',
-    });
-    setConnectionStatus('LiveBarn connected! Live streams available.');
-  };
-
-  const handleLiveBarnDisconnect = () => {
-    setLiveBarnConfig({ email: '', password: '', connected: false, venues: [] });
-    setLbEmail('');
-    setLbPassword('');
-    setConnectionStatus('Disconnected from LiveBarn.');
   };
 
   // --- IceHockeyPro ---
@@ -802,103 +746,6 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
-          {/* LiveBarn */}
-          <IntegrationCard
-            id="livebarn"
-            icon={Video}
-            title="LiveBarn"
-            subtitle="Not connected"
-            connected={liveBarnConfig.connected}
-            connectedText={`Connected — ${liveBarnConfig.venues.length} venues`}
-            color="red"
-            expanded={expandedSection === 'livebarn'}
-            onToggle={() => setExpandedSection(expandedSection === 'livebarn' ? null : 'livebarn')}
-          >
-            <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
-              <div className="flex items-start gap-2">
-                <Video size={14} className="text-red-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-red-300">
-                  Connect your LiveBarn account to see live stream availability. Venues with
-                  active streams show a live indicator on the map. Tap any live marker to watch
-                  the stream or access replays.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Shield size={12} className="text-slate-500 mt-0.5 shrink-0" />
-              <p className="text-[10px] text-slate-500">
-                Credentials stored locally. Used to check stream availability.
-              </p>
-            </div>
-            {!liveBarnConfig.connected ? (
-              <>
-                <CredentialForm
-                  email={lbEmail}
-                  setEmail={setLbEmail}
-                  password={lbPassword}
-                  setPassword={setLbPassword}
-                  showPassword={showLiveBarnPassword}
-                  setShowPassword={setShowLiveBarnPassword}
-                  placeholder="LiveBarn"
-                />
-                <button
-                  onClick={handleLiveBarnConnect}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm font-medium rounded-xl transition-colors"
-                >
-                  <Video size={14} />
-                  Connect to LiveBarn
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Check size={14} className="text-emerald-400" />
-                    <p className="text-xs font-semibold text-emerald-300">Connected</p>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mb-2">Account: {liveBarnConfig.email}</p>
-                  <div className="space-y-2 mt-3">
-                    {liveBarnConfig.venues.map((venue) => (
-                      <button
-                        key={venue.id}
-                        onClick={() => setLiveBarnLaunchVenue(venue)}
-                        className="w-full flex items-center justify-between p-2 bg-black/20 rounded-lg active:bg-black/30 transition-colors text-left"
-                      >
-                        <div>
-                          <p className="text-xs text-white font-medium">{venue.surfaceName}</p>
-                          <p className="text-[10px] text-slate-500">{venue.name}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {venue.isLive ? (
-                            <>
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                              </span>
-                              <span className="text-[10px] text-red-400 font-medium">LIVE</span>
-                              <ExternalLink size={10} className="text-red-400" />
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-[10px] text-slate-500">Replay</span>
-                              <ExternalLink size={10} className="text-slate-600" />
-                            </>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button
-                  onClick={handleLiveBarnDisconnect}
-                  className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-xl transition-colors"
-                >
-                  Disconnect
-                </button>
-              </>
-            )}
-          </IntegrationCard>
-
           {/* Email Scanning */}
           <IntegrationCard
             id="email"
@@ -1025,7 +872,6 @@ export default function IntegrationsPage() {
               {[
                 { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', color: 'text-blue-400' },
                 { icon: Calendar, text: 'Programs & registrations from DaySmart', color: 'text-orange-400' },
-                { icon: Video, text: 'Live streams & recordings from LiveBarn', color: 'text-red-400' },
                 { icon: Mail, text: 'Schedule changes detected in your email', color: 'text-violet-400' },
                 { icon: Zap, text: 'Spending tracked across all sources', color: 'text-amber-400' },
               ].map((item, i) => (
@@ -1039,13 +885,6 @@ export default function IntegrationsPage() {
         </div>
       </div>
 
-      {/* LiveBarn app launcher modal */}
-      {liveBarnLaunchVenue && (
-        <LiveBarnLauncher
-          venue={liveBarnLaunchVenue}
-          onClose={() => setLiveBarnLaunchVenue(null)}
-        />
-      )}
     </div>
   );
 }

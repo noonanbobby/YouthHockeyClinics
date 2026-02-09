@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, LiveBarnConfig, IceHockeyProConfig, EmailScanConfig } from '@/types';
+import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, IceHockeyProConfig, EmailScanConfig } from '@/types';
 import { calculateDistance } from '@/lib/geocoder';
 
 /** Compute USA Hockey age group from a child's date of birth */
@@ -108,10 +108,6 @@ interface AppState {
   daySmartSyncing: boolean;
   setDaySmartSyncing: (syncing: boolean) => void;
 
-  // LiveBarn integration
-  liveBarnConfig: LiveBarnConfig;
-  setLiveBarnConfig: (config: Partial<LiveBarnConfig>) => void;
-
   // IceHockeyPro integration
   iceHockeyProConfig: IceHockeyProConfig;
   setIceHockeyProConfig: (config: Partial<IceHockeyProConfig>) => void;
@@ -155,6 +151,10 @@ interface AppState {
   setApiKey: (key: keyof AppState['apiKeys'], value: string) => void;
   autoRefreshInterval: number; // minutes
   setAutoRefreshInterval: (minutes: number) => void;
+
+  // Color mode
+  colorMode: 'light' | 'dark' | 'system';
+  setColorMode: (mode: 'light' | 'dark' | 'system') => void;
 
   // Theme / Branding
   teamThemeId: string; // NHL team id, 'default' for sky blue
@@ -599,18 +599,6 @@ export const useStore = create<AppState>()(
       daySmartSyncing: false,
       setDaySmartSyncing: (syncing) => set({ daySmartSyncing: syncing }),
 
-      // LiveBarn
-      liveBarnConfig: {
-        email: '',
-        password: '',
-        connected: false,
-        venues: [],
-      },
-      setLiveBarnConfig: (config) =>
-        set((state) => ({
-          liveBarnConfig: { ...state.liveBarnConfig, ...config },
-        })),
-
       // IceHockeyPro
       iceHockeyProConfig: {
         email: '',
@@ -668,6 +656,10 @@ export const useStore = create<AppState>()(
       autoRefreshInterval: 30,
       setAutoRefreshInterval: (minutes) => set({ autoRefreshInterval: minutes }),
 
+      // Color mode
+      colorMode: 'dark',
+      setColorMode: (mode) => set({ colorMode: mode }),
+
       // Theme / Branding
       teamThemeId: 'default',
       setTeamTheme: (teamId) => set({ teamThemeId: teamId }),
@@ -680,7 +672,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -693,6 +685,13 @@ export const useStore = create<AppState>()(
             tavilyApiKey: oldKeys?.tavilyApiKey || '',
             eventbriteApiKey: oldKeys?.eventbriteApiKey || '',
           };
+        }
+        if (version < 3) {
+          // Remove LiveBarn config, add color mode
+          delete state.liveBarnConfig;
+          if (!state.colorMode) {
+            state.colorMode = 'dark';
+          }
         }
         return state;
       },
@@ -711,7 +710,7 @@ export const useStore = create<AppState>()(
         lastUpdated: state.lastUpdated,
         registrations: state.registrations,
         daySmartConfig: state.daySmartConfig,
-        liveBarnConfig: state.liveBarnConfig,
+        colorMode: state.colorMode,
         teamThemeId: state.teamThemeId,
         childProfiles: state.childProfiles,
         activeChildIds: state.activeChildIds,

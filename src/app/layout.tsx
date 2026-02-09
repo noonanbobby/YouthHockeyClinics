@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import BottomNav from '@/components/BottomNav';
+import DesktopSidebar from '@/components/DesktopSidebar';
 import Providers from '@/components/Providers';
 
 export const metadata: Metadata = {
@@ -34,16 +35,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="bg-slate-950 text-white antialiased font-sans">
+      <body className="antialiased font-sans theme-text" style={{ backgroundColor: 'var(--theme-bg)' }}>
         <Providers>
-          {children}
+          <div className="flex min-h-screen">
+            <DesktopSidebar />
+            <main className="flex-1 lg:ml-[260px]">
+              {children}
+            </main>
+          </div>
           <BottomNav />
         </Providers>
       </body>

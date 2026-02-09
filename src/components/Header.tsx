@@ -49,14 +49,14 @@ export default function Header() {
       }}>
       <div className="absolute inset-0 theme-gradient-radial pointer-events-none" />
       <div className="safe-area-top" />
-      <div className="relative px-4 py-3">
+      <div className="relative px-4 py-3 max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              <span className="text-2xl">🏒</span>
+            <h1 className="text-lg font-bold theme-text tracking-tight flex items-center gap-2">
+              <span className="text-xl font-black tracking-tighter" style={{ color: 'var(--theme-primary)' }}>NH</span>
               Noonan Hockey
             </h1>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] theme-text-secondary mt-0.5">
               {homeLocation
                 ? `${homeLocation.city}, ${homeLocation.state}`
                 : 'Discover youth hockey worldwide'}
@@ -68,14 +68,14 @@ export default function Header() {
               className="w-9 h-9 flex items-center justify-center rounded-full transition-colors"
               style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
             >
-              <Search size={18} className="text-slate-300" />
+              <Search size={18} className="theme-text-secondary" />
             </button>
             <button
               onClick={() => setFilterOpen(true)}
               className="relative w-9 h-9 flex items-center justify-center rounded-full transition-colors"
               style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
             >
-              <SlidersHorizontal size={18} className="text-slate-300" />
+              <SlidersHorizontal size={18} className="theme-text-secondary" />
               {filterCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center theme-bg-primary text-white text-[10px] font-bold rounded-full px-1">
                   {filterCount}
@@ -124,13 +124,13 @@ export default function Header() {
                     </div>
                   ))
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-slate-400">
+                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] theme-text-secondary">
                     ?
                   </div>
                 )}
               </div>
-              <span className="text-[11px] font-medium text-slate-300">{pillLabel}</span>
-              <ChevronDown size={12} className={cn('text-slate-500 transition-transform', showChildPicker && 'rotate-180')} />
+              <span className="text-[11px] font-medium theme-text-secondary">{pillLabel}</span>
+              <ChevronDown size={12} className={cn('theme-text-muted transition-transform', showChildPicker && 'rotate-180')} />
             </button>
 
             {/* Dropdown child picker */}
@@ -142,8 +142,8 @@ export default function Header() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-2 p-1.5 rounded-xl border bg-slate-900/90 backdrop-blur-xl"
-                    style={{ borderColor: 'var(--theme-card-border)' }}>
+                  <div className="mt-2 p-1.5 rounded-xl border backdrop-blur-xl"
+                    style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-card-border)' }}>
                     {/* Select all / none */}
                     <button
                       onClick={() => {
@@ -162,10 +162,10 @@ export default function Header() {
                         {allSelected ? '✅' : '👥'}
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs font-medium text-slate-300">
+                        <p className="text-xs font-medium theme-text-secondary">
                           {allSelected ? 'Deselect All' : 'Select All Players'}
                         </p>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-[10px] theme-text-muted">
                           {allSelected ? 'Clear selection' : 'Show clinics for everyone'}
                         </p>
                       </div>
@@ -185,17 +185,17 @@ export default function Header() {
                         >
                           <div className={cn(
                             'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                            isActive ? 'text-white' : 'bg-white/10 text-slate-300'
+                            isActive ? 'text-white' : 'bg-white/10 theme-text-secondary'
                           )}
                             style={isActive ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                           >
                             {child.name.charAt(0)}
                           </div>
                           <div className="flex-1">
-                            <p className={cn('text-xs font-medium', isActive ? 'text-white' : 'text-slate-300')}>
+                            <p className={cn('text-xs font-medium', isActive ? 'theme-text' : 'theme-text-secondary')}>
                               {child.name}
                             </p>
-                            <p className="text-[10px] text-slate-500">
+                            <p className="text-[10px] theme-text-muted">
                               Age {getChildAge(child.dateOfBirth)} · {getAgeGroupLabel(ag)}
                               {child.currentDivision && child.currentDivision !== getAgeGroupFromDOB(child.dateOfBirth) && (
                                 <span className="text-amber-400"> (playing up)</span>
@@ -216,15 +216,15 @@ export default function Header() {
           </div>
         )}
 
-        {/* View Toggle */}
-        <div className="flex rounded-xl p-1" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' }}>
+        {/* View Toggle — hidden on desktop where sidebar handles this */}
+        <div className="flex rounded-xl p-1 lg:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' }}>
           {(['list', 'map'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
               className={cn(
                 'relative flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize',
-                viewMode === mode ? 'text-white' : 'text-slate-400'
+                viewMode === mode ? 'theme-text' : 'theme-text-secondary'
               )}
             >
               {viewMode === mode && (

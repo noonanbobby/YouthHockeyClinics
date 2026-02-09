@@ -76,21 +76,22 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--theme-bg)' }}>
       <div className="safe-area-top" />
-      <div className="px-4 py-4">
+      <div className="max-w-screen-2xl mx-auto px-4 lg:px-8 py-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push('/')}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5"
+              className="w-9 h-9 flex items-center justify-center rounded-full"
+              style={{ backgroundColor: 'var(--theme-surface)' }}
             >
-              <ArrowLeft size={18} className="text-slate-300" />
+              <ArrowLeft size={18} className="theme-text-secondary" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white">Alerts</h1>
-              <p className="text-xs text-slate-400">
+              <h1 className="text-xl font-bold theme-text">Alerts</h1>
+              <p className="text-xs theme-text-secondary">
                 {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
               </p>
             </div>
@@ -123,14 +124,17 @@ export default function NotificationsPage() {
                   className={cn(
                     'shrink-0 px-3 py-1.5 text-[11px] font-medium rounded-full border transition-colors',
                     isActive
-                      ? 'text-white border-transparent'
-                      : 'bg-white/[0.03] text-slate-400 border-white/5'
+                      ? 'border-transparent'
+                      : 'theme-text-secondary'
                   )}
                   style={isActive ? {
                     backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
                     borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
                     color: 'var(--theme-accent)',
-                  } : undefined}
+                  } : {
+                    backgroundColor: 'var(--theme-surface)',
+                    borderColor: 'var(--theme-card-border)',
+                  }}
                 >
                   {FILTER_LABELS[key]}
                   {key !== 'all' && typeCounts[key] && (
@@ -144,11 +148,11 @@ export default function NotificationsPage() {
 
         {filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <BellOff size={48} className="text-slate-700 mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">
+            <BellOff size={48} className="theme-text-muted mb-4" />
+            <h3 className="text-lg font-bold theme-text mb-2">
               {filter === 'all' ? 'No Alerts Yet' : `No ${FILTER_LABELS[filter]}`}
             </h3>
-            <p className="text-sm text-slate-400 text-center max-w-xs">
+            <p className="text-sm theme-text-secondary text-center max-w-xs">
               {filter === 'all'
                 ? "You'll receive alerts when new clinics are discovered, spots are running low, or prices drop."
                 : 'No notifications of this type yet.'}
@@ -173,9 +177,13 @@ export default function NotificationsPage() {
                   className={cn(
                     'relative p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.98]',
                     notif.read
-                      ? 'bg-white/[0.02] border-white/5'
+                      ? ''
                       : `${accent.bg} ${accent.border}`
                   )}
+                  style={notif.read ? {
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderColor: 'var(--theme-card-border)',
+                  } : undefined}
                 >
                   {!notif.read && (
                     <div className={cn('absolute top-4 right-4 w-2 h-2 rounded-full', accent.dot)} />
@@ -183,15 +191,18 @@ export default function NotificationsPage() {
                   <div className="flex items-start gap-3">
                     <span className="text-xl">{getIcon(notif.type)}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={cn('text-sm font-semibold', notif.read ? 'text-slate-300' : 'text-white')}>
+                      <p className={cn('text-sm font-semibold', notif.read ? 'theme-text-secondary' : 'theme-text')}>
                         {notif.title}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{notif.body}</p>
+                      <p className="text-xs theme-text-secondary mt-0.5 line-clamp-2">{notif.body}</p>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <p className="text-[10px] text-slate-600">
+                        <p className="text-[10px] theme-text-muted">
                           {formatDistanceToNow(parseISO(notif.timestamp), { addSuffix: true })}
                         </p>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500">
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded theme-text-muted"
+                          style={{ backgroundColor: 'var(--theme-surface)' }}
+                        >
                           {notif.type.replace(/_/g, ' ')}
                         </span>
                       </div>

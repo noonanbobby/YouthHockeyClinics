@@ -61,10 +61,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--theme-bg)' }}>
       <div className="safe-area-top" />
 
-      <div className="flex-1 flex flex-col justify-center px-6 py-10">
+      <div className="flex-1 flex flex-col justify-center px-6 py-10 max-w-lg mx-auto w-full">
         {/* Logo & Title */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -74,8 +74,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-sky-500 to-blue-600 mb-5 shadow-lg shadow-sky-500/20">
             <span className="text-4xl">🏒</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Noonan Hockey</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-3xl font-bold theme-text mb-2">Noonan Hockey</h1>
+          <p className="text-sm theme-text-secondary">
             The world&apos;s most comprehensive hockey clinic finder
           </p>
         </motion.div>
@@ -100,9 +100,9 @@ export default function LoginPage() {
         {(oauthAvailable.google || oauthAvailable.apple) && (
           <>
             <div className="flex items-center gap-4 my-2 mb-4">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-xs text-slate-500 uppercase tracking-wider">or sign in</span>
-              <div className="flex-1 h-px bg-white/10" />
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-card-border)' }} />
+              <span className="text-xs theme-text-muted uppercase tracking-wider">or sign in</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-card-border)' }} />
             </div>
 
             <motion.div
@@ -161,9 +161,9 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div className="flex items-center gap-4 my-2 mb-4">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-xs text-slate-500 uppercase tracking-wider">or use email</span>
-          <div className="flex-1 h-px bg-white/10" />
+          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-card-border)' }} />
+          <span className="text-xs theme-text-muted uppercase tracking-wider">or use email</span>
+          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-card-border)' }} />
         </div>
 
         {/* Email Login */}
@@ -174,24 +174,26 @@ export default function LoginPage() {
           className="space-y-3 mb-8"
         >
           <div className="relative">
-            <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+            <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 theme-text-muted" />
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-card-border)' }}
             />
           </div>
 
           <div className="relative">
-            <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 theme-text-muted" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email address"
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-card-border)' }}
             />
           </div>
 
@@ -199,11 +201,15 @@ export default function LoginPage() {
             onClick={handleEmailSignIn}
             disabled={!email || !!isLoading}
             className={cn(
-              'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-medium text-sm transition-all active:scale-[0.98]',
+              'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-medium text-sm transition-all active:scale-[0.98] border',
               email
-                ? 'bg-white/10 text-white border border-white/20'
-                : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                ? 'theme-text'
+                : 'theme-text-muted cursor-not-allowed'
             )}
+            style={{
+              backgroundColor: 'var(--theme-surface)',
+              borderColor: 'var(--theme-card-border)',
+            }}
           >
             {isLoading === 'email' ? (
               <div className="w-5 h-5 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
@@ -218,8 +224,8 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <div className="px-6 pb-8 text-center">
-        <p className="text-[10px] text-slate-600 leading-relaxed">
+      <div className="px-6 pb-8 text-center max-w-lg mx-auto w-full">
+        <p className="text-[10px] theme-text-muted leading-relaxed">
           By continuing, you agree to our Terms of Service and Privacy Policy.
           Your data stays on your device unless you choose to sync.
         </p>

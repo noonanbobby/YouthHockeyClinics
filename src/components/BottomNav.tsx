@@ -47,7 +47,7 @@ export default function BottomNav() {
     pathname === '/spending' || pathname === '/favorites';
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t safe-area-bottom"
+    <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t safe-area-bottom lg:hidden"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--theme-nav-bg) 95%, transparent)',
         borderColor: 'var(--theme-card-border)',

@@ -17,7 +17,6 @@ import {
   CalendarCheck,
   DollarSign,
   Plug,
-  Video,
   Calendar,
   Home,
   Navigation,
@@ -55,7 +54,6 @@ export default function SettingsPage() {
     clinics,
     registrations,
     daySmartConfig,
-    liveBarnConfig,
     childProfiles,
     activeChildIds,
     addChildProfile,
@@ -275,8 +273,8 @@ export default function SettingsPage() {
             <div className="text-left">
               <p className="text-sm font-semibold text-white">Integrations</p>
               <p className="text-[10px] text-slate-400">
-                {daySmartConfig.connected || liveBarnConfig.connected
-                  ? `${[daySmartConfig.connected && 'Dash', liveBarnConfig.connected && 'LiveBarn'].filter(Boolean).join(', ')}`
+                {daySmartConfig.connected
+                  ? 'Dash connected'
                   : 'Connect accounts'}
               </p>
             </div>
@@ -284,20 +282,12 @@ export default function SettingsPage() {
         </div>
 
         {/* Integration status badges */}
-        {(daySmartConfig.connected || liveBarnConfig.connected) && (
+        {daySmartConfig.connected && (
           <div className="flex gap-2 mb-6 overflow-x-auto">
-            {daySmartConfig.connected && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full shrink-0">
-                <Calendar size={12} className="text-orange-400" />
-                <span className="text-[10px] text-orange-300 font-medium">Dash Connected</span>
-              </div>
-            )}
-            {liveBarnConfig.connected && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full shrink-0">
-                <Video size={12} className="text-red-400" />
-                <span className="text-[10px] text-red-300 font-medium">LiveBarn Active</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full shrink-0">
+              <Calendar size={12} className="text-orange-400" />
+              <span className="text-[10px] text-orange-300 font-medium">Dash Connected</span>
+            </div>
           </div>
         )}
 
@@ -797,8 +787,8 @@ export default function SettingsPage() {
             <p className="text-xs text-slate-500 leading-relaxed">
               Noonan Hockey — your all-in-one hockey hub. Scans the internet in real-time to discover
               youth hockey clinics, camps, showcases, and development programs worldwide. Integrates
-              with Dash by DaySmart for local rink management and LiveBarn for live streaming. Track
-              your registrations, spending, and never miss an opportunity.
+              with Dash by DaySmart for local rink management. Track your registrations, spending,
+              and never miss an opportunity.
             </p>
             <div className="mt-3 pt-3 border-t border-white/5">
               <p className="text-[10px] text-slate-600">

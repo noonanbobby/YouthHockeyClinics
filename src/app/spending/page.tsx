@@ -221,23 +221,27 @@ export default function SpendingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white pb-20">
+    <div className="min-h-screen pb-20" style={{ backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-10 bg-slate-900/80 backdrop-blur-lg border-b border-slate-800"
+        className="sticky top-0 z-10 backdrop-blur-lg border-b"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--theme-header-bg) 80%, transparent)', borderColor: 'var(--theme-card-border)' }}
       >
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-2 rounded-lg transition-colors"
+            style={{ backgroundColor: 'transparent' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--theme-card-bg)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
             <h1 className="text-2xl font-bold">Spending</h1>
-            <p className="text-sm text-slate-400">Track your hockey expenses</p>
+            <p className="text-sm" style={{ color: 'var(--theme-text-secondary)' }}>Track your hockey expenses</p>
           </div>
           <DollarSign className="w-8 h-8 text-green-400" />
         </div>
@@ -254,10 +258,10 @@ export default function SpendingPage() {
           >
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="w-4 h-4 text-green-400" />
-              <span className="text-[10px] text-slate-400 uppercase">Total</span>
+              <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Total</span>
             </div>
             <p className="text-2xl font-bold text-green-400">{formatCurrency(summary.total)}</p>
-            <p className="text-[10px] text-slate-500">{summary.count} registrations</p>
+            <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>{summary.count} registrations</p>
           </motion.div>
 
           <motion.div
@@ -268,7 +272,7 @@ export default function SpendingPage() {
           >
             <div className="flex items-center gap-2 mb-1">
               <Calendar className="w-4 h-4 text-blue-400" />
-              <span className="text-[10px] text-slate-400 uppercase">This Month</span>
+              <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>This Month</span>
             </div>
             <p className="text-2xl font-bold text-blue-400">{formatCurrency(summary.thisMonth)}</p>
             {trend !== 0 && (
@@ -289,10 +293,10 @@ export default function SpendingPage() {
           >
             <div className="flex items-center gap-2 mb-1">
               <BarChart3 className="w-4 h-4 text-purple-400" />
-              <span className="text-[10px] text-slate-400 uppercase">Avg Monthly</span>
+              <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Avg Monthly</span>
             </div>
             <p className="text-2xl font-bold text-purple-400">{formatCurrency(summary.avgMonthly)}</p>
-            <p className="text-[10px] text-slate-500">Last 6 months</p>
+            <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>Last 6 months</p>
           </motion.div>
 
           <motion.div
@@ -311,7 +315,7 @@ export default function SpendingPage() {
         </div>
 
         {/* View Tabs */}
-        <div className="flex bg-slate-900 rounded-xl p-1 border border-slate-800">
+        <div className="flex rounded-xl p-1 border" style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-card-border)' }}>
           {([
             { key: 'overview', label: 'Overview', icon: BarChart3 },
             { key: 'venues', label: 'By Venue', icon: MapPin },
@@ -323,8 +327,8 @@ export default function SpendingPage() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-lg transition-all',
                 activeTab === tab.key
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-white/10 theme-text'
+                  : 'theme-text-muted hover:theme-text-secondary'
               )}
             >
               <tab.icon size={12} />
@@ -340,7 +344,8 @@ export default function SpendingPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-5"
+              className="rounded-xl p-5"
+              style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
             >
               <div className="flex items-center gap-2 mb-4">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
@@ -356,10 +361,10 @@ export default function SpendingPage() {
                     className="space-y-1"
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{month.monthLabel}</span>
-                      <span className="font-semibold text-white">{formatCurrency(month.total)}</span>
+                      <span style={{ color: 'var(--theme-text-secondary)' }}>{month.monthLabel}</span>
+                      <span className="font-semibold" style={{ color: 'var(--theme-text)' }}>{formatCurrency(month.total)}</span>
                     </div>
-                    <div className="relative h-6 bg-slate-800 rounded-lg overflow-hidden">
+                    <div className="relative h-6 rounded-lg overflow-hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-card-border) 50%, transparent)' }}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(month.total / maxMonthly) * 100}%` }}
@@ -377,7 +382,8 @@ export default function SpendingPage() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-slate-900 border border-slate-800 rounded-xl p-5"
+                className="rounded-xl p-5"
+                style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
               >
                 <div className="flex items-center gap-2 mb-4">
                   <PieChart className="w-5 h-5 text-purple-400" />
@@ -387,13 +393,13 @@ export default function SpendingPage() {
                   {categoryData.map((cat) => (
                     <div key={cat.category} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-white font-medium">{cat.category}</span>
+                        <span className="font-medium" style={{ color: 'var(--theme-text)' }}>{cat.category}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-slate-500">{cat.count}</span>
-                          <span className="font-semibold text-white">{formatCurrency(cat.total)}</span>
+                          <span style={{ color: 'var(--theme-text-muted)' }}>{cat.count}</span>
+                          <span className="font-semibold" style={{ color: 'var(--theme-text)' }}>{formatCurrency(cat.total)}</span>
                         </div>
                       </div>
-                      <div className="relative h-5 bg-slate-800 rounded-lg overflow-hidden">
+                      <div className="relative h-5 rounded-lg overflow-hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-card-border) 50%, transparent)' }}>
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${cat.percentage}%` }}
@@ -431,10 +437,11 @@ export default function SpendingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden"
+                  className="rounded-xl overflow-hidden"
+                  style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
                 >
                   {/* Venue header */}
-                  <div className="p-4 border-b border-slate-800/50">
+                  <div className="p-4 border-b" style={{ borderColor: 'var(--theme-card-border)' }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className={cn(
@@ -444,17 +451,17 @@ export default function SpendingPage() {
                           <MapPin size={14} className="text-white" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-white">{venue.venue}</h3>
-                          <p className="text-[10px] text-slate-500">{venue.count} registrations</p>
+                          <h3 className="text-sm font-bold" style={{ color: 'var(--theme-text)' }}>{venue.venue}</h3>
+                          <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>{venue.count} registrations</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-white">{formatCurrency(venue.total)}</p>
-                        <p className="text-[10px] text-slate-500">{venue.percentage.toFixed(0)}% of total</p>
+                        <p className="text-lg font-bold" style={{ color: 'var(--theme-text)' }}>{formatCurrency(venue.total)}</p>
+                        <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>{venue.percentage.toFixed(0)}% of total</p>
                       </div>
                     </div>
                     {/* Progress bar */}
-                    <div className="mt-3 relative h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="mt-3 relative h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-card-border) 50%, transparent)' }}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${venue.percentage}%` }}
@@ -464,15 +471,15 @@ export default function SpendingPage() {
                     </div>
                   </div>
                   {/* Individual items */}
-                  <div className="divide-y divide-slate-800/50">
+                  <div className="divide-y" style={{ borderColor: 'var(--theme-card-border)' }}>
                     {venue.items.map((reg) => (
                       <div key={reg.id} className="px-4 py-2.5 flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-medium text-slate-300">{reg.clinicName}</p>
-                          <p className="text-[10px] text-slate-500">
+                          <p className="text-xs font-medium" style={{ color: 'var(--theme-text-secondary)' }}>{reg.clinicName}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>
                             {format(parseISO(reg.startDate), 'MMM d, yyyy')}
                             {reg.source !== 'manual' && (
-                              <span className="ml-2 text-slate-600">via {reg.source}</span>
+                              <span className="ml-2" style={{ color: 'var(--theme-text-muted)' }}>via {reg.source}</span>
                             )}
                           </p>
                         </div>
@@ -513,19 +520,20 @@ export default function SpendingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-4"
+                  className="rounded-xl p-4"
+                  style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <Tag size={14} className="text-slate-400" />
-                      <h3 className="text-sm font-bold text-white">{src.label}</h3>
-                      <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+                      <Tag size={14} style={{ color: 'var(--theme-text-secondary)' }} />
+                      <h3 className="text-sm font-bold" style={{ color: 'var(--theme-text)' }}>{src.label}</h3>
+                      <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full" style={{ color: 'var(--theme-text-muted)' }}>
                         {src.count} items
                       </span>
                     </div>
-                    <p className="text-lg font-bold text-white">{formatCurrency(src.total)}</p>
+                    <p className="text-lg font-bold" style={{ color: 'var(--theme-text)' }}>{formatCurrency(src.total)}</p>
                   </div>
-                  <div className="relative h-3 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="relative h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-card-border) 50%, transparent)' }}>
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${src.percentage}%` }}
@@ -533,7 +541,7 @@ export default function SpendingPage() {
                       className={cn('absolute inset-y-0 left-0 bg-gradient-to-r rounded-full', src.color)}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1">{src.percentage.toFixed(0)}% of total spending</p>
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--theme-text-muted)' }}>{src.percentage.toFixed(0)}% of total spending</p>
                 </motion.div>
               ))
             )}
@@ -544,7 +552,8 @@ export default function SpendingPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-900 border border-slate-800 rounded-xl p-5"
+          className="rounded-xl p-5"
+          style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
         >
           <div className="flex items-center gap-2 mb-4">
             <Receipt className="w-5 h-5 text-cyan-400" />
@@ -552,7 +561,7 @@ export default function SpendingPage() {
           </div>
           <div className="space-y-2">
             {recentTransactions.length === 0 ? (
-              <p className="text-center text-slate-500 py-8 text-sm">No transactions yet</p>
+              <p className="text-center py-8 text-sm" style={{ color: 'var(--theme-text-muted)' }}>No transactions yet</p>
             ) : (
               recentTransactions.map((reg) => (
                 <div
@@ -566,17 +575,17 @@ export default function SpendingPage() {
                   )}
                 >
                   <div className="flex-1 min-w-0">
-                    <h3 className={cn('text-xs font-semibold text-white truncate', reg.status === 'cancelled' && 'line-through')}>
+                    <h3 className={cn('text-xs font-semibold truncate', reg.status === 'cancelled' && 'line-through')} style={{ color: 'var(--theme-text)' }}>
                       {reg.clinicName}
                     </h3>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                    <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--theme-text-secondary)' }}>
                       <span>{reg.venue || reg.city}</span>
                       <span>·</span>
                       <span>{format(parseISO(reg.startDate), 'MMM d')}</span>
                       {reg.source !== 'manual' && (
                         <>
                           <span>·</span>
-                          <span className="text-slate-500">{reg.source}</span>
+                          <span style={{ color: 'var(--theme-text-muted)' }}>{reg.source}</span>
                         </>
                       )}
                     </div>
@@ -591,7 +600,7 @@ export default function SpendingPage() {
                     )}>
                       {formatCurrency(reg.price)}
                     </p>
-                    <p className="text-[9px] text-slate-500 capitalize">{reg.status}</p>
+                    <p className="text-[9px] capitalize" style={{ color: 'var(--theme-text-muted)' }}>{reg.status}</p>
                   </div>
                 </div>
               ))
@@ -606,9 +615,9 @@ export default function SpendingPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-16"
           >
-            <Receipt className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-slate-400 mb-2">No spending data yet</h3>
-            <p className="text-slate-500 text-sm">
+            <Receipt className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--theme-text-muted)' }} />
+            <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--theme-text-secondary)' }}>No spending data yet</h3>
+            <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
               Connect IceHockeyPro or Dash to automatically track expenses, or register for clinics manually.
             </p>
           </motion.div>

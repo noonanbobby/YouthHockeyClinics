@@ -52,7 +52,7 @@ export default function ListView() {
                   >
                     🏒
                   </motion.span>
-                  <span className="text-xs text-slate-400">Searching {source}...</span>
+                  <span className="text-xs theme-text-secondary">Searching {source}...</span>
                 </motion.div>
               )
             )}
@@ -79,10 +79,10 @@ export default function ListView() {
             >
               <span className="text-6xl">🥅</span>
             </motion.div>
-            <h3 className="text-lg font-bold text-white mb-2">
+            <h3 className="text-lg font-bold theme-text mb-2">
               {error.includes('timed out') ? 'Shot Blocked!' : 'Empty Net'}
             </h3>
-            <p className="text-sm text-slate-400 text-center max-w-xs mb-2">{error}</p>
+            <p className="text-sm theme-text-secondary text-center max-w-xs mb-2">{error}</p>
           </div>
         ) : (
           <div className="relative z-10 text-center">
@@ -93,8 +93,8 @@ export default function ListView() {
             >
               <span className="text-6xl">🏒</span>
             </motion.div>
-            <h3 className="text-lg font-bold text-white mb-2">No Clinics Found</h3>
-            <p className="text-sm text-slate-400 text-center max-w-xs mb-2">
+            <h3 className="text-lg font-bold theme-text mb-2">No Clinics Found</h3>
+            <p className="text-sm theme-text-secondary text-center max-w-xs mb-2">
               Try adjusting your filters or adding search API keys for more results.
             </p>
           </div>
@@ -115,7 +115,7 @@ export default function ListView() {
   }
 
   return (
-    <div className="relative px-4 py-4 pb-24 space-y-3">
+    <div className="relative px-4 py-4 pb-24">
       <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
 
       {/* Welcome / setup card for new users */}
@@ -132,8 +132,8 @@ export default function ListView() {
           <div className="flex items-start gap-3">
             <span className="text-3xl">👋</span>
             <div className="flex-1">
-              <h3 className="text-sm font-bold text-white mb-1">Welcome to Noonan Hockey!</h3>
-              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+              <h3 className="text-sm font-bold theme-text mb-1">Welcome to Noonan Hockey!</h3>
+              <p className="text-[11px] theme-text-secondary mb-3 leading-relaxed">
                 Personalize your experience to find the perfect clinics for your player.
               </p>
               <div className="space-y-2">
@@ -146,10 +146,10 @@ export default function ListView() {
                     <UserPlus size={14} style={{ color: 'var(--theme-primary)' }} />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-white">Add Your Player</p>
-                    <p className="text-[10px] text-slate-500">Name & DOB for age-matched results</p>
+                    <p className="text-xs font-semibold theme-text">Add Your Player</p>
+                    <p className="text-[10px] theme-text-muted">Name & DOB for age-matched results</p>
                   </div>
-                  <ArrowRight size={12} className="text-slate-500 ml-auto" />
+                  <ArrowRight size={12} className="theme-text-muted ml-auto" />
                 </button>
                 <button
                   onClick={() => router.push('/settings')}
@@ -159,10 +159,10 @@ export default function ListView() {
                     <MapPin size={14} className="text-green-400" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-white">Set Home Location</p>
-                    <p className="text-[10px] text-slate-500">Local clinics show up first</p>
+                    <p className="text-xs font-semibold theme-text">Set Home Location</p>
+                    <p className="text-[10px] theme-text-muted">Local clinics show up first</p>
                   </div>
-                  <ArrowRight size={12} className="text-slate-500 ml-auto" />
+                  <ArrowRight size={12} className="theme-text-muted ml-auto" />
                 </button>
               </div>
             </div>
@@ -173,11 +173,11 @@ export default function ListView() {
       {/* Status bar */}
       <div className="relative z-10 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold theme-text">
             {filteredClinics.length} clinic{filteredClinics.length !== 1 ? 's' : ''} found
           </p>
           {searchMeta && (
-            <p className="text-[10px] text-slate-500 mt-0.5">
+            <p className="text-[10px] theme-text-muted mt-0.5">
               Scanned {searchMeta.sources.length} sources in {(searchMeta.searchDuration / 1000).toFixed(1)}s
             </p>
           )}
@@ -197,13 +197,13 @@ export default function ListView() {
       </div>
 
       {lastUpdated && (
-        <p className="relative z-10 text-[10px] text-slate-600">
+        <p className="relative z-10 text-[10px] theme-text-muted mt-3">
           Last updated: {new Date(lastUpdated).toLocaleTimeString()}
         </p>
       )}
 
       {/* Clinic cards */}
-      <div className="relative z-10 space-y-3">
+      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-3">
         {filteredClinics.map((clinic, i) => (
           <ClinicCard key={clinic.id} clinic={clinic} index={i} />
         ))}
@@ -216,13 +216,13 @@ export default function ListView() {
             backgroundColor: 'color-mix(in srgb, var(--theme-primary) 3%, transparent)',
             borderColor: 'var(--theme-card-border)',
           }}>
-          <p className="text-xs font-semibold text-white mb-2">Data Sources</p>
+          <p className="text-xs font-semibold theme-text mb-2">Data Sources</p>
           <div className="space-y-1">
             {searchMeta.sources
               .filter((s) => s.count > 0)
               .map((source, i) => (
                 <div key={i} className="flex items-center justify-between text-[10px]">
-                  <span className="text-slate-400">{source.name}</span>
+                  <span className="theme-text-secondary">{source.name}</span>
                   <span className={source.status === 'success' ? 'text-green-400' : 'text-red-400'}>
                     {source.count} results
                   </span>

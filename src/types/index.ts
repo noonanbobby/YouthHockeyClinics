@@ -65,9 +65,6 @@ export interface Clinic {
   rating: number;
   reviewCount: number;
   createdAt: string;
-  // LiveBarn integration
-  liveBarnUrl?: string;
-  hasLiveStream?: boolean;
   // Source tracking
   source?: string;
 }
@@ -130,6 +127,7 @@ export interface Registration {
   // Player info
   playerName?: string;
   childId?: string;
+  isDemo?: boolean;
 }
 
 // DaySmart/Dash integration
@@ -167,22 +165,6 @@ export interface IceHockeyProConfig {
   linkedChildIds: string[];
 }
 
-// LiveBarn integration
-export interface LiveBarnConfig {
-  email: string;
-  password: string;
-  connected: boolean;
-  venues: LiveBarnVenue[];
-}
-
-export interface LiveBarnVenue {
-  id: string;
-  name: string;
-  surfaceName: string;
-  isLive: boolean;
-  streamUrl: string;
-}
-
 // Spending tracking
 export interface MonthlySpend {
   month: string; // "2026-01"
@@ -204,3 +186,5 @@ export interface EmailScanConfig {
 }
 
 export type ViewMode = 'list' | 'map';
+
+export type ColorMode = 'light' | 'dark' | 'system';

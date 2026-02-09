@@ -4,11 +4,10 @@ import { useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
-import { Clinic, LiveBarnVenue, Registration } from '@/types';
+import { Clinic, Registration } from '@/types';
 import { formatPrice, getCountryFlag, formatDateShort, cn } from '@/lib/utils';
-import { X, ChevronRight, Video, MapPin, Calendar, Users, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, ChevronRight, MapPin, Calendar, Users, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 import type { VenueMarkerData } from './LeafletMap';
 
 // Dynamic import — SSR-safe. MapLibre GL must not render on the server.
@@ -34,11 +33,10 @@ interface VenueGroup {
 }
 
 export default function MapView() {
-  const { filteredClinics, isLoading, liveBarnConfig, homeLocation, registrations, childProfiles, activeChildIds } = useStore();
+  const { filteredClinics, isLoading, homeLocation, registrations, childProfiles, activeChildIds } = useStore();
   const router = useRouter();
   const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
   const [showCard, setShowCard] = useState(false);
-  const [launchVenue, setLaunchVenue] = useState<LiveBarnVenue | null>(null);
 
   // ─── Group clinics by venue ───────────────────────────
   const venueGroups = useMemo(() => {
@@ -66,42 +64,6 @@ export default function MapView() {
     return groups;
   }, [filteredClinics]);
 
-  // ─── LiveBarn helpers ─────────────────────────────────
-  const liveVenueNames = useMemo(
-    () =>
-      liveBarnConfig.connected
-        ? liveBarnConfig.venues.filter((v) => v.isLive).map((v) => v.name.toLowerCase())
-        : [],
-    [liveBarnConfig.connected, liveBarnConfig.venues]
-  );
-
-  const isVenueNameLive = useCallback(
-    (venueName: string) => {
-      if (!liveBarnConfig.connected) return false;
-      const v = venueName.toLowerCase();
-      return liveVenueNames.some((lv) => v.includes(lv) || lv.includes(v));
-    },
-    [liveBarnConfig.connected, liveVenueNames]
-  );
-
-  const isGroupLive = useCallback(
-    (group: VenueGroup) =>
-      isVenueNameLive(group.venue) || group.clinics.some((c) => c.hasLiveStream),
-    [isVenueNameLive]
-  );
-
-  const getLiveBarnVenuesForName = useCallback(
-    (venueName: string): LiveBarnVenue[] => {
-      if (!liveBarnConfig.connected) return [];
-      const v = venueName.toLowerCase();
-      return liveBarnConfig.venues.filter((lbv) => {
-        const n = lbv.name.toLowerCase();
-        return v.includes(n) || n.includes(v);
-      });
-    },
-    [liveBarnConfig.connected, liveBarnConfig.venues]
-  );
-
   // ─── Build marker data for LeafletMap ─────────────────
   const markerData: VenueMarkerData[] = useMemo(() => {
     const result: VenueMarkerData[] = [];
@@ -111,11 +73,11 @@ export default function MapView() {
         lat: group.lat,
         lng: group.lng,
         count: group.clinics.length,
-        isLive: isGroupLive(group),
+        isLive: false,
       });
     });
     return result;
-  }, [venueGroups, isGroupLive]);
+  }, [venueGroups]);
 
   // ─── Map config ───────────────────────────────────────
   const mapCenter: [number, number] = homeLocation
@@ -157,14 +119,6 @@ export default function MapView() {
       ),
     [registrations]
   );
-
-  const selectedLiveBarnVenues = useMemo(
-    () => (selectedVenue ? getLiveBarnVenuesForName(selectedVenue.venue) : []),
-    [selectedVenue, getLiveBarnVenuesForName]
-  );
-  const venueIsLive = selectedVenue ? isGroupLive(selectedVenue) : false;
-  const liveStreams = useMemo(() => selectedLiveBarnVenues.filter((v) => v.isLive), [selectedLiveBarnVenues]);
-  const replayStreams = useMemo(() => selectedLiveBarnVenues.filter((v) => !v.isLive), [selectedLiveBarnVenues]);
 
   // ─── Handlers ─────────────────────────────────────────
   const dismissCard = useCallback(() => {
@@ -212,18 +166,6 @@ export default function MapView() {
             {venueGroups.size} venues · {filteredClinics.filter((c) => c.location.lat !== 0).length} clinics
           </p>
         </div>
-
-        {liveBarnConfig.connected && liveVenueNames.length > 0 && (
-          <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-red-500/30 flex items-center gap-1.5 pointer-events-auto">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-            </span>
-            <p className="text-xs font-medium text-red-400">
-              {liveVenueNames.length} Live
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Venue bottom sheet — NO full-screen backdrop. Dismissing is handled by
@@ -240,15 +182,11 @@ export default function MapView() {
             onClick={(e) => e.stopPropagation()}
           >
             <div
-              className={cn(
-                'mx-2 mb-2 rounded-2xl border overflow-hidden',
-                venueIsLive && 'ring-1 ring-red-500/40'
-              )}
+              className="mx-2 mb-2 rounded-2xl border overflow-hidden"
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-bg) 97%, transparent)',
-                borderColor: venueIsLive ? 'rgba(239,68,68,0.3)' : 'var(--theme-card-border)',
+                borderColor: 'var(--theme-card-border)',
                 backdropFilter: 'blur(20px)',
-                animation: venueIsLive ? 'live-glow 2s ease-in-out infinite' : undefined,
               }}
             >
               {/* Header */}
@@ -275,58 +213,6 @@ export default function MapView() {
 
               {/* Scrollable content */}
               <div className="max-h-[55vh] overflow-y-auto overscroll-contain px-4 pb-4">
-                {/* LIVE banner */}
-                {venueIsLive && (
-                  <div className="flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
-                    <span className="relative flex h-3 w-3 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                    </span>
-                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Live Now at This Venue</span>
-                    <Video size={12} className="text-red-400 ml-auto" />
-                  </div>
-                )}
-
-                {/* LiveBarn streams */}
-                {liveStreams.length > 0 && (
-                  <div className="space-y-2 mb-3">
-                    {liveStreams.map((lbv) => (
-                      <button key={lbv.id} onClick={() => setLaunchVenue(lbv)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors text-left">
-                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
-                          <Video size={20} className="text-red-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white">Watch Live — {lbv.surfaceName}</p>
-                          <p className="text-[10px] text-red-400/70">{lbv.name}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="relative flex h-2 w-2 mr-1">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                          </span>
-                          <ExternalLink size={12} className="text-red-400" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {replayStreams.length > 0 && (
-                  <div className="space-y-1.5 mb-3">
-                    {replayStreams.map((lbv) => (
-                      <button key={lbv.id} onClick={() => setLaunchVenue(lbv)}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors text-left">
-                        <Video size={14} className="text-slate-500" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] text-slate-400">{lbv.surfaceName} — Watch Replay</p>
-                        </div>
-                        <ExternalLink size={10} className="text-slate-500" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
                 {/* Clinics list */}
                 <div className="flex items-center justify-between mb-2 mt-1">
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -434,18 +320,6 @@ export default function MapView() {
         )}
       </AnimatePresence>
 
-      {/* live-glow animation for venue card */}
-      <style jsx global>{`
-        @keyframes live-glow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
-          50% { box-shadow: 0 0 24px 6px rgba(239, 68, 68, 0.12); }
-        }
-      `}</style>
-
-      {/* LiveBarn launcher modal */}
-      {launchVenue && (
-        <LiveBarnLauncher venue={launchVenue} onClose={() => setLaunchVenue(null)} />
-      )}
     </div>
   );
 }
