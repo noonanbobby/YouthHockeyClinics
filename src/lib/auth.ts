@@ -4,6 +4,12 @@ import Google from 'next-auth/providers/google';
 import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 
+// Admin emails (comma-separated in env var)
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(function (e) { return e.trim().toLowerCase(); })
+  .filter(Boolean);
+
 // Only register OAuth providers when credentials are actually configured
 const providers: Provider[] = [];
 
@@ -47,20 +53,31 @@ providers.push(
 );
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // CRITICAL: Required for Vercel — trust the proxy X-Forwarded-Host header
+  trustHost: true,
   providers,
   pages: {
     signIn: '/login',
   },
   callbacks: {
-    async session({ session, token }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: any) {
       if (token?.sub) {
         session.user.id = token.sub;
       }
+      if (token?.isAdmin) {
+        session.isAdmin = true;
+      }
       return session;
     },
-    async jwt({ token, user }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: any) {
       if (user) {
         token.sub = user.id;
+      }
+      // Check admin status by email
+      if (token?.email && ADMIN_EMAILS.indexOf(token.email.toLowerCase()) !== -1) {
+        token.isAdmin = true;
       }
       return token;
     },
@@ -68,5 +85,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: 'jwt',
   },
-  secret: process.env.NEXTAUTH_SECRET || 'hockey-clinics-dev-secret-change-in-production',
+  // NextAuth v5 uses AUTH_SECRET, but also support NEXTAUTH_SECRET for compatibility
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'hockey-clinics-dev-secret-change-in-production',
 });
