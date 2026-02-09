@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
+import { getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import {
   ArrowLeft,
   Wifi,
@@ -19,6 +20,7 @@ import {
   ExternalLink,
   Mail,
   Trophy,
+  UserCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -134,6 +136,7 @@ function IntegrationCard({
 export default function IntegrationsPage() {
   const router = useRouter();
   const {
+    childProfiles,
     daySmartConfig,
     setDaySmartConfig,
     daySmartSyncing,
@@ -158,9 +161,28 @@ export default function IntegrationsPage() {
   const [lbPassword, setLbPassword] = useState(liveBarnConfig.password);
   const [ihpEmail, setIhpEmail] = useState(iceHockeyProConfig.email);
   const [ihpPassword, setIhpPassword] = useState(iceHockeyProConfig.password);
-  const [ihpPlayerName, setIhpPlayerName] = useState(iceHockeyProConfig.playerName);
+  const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(
+    iceHockeyProConfig.linkedChildIds || []
+  );
   const [connectionStatus, setConnectionStatus] = useState('');
   const [syncing, setSyncing] = useState(false);
+
+  // Get linked children names for display
+  const getLinkedChildNames = () => {
+    const ids = iceHockeyProConfig.linkedChildIds || [];
+    const names = childProfiles
+      .filter((c) => ids.includes(c.id))
+      .map((c) => c.name);
+    return names.length > 0 ? names.join(', ') : iceHockeyProConfig.playerName || 'Unknown';
+  };
+
+  // Helper for age group display
+  const getChildLabel = (child: typeof childProfiles[0]) => {
+    const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+    const age = getChildAge(child.dateOfBirth);
+    const label = ag.charAt(0).toUpperCase() + ag.slice(1);
+    return `${child.position === 'goalie' ? 'Goalie' : 'Player'} · ${label} · Age ${age}`;
+  };
 
   // --- Dash by DaySmart ---
   const handleDashConnect = async () => {
@@ -310,22 +332,53 @@ export default function IntegrationsPage() {
       setConnectionStatus('Please enter your IceHockeyPro email and password');
       return;
     }
+    if (ihpLinkedChildIds.length === 0) {
+      setConnectionStatus('Please select at least one player to link');
+      return;
+    }
+
+    const linkedChildren = childProfiles.filter((c) => ihpLinkedChildIds.includes(c.id));
     setSyncing(true);
-    setConnectionStatus('Connecting to IceHockeyPro...');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    setIceHockeyProConfig({
-      email: ihpEmail,
-      password: ihpPassword,
-      connected: true,
-      lastSync: new Date().toISOString(),
-      playerName: ihpPlayerName || 'My Player',
-    });
+    // Step 1: Login
+    setConnectionStatus('Logging in to IceHockeyPro...');
+    await new Promise((resolve) => setTimeout(resolve, 1200));
 
-    // Simulated data from IceHockeyPro — in production this calls their API
-    const ihpActivities = [
-      {
-        clinicId: 'ihp-max-ivanov-spring',
+    // Step 2: Navigate to orders
+    setConnectionStatus('Navigating to My Account → Orders...');
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // Step 3: Scrape order list
+    const totalOrders = linkedChildren.length * 2 + 3; // Simulate finding extra orders for other families
+    setConnectionStatus(`Found ${totalOrders} orders. Clicking "View" on each to check billing details...`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Step 4: Match billing details to linked children
+    // In production: scrape /my-account-2/orders/ → click "view" on each order →
+    // read billing details → match child name → import only matching orders
+    setConnectionStatus('Matching billing details to your players...');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const matchedActivities: Array<{
+      clinicId: string;
+      clinicName: string;
+      venue: string;
+      city: string;
+      startDate: string;
+      endDate: string;
+      price: number;
+      currency: string;
+      status: 'confirmed' | 'pending';
+      source: 'icehockeypro';
+      notes: string;
+      playerName: string;
+      childId: string;
+    }> = [];
+
+    linkedChildren.forEach((child, idx) => {
+      // Each linked child has a Max Ivanov Spring Skills registration
+      matchedActivities.push({
+        clinicId: `ihp-max-ivanov-spring-${child.id}`,
         clinicName: 'Max Ivanov Spring Skills Camp',
         venue: 'Panthers IceDen',
         city: 'Coral Springs',
@@ -333,27 +386,16 @@ export default function IntegrationsPage() {
         endDate: '2026-03-26',
         price: 695,
         currency: 'USD',
-        status: 'confirmed' as const,
-        source: 'icehockeypro' as const,
-        notes: 'Advanced skills, 9 AM - 1 PM daily',
-        playerName: ihpPlayerName,
-      },
-      {
-        clinicId: 'ihp-goalie-intensive',
-        clinicName: 'Goaltending Intensive - IceHockeyPro',
-        venue: 'Florida Panthers IceDen',
-        city: 'Coral Springs',
-        startDate: '2026-04-05',
-        endDate: '2026-04-07',
-        price: 450,
-        currency: 'USD',
-        status: 'pending' as const,
-        source: 'icehockeypro' as const,
-        notes: 'Goalie-specific training',
-        playerName: ihpPlayerName,
-      },
-      {
-        clinicId: 'ihp-summer-elite',
+        status: 'confirmed',
+        source: 'icehockeypro',
+        notes: `Order #IHP-2026-${142 + idx} · Billing: ${child.name} · Advanced skills, 9 AM - 1 PM daily`,
+        playerName: child.name,
+        childId: child.id,
+      });
+
+      // Each linked child has an Elite Summer registration
+      matchedActivities.push({
+        clinicId: `ihp-summer-elite-${child.id}`,
         clinicName: 'Elite Summer Hockey Program',
         venue: 'Baptist Health IcePlex',
         city: 'Fort Lauderdale',
@@ -361,42 +403,67 @@ export default function IntegrationsPage() {
         endDate: '2026-06-26',
         price: 1250,
         currency: 'USD',
-        status: 'confirmed' as const,
-        source: 'icehockeypro' as const,
-        notes: '2-week elite program',
-        playerName: ihpPlayerName,
-      },
-    ];
+        status: 'confirmed',
+        source: 'icehockeypro',
+        notes: `Order #IHP-2026-${156 + idx} · Billing: ${child.name} · 2-week elite program`,
+        playerName: child.name,
+        childId: child.id,
+      });
+    });
 
-    for (const activity of ihpActivities) {
+    // Skipped orders (other families' registrations on the account)
+    const skippedOrders = totalOrders - matchedActivities.length;
+
+    setIceHockeyProConfig({
+      email: ihpEmail,
+      password: ihpPassword,
+      connected: true,
+      lastSync: new Date().toISOString(),
+      playerName: linkedChildren.map((c) => c.name).join(', '),
+      linkedChildIds: ihpLinkedChildIds,
+    });
+
+    for (const activity of matchedActivities) {
       addRegistration(activity);
     }
 
     addNotification({
       title: 'IceHockeyPro Connected',
-      body: `Synced ${ihpActivities.length} camps/clinics from IceHockeyPro`,
+      body: `Synced ${matchedActivities.length} registrations for ${linkedChildren.map((c) => c.name).join(' & ')}`,
       clinicId: '',
       type: 'new_clinic',
     });
 
-    setConnectionStatus('IceHockeyPro connected! Synced camps and spending data.');
+    setConnectionStatus(
+      `Synced ${matchedActivities.length} registrations for ${linkedChildren.map((c) => c.name).join(' & ')}. ` +
+      `Skipped ${skippedOrders} order(s) not matching your players.`
+    );
     setSyncing(false);
   };
 
   const handleIhpSync = async () => {
     setSyncing(true);
     setConnectionStatus('Syncing with IceHockeyPro...');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setConnectionStatus('Checking /my-account-2/orders/ for new orders...');
+    await new Promise((resolve) => setTimeout(resolve, 1200));
     setIceHockeyProConfig({ lastSync: new Date().toISOString() });
-    setConnectionStatus('IceHockeyPro sync complete!');
+    setConnectionStatus('IceHockeyPro sync complete! No new orders found.');
     setSyncing(false);
   };
 
   const handleIhpDisconnect = () => {
-    setIceHockeyProConfig({ email: '', password: '', connected: false, lastSync: null, playerName: '' });
+    setIceHockeyProConfig({
+      email: '',
+      password: '',
+      connected: false,
+      lastSync: null,
+      playerName: '',
+      linkedChildIds: [],
+    });
     setIhpEmail('');
     setIhpPassword('');
-    setIhpPlayerName('');
+    setIhpLinkedChildIds([]);
     setConnectionStatus('Disconnected from IceHockeyPro.');
   };
 
@@ -472,7 +539,7 @@ export default function IntegrationsPage() {
             title="IceHockeyPro"
             subtitle="Not connected"
             connected={iceHockeyProConfig.connected}
-            connectedText={`Connected — ${iceHockeyProConfig.playerName}`}
+            connectedText={`Connected — ${getLinkedChildNames()}`}
             color="blue"
             expanded={expandedSection === 'icehockeypro'}
             onToggle={() => setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')}
@@ -482,8 +549,9 @@ export default function IntegrationsPage() {
                 <Trophy size={14} className="text-blue-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-blue-300">
                   Connect your IceHockeyPro account to sync camps attended, upcoming registrations,
-                  and spending. Camps from Max Ivanov, Elite Hockey, and other providers will automatically
-                  appear in your calendar and spending tracker.
+                  and spending. We scrape your order history at{' '}
+                  <span className="font-mono text-blue-200">icehockeypro.com/my-account-2/orders/</span>{' '}
+                  and match billing details to your linked players.
                 </p>
               </div>
             </div>
@@ -491,7 +559,7 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-500 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials stored locally on your device. Used only to communicate directly with IceHockeyPro.
+                Credentials stored locally on your device. We only access your order history to match registrations by billing name.
               </p>
             </div>
 
@@ -506,23 +574,76 @@ export default function IntegrationsPage() {
                   setShowPassword={setShowIhpPassword}
                   placeholder="IceHockeyPro"
                 />
+
+                {/* Multi-child selector */}
                 <div>
-                  <label className="text-xs font-medium text-white block mb-1">Player Name</label>
-                  <input
-                    type="text"
-                    value={ihpPlayerName}
-                    onChange={(e) => setIhpPlayerName(e.target.value)}
-                    placeholder="Your child's name (for matching)"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
-                  />
+                  <label className="text-xs font-medium text-white block mb-2">
+                    Link Players <span className="text-slate-500">(select who to sync)</span>
+                  </label>
+                  {childProfiles.length === 0 ? (
+                    <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                      <p className="text-xs text-slate-400 mb-2">
+                        No players added yet. Add your children first so we can match their billing details.
+                      </p>
+                      <button
+                        onClick={() => router.push('/settings')}
+                        className="text-xs font-medium text-sky-400 flex items-center gap-1"
+                      >
+                        Add players in Settings <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {childProfiles.map((child) => {
+                        const isLinked = ihpLinkedChildIds.includes(child.id);
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => {
+                              setIhpLinkedChildIds((prev) =>
+                                isLinked
+                                  ? prev.filter((id) => id !== child.id)
+                                  : [...prev, child.id]
+                              );
+                            }}
+                            className={cn(
+                              'w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left',
+                              isLinked
+                                ? 'bg-blue-500/10 border-blue-500/30'
+                                : 'bg-white/5 border-white/10'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0',
+                                isLinked
+                                  ? 'bg-blue-500 border-blue-500'
+                                  : 'border-slate-600'
+                              )}
+                            >
+                              {isLinked && <Check size={12} className="text-white" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white font-medium">{child.name}</p>
+                              <p className="text-[10px] text-slate-400">{getChildLabel(child)}</p>
+                            </div>
+                            {isLinked && (
+                              <UserCheck size={14} className="text-blue-400 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
                 <button
                   onClick={handleIhpConnect}
                   disabled={syncing}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
                 >
                   {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Trophy size={14} />}
-                  {syncing ? 'Connecting...' : 'Connect to IceHockeyPro'}
+                  {syncing ? 'Connecting...' : 'Connect & Sync Orders'}
                 </button>
               </>
             ) : (
@@ -533,7 +654,12 @@ export default function IntegrationsPage() {
                     <p className="text-xs font-semibold text-emerald-300">Connected</p>
                   </div>
                   <p className="text-[10px] text-slate-400">Account: {iceHockeyProConfig.email}</p>
-                  <p className="text-[10px] text-slate-400">Player: {iceHockeyProConfig.playerName}</p>
+                  <p className="text-[10px] text-slate-400">
+                    Linked players: {getLinkedChildNames()}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Source: icehockeypro.com/my-account-2/orders/ → View → Billing Details
+                  </p>
                   {iceHockeyProConfig.lastSync && (
                     <p className="text-[10px] text-slate-400">
                       Last sync: {new Date(iceHockeyProConfig.lastSync).toLocaleString()}
@@ -677,8 +803,8 @@ export default function IntegrationsPage() {
                 <Video size={14} className="text-red-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-red-300">
                   Connect your LiveBarn account to see live stream availability. Venues with
-                  active streams show a live indicator on the map. Replay recordings for specific
-                  dates/times at any connected venue.
+                  active streams show a live indicator on the map. Tap any live marker to watch
+                  the stream or access replays.
                 </p>
               </div>
             </div>
@@ -717,7 +843,13 @@ export default function IntegrationsPage() {
                   <p className="text-[10px] text-slate-400 mb-2">Account: {liveBarnConfig.email}</p>
                   <div className="space-y-2 mt-3">
                     {liveBarnConfig.venues.map((venue) => (
-                      <div key={venue.id} className="flex items-center justify-between p-2 bg-black/20 rounded-lg">
+                      <a
+                        key={venue.id}
+                        href={venue.streamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2 bg-black/20 rounded-lg active:bg-black/30 transition-colors"
+                      >
                         <div>
                           <p className="text-xs text-white font-medium">{venue.surfaceName}</p>
                           <p className="text-[10px] text-slate-500">{venue.name}</p>
@@ -725,14 +857,21 @@ export default function IntegrationsPage() {
                         <div className="flex items-center gap-1.5">
                           {venue.isLive ? (
                             <>
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                              </span>
                               <span className="text-[10px] text-red-400 font-medium">LIVE</span>
+                              <ExternalLink size={10} className="text-red-400" />
                             </>
                           ) : (
-                            <span className="text-[10px] text-slate-600">Offline</span>
+                            <>
+                              <span className="text-[10px] text-slate-500">Replay</span>
+                              <ExternalLink size={10} className="text-slate-600" />
+                            </>
                           )}
                         </div>
-                      </div>
+                      </a>
                     ))}
                   </div>
                 </div>
@@ -870,7 +1009,7 @@ export default function IntegrationsPage() {
             <h3 className="text-sm font-bold text-white mb-3">What Gets Synced</h3>
             <div className="space-y-2">
               {[
-                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro', color: 'text-blue-400' },
+                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', color: 'text-blue-400' },
                 { icon: Calendar, text: 'Programs & registrations from DaySmart', color: 'text-orange-400' },
                 { icon: Video, text: 'Live streams & recordings from LiveBarn', color: 'text-red-400' },
                 { icon: Mail, text: 'Schedule changes detected in your email', color: 'text-violet-400' },

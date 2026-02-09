@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
-import { Clinic } from '@/types';
+import { Clinic, LiveBarnVenue } from '@/types';
 import { formatPrice, getCountryFlag, formatDateShort, cn } from '@/lib/utils';
-import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation } from 'lucide-react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation, ExternalLink } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import 'leaflet/dist/leaflet.css';
+
+interface VenueGroup {
+  key: string;
+  venue: string;
+  city: string;
+  country: string;
+  countryCode: string;
+  lat: number;
+  lng: number;
+  clinics: Clinic[];
+}
 
 export default function MapView() {
   const { filteredClinics, isLoading, liveBarnConfig, homeLocation } = useStore();
@@ -15,10 +26,44 @@ export default function MapView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
-  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
   const [showCard, setShowCard] = useState(false);
-  const dragControls = useDragControls();
+  const [mapReady, setMapReady] = useState(false);
+
+  // Group clinics by venue
+  const venueGroups = useMemo(() => {
+    const groups = new Map<string, VenueGroup>();
+
+    filteredClinics
+      .filter((c) => c.location.lat !== 0 && c.location.lng !== 0)
+      .forEach((clinic) => {
+        const key = clinic.location.venue
+          ? clinic.location.venue.toLowerCase().trim()
+          : `${clinic.location.lat.toFixed(3)},${clinic.location.lng.toFixed(3)}`;
+
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key,
+            venue: clinic.location.venue || clinic.location.city,
+            city: clinic.location.city,
+            country: clinic.location.country,
+            countryCode: clinic.location.countryCode,
+            lat: clinic.location.lat,
+            lng: clinic.location.lng,
+            clinics: [],
+          });
+        }
+        groups.get(key)!.clinics.push(clinic);
+      });
+
+    return groups;
+  }, [filteredClinics]);
+
+  // Selected venue data
+  const selectedVenue = useMemo(
+    () => (selectedVenueKey ? venueGroups.get(selectedVenueKey) || null : null),
+    [selectedVenueKey, venueGroups]
+  );
 
   // LiveBarn connected venues for live indicators
   const liveVenueNames = useMemo(
@@ -29,35 +74,62 @@ export default function MapView() {
     [liveBarnConfig.connected, liveBarnConfig.venues]
   );
 
-  const isVenueLive = useCallback(
-    (clinic: Clinic) => {
+  // Check if a venue name has a live stream
+  const isVenueNameLive = useCallback(
+    (venueName: string) => {
       if (!liveBarnConfig.connected) return false;
-      const venue = clinic.location.venue.toLowerCase();
-      return liveVenueNames.some((lv) => venue.includes(lv) || lv.includes(venue));
+      const v = venueName.toLowerCase();
+      return liveVenueNames.some((lv) => v.includes(lv) || lv.includes(v));
     },
     [liveBarnConfig.connected, liveVenueNames]
   );
 
-  const hasLiveStream = useCallback(
-    (clinic: Clinic) => {
-      return clinic.hasLiveStream || isVenueLive(clinic);
+  // Check if any clinic in a group has live stream
+  const isGroupLive = useCallback(
+    (group: VenueGroup) => {
+      return (
+        isVenueNameLive(group.venue) ||
+        group.clinics.some((c) => c.hasLiveStream)
+      );
     },
-    [isVenueLive]
+    [isVenueNameLive]
   );
 
-  // Select a clinic and show the card
-  const selectClinic = useCallback((clinic: Clinic | null) => {
-    if (clinic) {
-      setSelectedClinic(clinic);
-      setShowCard(true);
-      mapInstanceRef.current?.flyTo([clinic.location.lat, clinic.location.lng], 12, {
-        duration: 0.6,
+  // Get LiveBarn venue data for a venue name
+  const getLiveBarnVenuesForName = useCallback(
+    (venueName: string): LiveBarnVenue[] => {
+      if (!liveBarnConfig.connected) return [];
+      const v = venueName.toLowerCase();
+      return liveBarnConfig.venues.filter((lbv) => {
+        const n = lbv.name.toLowerCase();
+        return v.includes(n) || n.includes(v);
       });
-    } else {
-      setShowCard(false);
-      setTimeout(() => setSelectedClinic(null), 300);
-    }
+    },
+    [liveBarnConfig.connected, liveBarnConfig.venues]
+  );
+
+  // Dismiss card
+  const dismissCard = useCallback(() => {
+    setShowCard(false);
+    setTimeout(() => setSelectedVenueKey(null), 300);
   }, []);
+
+  // Select a venue
+  const selectVenue = useCallback(
+    (key: string | null) => {
+      if (key) {
+        const group = venueGroups.get(key);
+        setSelectedVenueKey(key);
+        setShowCard(true);
+        if (group) {
+          mapInstanceRef.current?.flyTo([group.lat, group.lng], 13, { duration: 0.5 });
+        }
+      } else {
+        dismissCard();
+      }
+    },
+    [dismissCard, venueGroups]
+  );
 
   // Initialize map
   useEffect(() => {
@@ -78,24 +150,15 @@ export default function MapView() {
         attributionControl: false,
       });
 
-      // Dark map tiles
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
       }).addTo(map);
 
-      // Zoom control bottom-right
       L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      // Attribution
       L.control.attribution({ position: 'bottomleft' }).addTo(map);
       map.attributionControl.addAttribution(
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
       );
-
-      // Click on map to deselect
-      map.on('click', () => {
-        selectClinic(null);
-      });
 
       mapInstanceRef.current = map;
       markersRef.current = L.layerGroup().addTo(map);
@@ -112,7 +175,7 @@ export default function MapView() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update markers when clinics change
+  // Update markers when venue groups change
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !markersRef.current) return;
 
@@ -120,83 +183,104 @@ export default function MapView() {
       const L = (await import('leaflet')).default;
       markersRef.current!.clearLayers();
 
-      const validClinics = filteredClinics.filter(
-        (c) => c.location.lat !== 0 && c.location.lng !== 0
-      );
-
       const bounds: [number, number][] = [];
 
-      validClinics.forEach((clinic) => {
-        const { lat, lng } = clinic.location;
+      venueGroups.forEach((group) => {
+        const { lat, lng, clinics, key } = group;
         bounds.push([lat, lng]);
 
-        const isLive = hasLiveStream(clinic);
-        const isSelected = selectedClinic?.id === clinic.id;
+        const isLive = isGroupLive(group);
+        const isSelected = selectedVenueKey === key;
+        const count = clinics.length;
+        const size = isSelected ? 46 : 36;
 
-        // Theme-colored marker with optional live indicator
         const icon = L.divIcon({
           className: 'custom-marker',
-          html: `<div style="position:relative;">
+          html: `<div style="position:relative; cursor:pointer;">
             <div style="
-              background: ${isSelected ? 'var(--theme-primary)' : 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))'};
-              width: ${isSelected ? '38px' : '30px'};
-              height: ${isSelected ? '38px' : '30px'};
+              background: ${isSelected ? 'var(--theme-primary)' : isLive ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))'};
+              width: ${size}px;
+              height: ${size}px;
               border-radius: 50% 50% 50% 0;
               transform: rotate(-45deg);
-              border: 2px solid ${isSelected ? '#fff' : 'rgba(255,255,255,0.3)'};
+              border: 3px solid ${isSelected ? '#fff' : isLive ? '#fca5a5' : 'rgba(255,255,255,0.3)'};
               display: flex; align-items: center; justify-content: center;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-              cursor: pointer;
+              box-shadow: ${isLive ? '0 0 24px rgba(239,68,68,0.5), 0 0 8px rgba(239,68,68,0.3)' : isSelected ? '0 0 16px rgba(var(--theme-primary-rgb, 56,189,248),0.3)' : '0 4px 12px rgba(0,0,0,0.4)'};
               transition: all 0.2s;
             ">
-              <span style="transform: rotate(45deg); font-size: ${isSelected ? '16px' : '13px'};">🏒</span>
+              <span style="transform: rotate(45deg); font-size: ${isSelected ? '19px' : '15px'};">${isLive ? '📹' : '🏒'}</span>
             </div>
+            ${count > 1 ? `<div style="
+              position: absolute; top: -8px; left: -4px;
+              min-width: 20px; height: 20px; border-radius: 10px;
+              background: var(--theme-primary, #0ea5e9); border: 2px solid #0f172a;
+              display: flex; align-items: center; justify-content: center;
+              padding: 0 4px;
+            "><span style="font-size: 9px; color: white; font-weight: 800;">${count}</span></div>` : ''}
             ${isLive ? `<div style="
-              position: absolute; top: -4px; right: -4px;
-              width: 14px; height: 14px; border-radius: 50%;
+              position: absolute; top: ${count > 1 ? '-8px' : '-6px'}; right: -6px;
+              width: 20px; height: 20px; border-radius: 50%;
               background: #ef4444; border: 2px solid #0f172a;
               display: flex; align-items: center; justify-content: center;
-              animation: marker-pulse 2s infinite;
-            "><span style="font-size: 6px; color: white; font-weight: bold;">●</span></div>` : ''}
+              animation: marker-pulse 1.5s infinite;
+              box-shadow: 0 0 10px rgba(239,68,68,0.6);
+            "><span style="font-size: 6px; color: white; font-weight: 900;">LIVE</span></div>` : ''}
           </div>`,
-          iconSize: [isSelected ? 38 : 30, isSelected ? 38 : 30],
-          iconAnchor: [isSelected ? 19 : 15, isSelected ? 38 : 30],
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size],
         });
 
         const marker = L.marker([lat, lng], { icon }).on('click', (e: L.LeafletEvent) => {
           L.DomEvent.stopPropagation(e as L.LeafletMouseEvent);
-          selectClinic(clinic);
+          selectVenue(key);
         });
 
         markersRef.current!.addLayer(marker);
       });
 
-      // Fit bounds if we have markers and no clinic is selected
-      if (bounds.length > 0 && !selectedClinic) {
+      // Fit bounds if we have markers and nothing is selected
+      if (bounds.length > 0 && !selectedVenueKey) {
         try {
           mapInstanceRef.current!.fitBounds(bounds as L.LatLngBoundsExpression, {
             padding: [50, 50],
             maxZoom: 12,
           });
         } catch {
-          // Bounds error, ignore
+          // ignore
         }
       }
     };
 
     updateMarkers();
-  }, [filteredClinics, mapReady, selectedClinic, hasLiveStream, selectClinic]);
+  }, [venueGroups, mapReady, selectedVenueKey, isGroupLive, selectVenue]);
+
+  // LiveBarn venues for the selected venue
+  const selectedLiveBarnVenues = useMemo(
+    () => (selectedVenue ? getLiveBarnVenuesForName(selectedVenue.venue) : []),
+    [selectedVenue, getLiveBarnVenuesForName]
+  );
+  const venueIsLive = selectedVenue ? isGroupLive(selectedVenue) : false;
+  const liveStreams = useMemo(
+    () => selectedLiveBarnVenues.filter((v) => v.isLive),
+    [selectedLiveBarnVenues]
+  );
+  const replayStreams = useMemo(
+    () => selectedLiveBarnVenues.filter((v) => !v.isLive),
+    [selectedLiveBarnVenues]
+  );
 
   return (
     <div className="relative h-[calc(100vh-180px)]">
-      {/* Map container - full height */}
       <div ref={mapRef} className="w-full h-full bg-slate-900" />
 
-      {/* Pulse animation for live markers */}
       <style jsx global>{`
         @keyframes marker-pulse {
           0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.2); opacity: 0.8; }
+          50% { transform: scale(1.3); opacity: 0.7; }
+        }
+        @keyframes live-glow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+          50% { box-shadow: 0 0 24px 6px rgba(239, 68, 68, 0.12); }
         }
       `}</style>
 
@@ -204,8 +288,10 @@ export default function MapView() {
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm z-10">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }} />
+            <div
+              className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin"
+              style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }}
+            />
             <p className="text-sm text-slate-300">Scanning for clinics...</p>
           </div>
         </div>
@@ -215,13 +301,16 @@ export default function MapView() {
       <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
         <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/10">
           <p className="text-xs font-medium text-white">
-            {filteredClinics.filter((c) => c.location.lat !== 0).length} clinics on map
+            {venueGroups.size} venues · {filteredClinics.filter((c) => c.location.lat !== 0).length} clinics
           </p>
         </div>
 
         {liveBarnConfig.connected && liveVenueNames.length > 0 && (
           <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-red-500/30 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
             <p className="text-xs font-medium text-red-400">
               {liveVenueNames.length} Live
             </p>
@@ -233,7 +322,9 @@ export default function MapView() {
       {homeLocation && (
         <button
           onClick={() => {
-            mapInstanceRef.current?.flyTo([homeLocation.lat, homeLocation.lng], 10, { duration: 0.6 });
+            mapInstanceRef.current?.flyTo([homeLocation.lat, homeLocation.lng], 10, {
+              duration: 0.6,
+            });
           }}
           className="absolute bottom-24 right-3 z-10 bg-slate-900/90 backdrop-blur-sm rounded-full p-2.5 border border-white/10 active:scale-95 transition-transform"
           title="Re-center on home"
@@ -242,131 +333,219 @@ export default function MapView() {
         </button>
       )}
 
-      {/* Slide-up clinic card */}
+      {/* Dismiss backdrop */}
+      {showCard && (
+        <div className="absolute inset-0 z-[18]" onClick={dismissCard} />
+      )}
+
+      {/* Venue bottom sheet */}
       <AnimatePresence>
-        {showCard && selectedClinic && (
+        {showCard && selectedVenue && (
           <motion.div
+            key="venue-sheet"
             initial={{ y: '100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            drag="y"
-            dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.5 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 100) selectClinic(null);
-            }}
+            transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className="absolute bottom-0 left-0 right-0 z-20 safe-area-bottom"
+            onClick={(e) => e.stopPropagation()}
           >
             <div
-              className="mx-2 mb-2 rounded-2xl border overflow-hidden"
+              className={cn(
+                'mx-2 mb-2 rounded-2xl border overflow-hidden',
+                venueIsLive && 'ring-1 ring-red-500/40'
+              )}
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-bg) 97%, transparent)',
-                borderColor: 'var(--theme-card-border)',
+                borderColor: venueIsLive
+                  ? 'rgba(239,68,68,0.3)'
+                  : 'var(--theme-card-border)',
                 backdropFilter: 'blur(20px)',
+                animation: venueIsLive
+                  ? 'live-glow 2s ease-in-out infinite'
+                  : undefined,
               }}
             >
-              {/* Drag handle */}
-              <div
-                className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing"
-                onPointerDown={(e) => dragControls.start(e)}
-              >
-                <div className="w-10 h-1 rounded-full bg-white/20" />
+              {/* Fixed header with close button */}
+              <div className="relative px-4 pt-3 pb-2">
+                {/* Drag handle */}
+                <div className="flex justify-center mb-2">
+                  <div className="w-12 h-1.5 rounded-full bg-white/20" />
+                </div>
+
+                {/* Close button */}
+                <button
+                  onClick={dismissCard}
+                  className="absolute top-2 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 z-30 transition-colors"
+                >
+                  <X size={20} className="text-white" />
+                </button>
+
+                {/* Venue header */}
+                <div className="pr-10">
+                  <h3 className="text-base font-bold text-white leading-tight">
+                    {selectedVenue.venue}
+                  </h3>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPin size={10} className="text-slate-500 shrink-0" />
+                    <p className="text-[11px] text-slate-400">
+                      {getCountryFlag(selectedVenue.countryCode)} {selectedVenue.city},{' '}
+                      {selectedVenue.country}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Close button */}
-              <button
-                onClick={() => selectClinic(null)}
-                className="absolute top-2 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 z-10"
-              >
-                <X size={16} className="text-slate-400" />
-              </button>
-
-              {/* Card content */}
-              <div className="p-4 pt-1">
-                {/* Live indicator if applicable */}
-                {hasLiveStream(selectedClinic) && (
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-red-400 uppercase">Live Now</span>
-                    <Video size={10} className="text-red-400" />
+              {/* Scrollable content */}
+              <div className="max-h-[55vh] overflow-y-auto overscroll-contain px-4 pb-4">
+                {/* LIVE NOW banner */}
+                {venueIsLive && (
+                  <div className="flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <span className="relative flex h-3 w-3 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                    </span>
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
+                      Live Now at This Venue
+                    </span>
+                    <Video size={12} className="text-red-400 ml-auto" />
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  {/* Thumbnail */}
-                  {selectedClinic.imageUrl && (
-                    <img
-                      src={selectedClinic.imageUrl}
-                      alt=""
-                      className="w-20 h-20 rounded-xl object-cover shrink-0"
-                    />
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-white leading-tight line-clamp-2">
-                      {selectedClinic.name}
-                    </h3>
-                    <div className="flex items-center gap-1 mt-1">
-                      <MapPin size={10} className="text-slate-500 shrink-0" />
-                      <p className="text-[11px] text-slate-400 truncate">
-                        {getCountryFlag(selectedClinic.location.countryCode)}{' '}
-                        {selectedClinic.location.venue || selectedClinic.location.city},{' '}
-                        {selectedClinic.location.country}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <div className="flex items-center gap-1">
-                        <Calendar size={10} className="text-slate-500" />
-                        <span className="text-[11px]" style={{ color: 'var(--theme-primary)' }}>
-                          {formatDateShort(selectedClinic.dates.start)}
-                          {selectedClinic.dates.start !== selectedClinic.dates.end &&
-                            ` – ${formatDateShort(selectedClinic.dates.end)}`}
-                        </span>
-                      </div>
-                      {selectedClinic.spotsRemaining > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Users size={10} className="text-slate-500" />
-                          <span
-                            className={cn(
-                              'text-[11px]',
-                              selectedClinic.spotsRemaining <= 5 ? 'text-red-400' : 'text-slate-400'
-                            )}
-                          >
-                            {selectedClinic.spotsRemaining} spots
-                          </span>
+                {/* LiveBarn stream links */}
+                {liveStreams.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {liveStreams.map((lbv) => (
+                      <a
+                        key={lbv.id}
+                        href={lbv.streamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
+                          <Video size={20} className="text-red-400" />
                         </div>
-                      )}
-                    </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white">
+                            Watch Live — {lbv.surfaceName}
+                          </p>
+                          <p className="text-[10px] text-red-400/70">{lbv.name}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="relative flex h-2 w-2 mr-1">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                          </span>
+                          <ExternalLink size={12} className="text-red-400" />
+                        </div>
+                      </a>
+                    ))}
                   </div>
+                )}
+
+                {/* Replay links */}
+                {replayStreams.length > 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    {replayStreams.map((lbv) => (
+                      <a
+                        key={lbv.id}
+                        href={lbv.streamUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors"
+                      >
+                        <Video size={14} className="text-slate-500" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-slate-400">
+                            {lbv.surfaceName} — Watch Replay
+                          </p>
+                        </div>
+                        <ExternalLink size={10} className="text-slate-500" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* Clinics section header */}
+                <div className="flex items-center justify-between mb-2 mt-1">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    {selectedVenue.clinics.length} Camp{selectedVenue.clinics.length !== 1 ? 's' : ''} at This Venue
+                  </p>
                 </div>
 
-                {/* Price + CTA */}
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
-                  <div>
-                    {selectedClinic.price.amount > 0 ? (
-                      <p className="text-base font-bold text-white">
-                        {formatPrice(selectedClinic.price.amount, selectedClinic.price.currency)}
-                      </p>
-                    ) : (
-                      <p className="text-base font-bold text-emerald-400">Free</p>
-                    )}
-                    {selectedClinic.rating > 0 && (
-                      <p className="text-[10px] text-slate-500">
-                        {'★'.repeat(Math.round(selectedClinic.rating))}{' '}
-                        {selectedClinic.rating.toFixed(1)}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => router.push(`/clinic/${selectedClinic.id}`)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95"
-                    style={{ backgroundColor: 'var(--theme-primary)' }}
-                  >
-                    View Details
-                    <ChevronRight size={14} />
-                  </button>
+                {/* Clinic cards */}
+                <div className="space-y-2">
+                  {selectedVenue.clinics.map((clinic) => (
+                    <button
+                      key={clinic.id}
+                      onClick={() => router.push(`/clinic/${clinic.id}`)}
+                      className="w-full text-left p-3 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/[0.06] transition-colors"
+                    >
+                      <div className="flex gap-3">
+                        {clinic.imageUrl && (
+                          <img // eslint-disable-line @next/next/no-img-element
+                            src={clinic.imageUrl}
+                            alt=""
+                            className="w-14 h-14 rounded-lg object-cover shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">
+                            {clinic.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-1">
+                              <Calendar size={9} className="text-slate-500" />
+                              <span
+                                className="text-[10px]"
+                                style={{ color: 'var(--theme-primary)' }}
+                              >
+                                {formatDateShort(clinic.dates.start)}
+                                {clinic.dates.start !== clinic.dates.end &&
+                                  ` – ${formatDateShort(clinic.dates.end)}`}
+                              </span>
+                            </div>
+                            {clinic.spotsRemaining > 0 && (
+                              <div className="flex items-center gap-1">
+                                <Users size={9} className="text-slate-500" />
+                                <span
+                                  className={cn(
+                                    'text-[10px]',
+                                    clinic.spotsRemaining <= 5
+                                      ? 'text-red-400'
+                                      : 'text-slate-400'
+                                  )}
+                                >
+                                  {clinic.spotsRemaining} spots
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <div>
+                              {clinic.price.amount > 0 ? (
+                                <span className="text-sm font-bold text-white">
+                                  {formatPrice(clinic.price.amount, clinic.price.currency)}
+                                </span>
+                              ) : (
+                                <span className="text-sm font-bold text-emerald-400">
+                                  Free
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className="flex items-center gap-1 text-[10px] font-medium"
+                              style={{ color: 'var(--theme-primary)' }}
+                            >
+                              View Details
+                              <ChevronRight size={12} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

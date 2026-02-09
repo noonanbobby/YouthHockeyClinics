@@ -164,6 +164,7 @@ export interface IceHockeyProConfig {
   connected: boolean;
   lastSync: string | null;
   playerName: string;
+  linkedChildIds: string[];
 }
 
 // LiveBarn integration

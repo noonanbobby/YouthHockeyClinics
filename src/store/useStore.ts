@@ -569,6 +569,7 @@ export const useStore = create<AppState>()(
         connected: false,
         lastSync: null,
         playerName: '',
+        linkedChildIds: [],
       },
       setIceHockeyProConfig: (config) =>
         set((state) => ({
