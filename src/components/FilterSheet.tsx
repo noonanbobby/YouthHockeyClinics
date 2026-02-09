@@ -65,11 +65,12 @@ export default function FilterSheet() {
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl max-h-[85vh] overflow-hidden"
-            style={{ backgroundColor: 'var(--theme-bg)' }}
+            data-theme-page
+            style={{ backgroundColor: '#ffffff', boxShadow: '0 -4px 30px rgba(0,0,0,0.12)' }}
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-white/20" />
+              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#cbd5e1' }} />
             </div>
 
             {/* Header */}

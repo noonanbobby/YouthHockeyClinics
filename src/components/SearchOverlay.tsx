@@ -55,14 +55,18 @@ export default function SearchOverlay() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-slate-900/98 backdrop-blur-xl"
+          className="fixed inset-0 z-50 backdrop-blur-xl"
+          style={{ backgroundColor: 'rgba(255,255,255,0.97)' }}
         >
           <div className="safe-area-top" />
           <div className="p-4">
             {/* Search input */}
             <form onSubmit={handleSubmit} className="flex items-center gap-3 mb-6">
-              <div className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
-                <Search size={18} className="text-slate-400 shrink-0" />
+              <div
+                className="flex-1 flex items-center gap-2 border rounded-xl px-3 py-2.5"
+                style={{ backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' }}
+              >
+                <Search size={18} className="shrink-0" style={{ color: '#94a3b8' }} />
                 <input
                   ref={inputRef}
                   type="text"
@@ -72,7 +76,8 @@ export default function SearchOverlay() {
                     setSearchQuery(e.target.value);
                   }}
                   placeholder="Search clinics, locations, coaches..."
-                  className="flex-1 bg-transparent text-white text-sm placeholder:text-slate-500 outline-none"
+                  className="flex-1 bg-transparent text-sm outline-none"
+                  style={{ color: '#0f172a' }}
                 />
                 {localQuery && (
                   <button
@@ -81,7 +86,7 @@ export default function SearchOverlay() {
                       setLocalQuery('');
                       setSearchQuery('');
                     }}
-                    className="text-slate-400"
+                    style={{ color: '#94a3b8' }}
                   >
                     <X size={16} />
                   </button>
@@ -93,7 +98,8 @@ export default function SearchOverlay() {
                   setSearchOpen(false);
                   if (!localQuery.trim()) setSearchQuery('');
                 }}
-                className="text-sky-400 text-sm font-medium"
+                className="text-sm font-medium"
+                style={{ color: 'var(--theme-primary)' }}
               >
                 Cancel
               </button>
@@ -104,7 +110,8 @@ export default function SearchOverlay() {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-xs text-slate-400 mb-4"
+                className="text-xs mb-4"
+                style={{ color: '#94a3b8' }}
               >
                 {filteredClinics.length} {filteredClinics.length === 1 ? 'result' : 'results'} found
               </motion.p>
@@ -121,7 +128,7 @@ export default function SearchOverlay() {
                   <button
                     key={clinic.id}
                     onClick={() => handleSearch(localQuery)}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-left"
                   >
                     <img
                       src={clinic.imageUrl}
@@ -129,10 +136,10 @@ export default function SearchOverlay() {
                       className="w-10 h-10 rounded-lg object-cover"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{clinic.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{clinic.location.city}, {clinic.location.country}</p>
+                      <p className="text-sm font-medium truncate" style={{ color: '#0f172a' }}>{clinic.name}</p>
+                      <p className="text-xs truncate" style={{ color: '#94a3b8' }}>{clinic.location.city}, {clinic.location.country}</p>
                     </div>
-                    <ArrowRight size={14} className="text-slate-500 shrink-0" />
+                    <ArrowRight size={14} className="shrink-0" style={{ color: '#94a3b8' }} />
                   </button>
                 ))}
               </motion.div>
@@ -142,13 +149,14 @@ export default function SearchOverlay() {
             {!localQuery && recentSearches.length > 0 && (
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Clock size={14} className="text-slate-400" />
+                  <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: '#0f172a' }}>
+                    <Clock size={14} style={{ color: '#94a3b8' }} />
                     Recent Searches
                   </h3>
                   <button
                     onClick={clearRecentSearches}
-                    className="text-xs text-sky-400 font-medium"
+                    className="text-xs font-medium"
+                    style={{ color: 'var(--theme-primary)' }}
                   >
                     Clear
                   </button>
@@ -161,10 +169,10 @@ export default function SearchOverlay() {
                         setLocalQuery(search);
                         handleSearch(search);
                       }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-colors text-left"
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
                     >
-                      <Clock size={14} className="text-slate-500" />
-                      <span className="text-sm text-slate-300">{search}</span>
+                      <Clock size={14} style={{ color: '#94a3b8' }} />
+                      <span className="text-sm" style={{ color: '#475569' }}>{search}</span>
                     </button>
                   ))}
                 </div>
@@ -174,8 +182,8 @@ export default function SearchOverlay() {
             {/* Trending */}
             {!localQuery && (
               <div>
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
-                  <TrendingUp size={14} className="text-sky-400" />
+                <h3 className="text-sm font-semibold flex items-center gap-2 mb-3" style={{ color: '#0f172a' }}>
+                  <TrendingUp size={14} style={{ color: 'var(--theme-primary)' }} />
                   Trending Searches
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -186,7 +194,12 @@ export default function SearchOverlay() {
                         setLocalQuery(search);
                         handleSearch(search);
                       }}
-                      className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs text-slate-300 hover:bg-sky-500/10 hover:border-sky-500/30 hover:text-sky-300 transition-colors"
+                      className="px-3 py-1.5 border rounded-full text-xs transition-colors hover:bg-slate-50"
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        borderColor: '#e2e8f0',
+                        color: '#475569',
+                      }}
                     >
                       {search}
                     </button>

@@ -65,9 +65,21 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
       onClick={() => router.push(`/clinic/${clinic.id}`)}
       className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.995]"
       style={{
-        backgroundColor: 'var(--theme-card-bg)',
+        backgroundColor: '#ffffff',
         border: '1px solid var(--theme-card-border)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        boxShadow: 'var(--theme-shadow)',
+      }}
+      whileHover={{
+        y: -2,
+        transition: { duration: 0.2 },
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--theme-shadow-lg)';
+        e.currentTarget.style.borderColor = 'var(--theme-primary)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--theme-shadow)';
+        e.currentTarget.style.borderColor = 'var(--theme-card-border)';
       }}
     >
       {/* Team-colored left accent bar */}
@@ -76,11 +88,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
         style={{ background: 'linear-gradient(180deg, var(--theme-primary), var(--theme-secondary))' }}
       />
 
-      {/* Hover glow effect */}
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-        style={{ boxShadow: 'inset 0 0 0 1px var(--theme-primary), 0 0 20px color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}
-      />
+      {/* Subtle hover border highlight is handled via onMouseEnter/Leave */}
 
       <div className="relative pl-5 pr-4 py-4 lg:pl-6 lg:pr-5 lg:py-5">
         {/* Row 1: Type badge + countdown + favorite */}
@@ -96,12 +104,12 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
               {TYPE_ICONS[clinic.type] || '🏒'} {getClinicTypeLabel(clinic.type)}
             </span>
             {clinic.featured && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide bg-amber-500/15 text-amber-400">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide bg-amber-50 text-amber-600 border border-amber-200">
                 <Award size={12} /> Featured
               </span>
             )}
             {clinic.isNew && (
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-400">
+              <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200">
                 New
               </span>
             )}
@@ -202,7 +210,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
               </div>
             )}
             {hasOverlap && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-amber-500/10 text-amber-400">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-amber-50 text-amber-600 border border-amber-200">
                 <AlertTriangle size={15} />
                 Schedule overlap with {overlappingRegs[0].clinicName}
               </div>

@@ -14,7 +14,7 @@ import type { VenueMarkerData } from './LeafletMap';
 const LeafletMap = dynamic(() => import('./LeafletMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: 'var(--theme-bg)' }}>
       <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
         style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }} />
     </div>
@@ -148,21 +148,21 @@ export default function MapView() {
 
       {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm z-10 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm z-10 pointer-events-none">
           <div className="flex flex-col items-center gap-3">
             <div
               className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin"
               style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }}
             />
-            <p className="text-sm text-slate-300">Scanning for clinics...</p>
+            <p className="text-sm" style={{ color: '#475569' }}>Scanning for clinics...</p>
           </div>
         </div>
       )}
 
       {/* Top info bar — pointer-events-none on container, auto on pills */}
       <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
-        <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/10 pointer-events-auto">
-          <p className="text-xs font-medium text-white">
+        <div className="rounded-full px-3 py-1.5 border pointer-events-auto" style={{ backgroundColor: '#ffffff', borderColor: 'var(--theme-card-border)', boxShadow: 'var(--theme-shadow)' }}>
+          <p className="text-xs font-medium" style={{ color: '#0f172a' }}>
             {venueGroups.size} venues · {filteredClinics.filter((c) => c.location.lat !== 0).length} clinics
           </p>
         </div>
@@ -183,22 +183,24 @@ export default function MapView() {
           >
             <div
               className="mx-2 mb-2 rounded-2xl border overflow-hidden"
+              data-theme-page
               style={{
-                backgroundColor: 'color-mix(in srgb, var(--theme-bg) 97%, transparent)',
+                backgroundColor: '#ffffff',
                 borderColor: 'var(--theme-card-border)',
-                backdropFilter: 'blur(20px)',
+                boxShadow: 'var(--theme-shadow-lg)',
               }}
             >
               {/* Header */}
               <div className="relative px-4 pt-3 pb-2">
                 <div className="flex justify-center mb-2">
-                  <div className="w-12 h-1.5 rounded-full bg-white/20" />
+                  <div className="w-12 h-1.5 rounded-full" style={{ backgroundColor: '#cbd5e1' }} />
                 </div>
                 <button
                   onClick={dismissCard}
-                  className="absolute top-2 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 z-30 transition-colors"
+                  className="absolute top-2 right-3 w-10 h-10 flex items-center justify-center rounded-full z-30 transition-colors"
+                  style={{ backgroundColor: '#f1f5f9' }}
                 >
-                  <X size={20} className="text-white" />
+                  <X size={20} style={{ color: '#475569' }} />
                 </button>
                 <div className="pr-10">
                   <h3 className="text-base font-bold text-white leading-tight">{selectedVenue.venue}</h3>
@@ -237,8 +239,8 @@ export default function MapView() {
                         className={cn(
                           'w-full text-left p-3 rounded-xl border transition-colors',
                           anyRegistered
-                            ? 'bg-emerald-500/[0.06] border-emerald-500/20 active:bg-emerald-500/10'
-                            : 'bg-white/[0.03] border-white/5 active:bg-white/[0.06]'
+                            ? 'bg-emerald-50 border-emerald-200 active:bg-emerald-100'
+                            : 'border active:bg-slate-50'
                         )}
                       >
                         <div className="flex gap-3">
@@ -261,7 +263,7 @@ export default function MapView() {
                               {clinic.spotsRemaining > 0 && (
                                 <div className="flex items-center gap-1">
                                   <Users size={9} className="text-slate-500" />
-                                  <span className={cn('text-[10px]', clinic.spotsRemaining <= 5 ? 'text-red-400' : 'text-slate-400')}>
+                                  <span className={cn('text-[10px]', clinic.spotsRemaining <= 5 ? 'text-red-500' : 'text-slate-500')}>
                                     {clinic.spotsRemaining} spots
                                   </span>
                                 </div>
@@ -275,8 +277,9 @@ export default function MapView() {
                                   <span key={child.id}
                                     className={cn(
                                       'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold',
-                                      registration ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-slate-500'
-                                    )}>
+                                      registration ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500'
+                                    )}
+                                    style={!registration ? { backgroundColor: 'var(--theme-surface)' } : undefined}>
                                     {registration ? <CheckCircle2 size={8} /> : null}
                                     {child.name}{registration ? ' Registered' : ''}
                                   </span>
@@ -287,8 +290,8 @@ export default function MapView() {
                             {/* Schedule overlap */}
                             {hasOverlap && (
                               <div className="flex items-center gap-1 mt-1">
-                                <AlertTriangle size={9} className="text-amber-400" />
-                                <span className="text-[9px] text-amber-400 font-medium">
+                                <AlertTriangle size={9} className="text-amber-500" />
+                                <span className="text-[9px] text-amber-600 font-medium">
                                   Overlaps with {overlaps[0].clinicName}
                                 </span>
                               </div>

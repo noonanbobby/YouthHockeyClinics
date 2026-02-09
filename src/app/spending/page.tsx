@@ -243,7 +243,7 @@ export default function SpendingPage() {
             <h1 className="text-2xl font-bold">Spending</h1>
             <p className="text-sm" style={{ color: 'var(--theme-text-secondary)' }}>Track your hockey expenses</p>
           </div>
-          <DollarSign className="w-8 h-8 text-green-400" />
+          <DollarSign className="w-8 h-8 text-emerald-600" />
         </div>
       </motion.header>
 
@@ -254,13 +254,13 @@ export default function SpendingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl p-4"
+            className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200 rounded-xl p-4"
           >
             <div className="flex items-center gap-2 mb-1">
-              <DollarSign className="w-4 h-4 text-green-400" />
+              <DollarSign className="w-4 h-4 text-emerald-600" />
               <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Total</span>
             </div>
-            <p className="text-2xl font-bold text-green-400">{formatCurrency(summary.total)}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(summary.total)}</p>
             <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>{summary.count} registrations</p>
           </motion.div>
 
@@ -268,17 +268,17 @@ export default function SpendingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4"
+            className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4"
           >
             <div className="flex items-center gap-2 mb-1">
-              <Calendar className="w-4 h-4 text-blue-400" />
+              <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>This Month</span>
             </div>
-            <p className="text-2xl font-bold text-blue-400">{formatCurrency(summary.thisMonth)}</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCurrency(summary.thisMonth)}</p>
             {trend !== 0 && (
               <div className="flex items-center gap-1">
-                {trend > 0 ? <TrendingUp className="w-3 h-3 text-red-400" /> : <TrendingDown className="w-3 h-3 text-green-400" />}
-                <span className={cn('text-[10px]', trend > 0 ? 'text-red-400' : 'text-green-400')}>
+                {trend > 0 ? <TrendingUp className="w-3 h-3 text-red-500" /> : <TrendingDown className="w-3 h-3 text-emerald-600" />}
+                <span className={cn('text-[10px]', trend > 0 ? 'text-red-500' : 'text-emerald-600')}>
                   {Math.abs(trend).toFixed(0)}% vs last
                 </span>
               </div>
@@ -289,13 +289,13 @@ export default function SpendingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-4"
+            className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4"
           >
             <div className="flex items-center gap-2 mb-1">
-              <BarChart3 className="w-4 h-4 text-purple-400" />
+              <BarChart3 className="w-4 h-4 text-purple-600" />
               <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Avg Monthly</span>
             </div>
-            <p className="text-2xl font-bold text-purple-400">{formatCurrency(summary.avgMonthly)}</p>
+            <p className="text-2xl font-bold text-purple-600">{formatCurrency(summary.avgMonthly)}</p>
             <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>Last 6 months</p>
           </motion.div>
 
@@ -303,13 +303,13 @@ export default function SpendingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-gradient-to-br from-orange-500/10 to-amber-500/10 border border-orange-500/20 rounded-xl p-4"
+            className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4"
           >
             <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-orange-400" />
+              <Clock className="w-4 h-4 text-orange-600" />
               <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Per Hour</span>
             </div>
-            <p className="text-2xl font-bold text-orange-400">{formatCurrency(costPerHour)}</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(costPerHour)}</p>
             <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>Est. ice time</p>
           </motion.div>
         </div>
@@ -327,9 +327,10 @@ export default function SpendingPage() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-lg transition-all',
                 activeTab === tab.key
-                  ? 'bg-white/10 theme-text'
+                  ? 'theme-text'
                   : 'theme-text-muted hover:theme-text-secondary'
               )}
+              style={activeTab === tab.key ? { backgroundColor: '#ffffff', boxShadow: 'var(--theme-shadow-sm)' } : undefined}
             >
               <tab.icon size={12} />
               {tab.label}
@@ -348,7 +349,7 @@ export default function SpendingPage() {
               style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
             >
               <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
+                <BarChart3 className="w-5 h-5 text-blue-600" />
                 <h2 className="text-base font-bold">Monthly Breakdown</h2>
               </div>
               <div className="space-y-3">
@@ -386,7 +387,7 @@ export default function SpendingPage() {
                 style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
               >
                 <div className="flex items-center gap-2 mb-4">
-                  <PieChart className="w-5 h-5 text-purple-400" />
+                  <PieChart className="w-5 h-5 text-purple-600" />
                   <h2 className="text-base font-bold">By Category</h2>
                 </div>
                 <div className="space-y-3">
@@ -486,8 +487,8 @@ export default function SpendingPage() {
                         <div className="flex items-center gap-2">
                           <span className={cn(
                             'text-xs font-bold',
-                            reg.status === 'confirmed' ? 'text-green-400' :
-                            reg.status === 'pending' ? 'text-yellow-400' : 'text-slate-400'
+                            reg.status === 'confirmed' ? 'text-emerald-600' :
+                            reg.status === 'pending' ? 'text-amber-600' : 'text-slate-500'
                           )}>
                             {formatCurrency(reg.price)}
                           </span>
@@ -527,7 +528,7 @@ export default function SpendingPage() {
                     <div className="flex items-center gap-2">
                       <Tag size={14} style={{ color: 'var(--theme-text-secondary)' }} />
                       <h3 className="text-sm font-bold" style={{ color: 'var(--theme-text)' }}>{src.label}</h3>
-                      <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full" style={{ color: 'var(--theme-text-muted)' }}>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: 'var(--theme-text-muted)', backgroundColor: 'var(--theme-surface)' }}>
                         {src.count} items
                       </span>
                     </div>
@@ -556,7 +557,7 @@ export default function SpendingPage() {
           style={{ backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-card-border)' }}
         >
           <div className="flex items-center gap-2 mb-4">
-            <Receipt className="w-5 h-5 text-cyan-400" />
+            <Receipt className="w-5 h-5 text-cyan-600" />
             <h2 className="text-base font-bold">Recent Transactions</h2>
           </div>
           <div className="space-y-2">
@@ -568,10 +569,10 @@ export default function SpendingPage() {
                   key={reg.id}
                   className={cn(
                     'flex items-center justify-between p-3 rounded-lg border transition-all',
-                    reg.status === 'confirmed' && 'bg-green-500/5 border-green-500/20',
-                    reg.status === 'pending' && 'bg-yellow-500/5 border-yellow-500/20',
-                    reg.status === 'waitlisted' && 'bg-blue-500/5 border-blue-500/20',
-                    reg.status === 'cancelled' && 'bg-red-500/5 border-red-500/20 opacity-50'
+                    reg.status === 'confirmed' && 'bg-emerald-50 border-emerald-200',
+                    reg.status === 'pending' && 'bg-amber-50 border-amber-200',
+                    reg.status === 'waitlisted' && 'bg-blue-50 border-blue-200',
+                    reg.status === 'cancelled' && 'bg-red-50 border-red-200 opacity-50'
                   )}
                 >
                   <div className="flex-1 min-w-0">
@@ -593,10 +594,10 @@ export default function SpendingPage() {
                   <div className="text-right ml-3">
                     <p className={cn(
                       'text-sm font-bold',
-                      reg.status === 'confirmed' && 'text-green-400',
-                      reg.status === 'pending' && 'text-yellow-400',
-                      reg.status === 'waitlisted' && 'text-blue-400',
-                      reg.status === 'cancelled' && 'text-red-400'
+                      reg.status === 'confirmed' && 'text-emerald-600',
+                      reg.status === 'pending' && 'text-amber-600',
+                      reg.status === 'waitlisted' && 'text-blue-600',
+                      reg.status === 'cancelled' && 'text-red-500'
                     )}>
                       {formatCurrency(reg.price)}
                     </p>

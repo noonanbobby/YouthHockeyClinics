@@ -3,52 +3,38 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════
-   NHL Team Theme System — CSS Custom Properties
-   Set dynamically by ThemeProvider.tsx
+   Noonan Hockey — Light Mode Design System
+   Team colors set dynamically by ThemeProvider.tsx
    ═══════════════════════════════════════════════ */
 
-/* Light mode defaults */
 :root {
   --theme-primary: #0ea5e9;
   --theme-secondary: #0284c7;
   --theme-accent: #38bdf8;
-  --theme-bg: #f8fafc;
+  --theme-bg: #f0f4f8;
   --theme-header-bg: #ffffff;
   --theme-card-bg: #ffffff;
-  --theme-card-border: rgba(0, 0, 0, 0.08);
-  --theme-card-hover: rgba(0, 0, 0, 0.04);
-  --theme-surface: #f1f5f9;
+  --theme-card-border: #e2e8f0;
+  --theme-card-hover: #f8fafc;
+  --theme-surface: #e8edf2;
   --theme-nav-bg: #ffffff;
-  --theme-glow: rgba(14, 165, 233, 0.15);
+  --theme-glow: rgba(14, 165, 233, 0.12);
   --theme-text: #0f172a;
   --theme-text-secondary: #475569;
   --theme-text-muted: #94a3b8;
-}
-
-/* Dark mode overrides — high contrast for readability */
-.dark {
-  --theme-bg: #030712;
-  --theme-header-bg: #0a0f1e;
-  --theme-card-bg: #111827;
-  --theme-card-border: rgba(255, 255, 255, 0.08);
-  --theme-card-hover: rgba(255, 255, 255, 0.12);
-  --theme-surface: #0f172a;
-  --theme-nav-bg: #0a0f1e;
-  --theme-glow: rgba(14, 165, 233, 0.4);
-  --theme-text: #f1f5f9;
-  --theme-text-secondary: #94a3b8;
-  --theme-text-muted: #64748b;
+  --theme-shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --theme-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --theme-shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --theme-shadow-lg: 0 10px 30px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.03);
 }
 
 /* ─── Core Theme Utilities ─────────────────────── */
 .theme-primary { color: var(--theme-primary); }
 .theme-secondary { color: var(--theme-secondary); }
 .theme-accent { color: var(--theme-accent); }
-
 .theme-text { color: var(--theme-text); }
 .theme-text-secondary { color: var(--theme-text-secondary); }
 .theme-text-muted { color: var(--theme-text-muted); }
-
 .theme-bg { background-color: var(--theme-bg); }
 .theme-bg-primary { background-color: var(--theme-primary); }
 .theme-bg-secondary { background-color: var(--theme-secondary); }
@@ -62,40 +48,18 @@
 .theme-bg-primary-10 { background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent); }
 .theme-bg-primary-15 { background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent); }
 .theme-bg-primary-20 { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
-.theme-bg-primary-30 { background-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
-.theme-bg-primary-50 { background-color: color-mix(in srgb, var(--theme-primary) 50%, transparent); }
 
 /* Borders */
-.theme-border-primary { border-color: var(--theme-card-border); }
-.theme-border-primary-strong { border-color: color-mix(in srgb, var(--theme-primary) 40%, transparent); }
+.theme-border { border-color: var(--theme-card-border); }
+.theme-border-strong { border-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
 
 /* Ring / Focus */
 .theme-ring { --tw-ring-color: var(--theme-primary); }
 .theme-ring-glow { box-shadow: 0 0 20px var(--theme-glow); }
 
 /* Gradient helpers */
-.theme-gradient-header {
-  background: linear-gradient(180deg, var(--theme-header-bg) 0%, var(--theme-bg) 100%);
-}
-.theme-gradient-card {
-  background: linear-gradient(135deg, var(--theme-card-bg) 0%, var(--theme-bg) 100%);
-}
 .theme-gradient-accent {
-  background: linear-gradient(90deg, var(--theme-primary), var(--theme-secondary));
-}
-.theme-gradient-radial {
-  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--theme-primary) 8%, transparent) 0%, transparent 60%);
-}
-
-/* ─── Hockey Arena Effects ────────────────────── */
-.ice-surface {
-  background-image:
-    radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--theme-primary) 5%, transparent) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 50%, color-mix(in srgb, var(--theme-secondary) 3%, transparent) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--theme-primary) 6%, transparent) 0%, transparent 35%);
-}
-.arena-spotlight {
-  background-image: radial-gradient(ellipse at 50% -100%, color-mix(in srgb, var(--theme-primary) 15%, transparent) 0%, transparent 60%);
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary));
 }
 
 /* ─── Safe Areas for iPhone ────────────────────── */
@@ -105,8 +69,8 @@
 /* ─── Scrollbar ────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--theme-card-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--theme-card-hover); }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ─── Global Overrides ─────────────────────────── */
 html {
@@ -118,15 +82,10 @@ body {
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
   background-color: var(--theme-bg);
-  transition: background-color 0.4s ease;
 }
 
-/* ─── Leaflet Dark Theme ───────────────────────── */
+/* ─── Map ─────────────────────────────────────── */
 .leaflet-container { background: var(--theme-bg) !important; font-family: inherit !important; }
-.leaflet-control-zoom a { background: var(--theme-surface) !important; color: white !important; border-color: rgba(255,255,255,0.1) !important; backdrop-filter: blur(8px); }
-.leaflet-control-zoom a:hover { background: var(--theme-header-bg) !important; }
-.leaflet-control-attribution { background: var(--theme-surface) !important; color: rgba(255,255,255,0.4) !important; font-size: 9px !important; backdrop-filter: blur(8px); }
-.leaflet-control-attribution a { color: var(--theme-primary) !important; opacity: 0.6; }
 .custom-marker { background: transparent !important; border: none !important; }
 
 @keyframes marker-pulse {
@@ -136,11 +95,10 @@ body {
 }
 
 /* ─── Form Elements ────────────────────────────── */
-select option { background: var(--theme-bg); color: var(--theme-text); }
-.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+select option { background: #ffffff; color: #0f172a; }
 
 /* ─── Animations ───────────────────────────────── */
-main { animation: fadeIn 0.2s ease-out; }
+main { animation: fadeIn 0.15s ease-out; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes shimmer {
@@ -148,138 +106,85 @@ main { animation: fadeIn 0.2s ease-out; }
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, var(--theme-card-hover) 25%, var(--theme-card-border) 50%, var(--theme-card-hover) 75%);
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
 /* ═══════════════════════════════════════════════════════
-   Light-Mode Overrides for Hardcoded-Dark Pages
-   Pages using bg-slate-950/text-white get auto-remapped
-   when marked with data-theme-page attribute.
-   Dark mode is unaffected — these only apply in light.
+   Hardcoded-Dark Page Overrides
+   Pages still using bg-slate-950/text-white get remapped
+   via data-theme-page attribute to light-mode equivalents.
    ═══════════════════════════════════════════════════════ */
 
-/* Base container */
-html:not(.dark) [data-theme-page] {
+[data-theme-page] {
   background-color: var(--theme-bg) !important;
   color: var(--theme-text);
 }
 
-/* Text colors: remap hardcoded dark text to theme vars */
-html:not(.dark) [data-theme-page] .text-white {
-  color: var(--theme-text) !important;
-}
-html:not(.dark) [data-theme-page] .text-slate-200,
-html:not(.dark) [data-theme-page] .text-slate-300 {
-  color: var(--theme-text-secondary) !important;
-}
-html:not(.dark) [data-theme-page] .text-slate-400 {
-  color: var(--theme-text-secondary) !important;
-}
-html:not(.dark) [data-theme-page] .text-slate-500 {
-  color: var(--theme-text-muted) !important;
-}
-html:not(.dark) [data-theme-page] .text-slate-600 {
-  color: var(--theme-text-muted) !important;
-}
-html:not(.dark) [data-theme-page] .placeholder\:text-slate-600::placeholder {
-  color: var(--theme-text-muted) !important;
-}
+/* Text */
+[data-theme-page] .text-white { color: var(--theme-text) !important; }
+[data-theme-page] .text-slate-200,
+[data-theme-page] .text-slate-300 { color: var(--theme-text-secondary) !important; }
+[data-theme-page] .text-slate-400 { color: var(--theme-text-secondary) !important; }
+[data-theme-page] .text-slate-500 { color: var(--theme-text-muted) !important; }
+[data-theme-page] .text-slate-600 { color: var(--theme-text-muted) !important; }
+[data-theme-page] .placeholder\:text-slate-600::placeholder { color: var(--theme-text-muted) !important; }
 
-/* Backgrounds: remap solid dark backgrounds */
-html:not(.dark) [data-theme-page] .bg-slate-950 {
-  background-color: var(--theme-bg) !important;
-}
-html:not(.dark) [data-theme-page] .bg-slate-900,
-html:not(.dark) [data-theme-page] .bg-slate-900\/95 {
-  background-color: var(--theme-card-bg) !important;
-}
-html:not(.dark) [data-theme-page] .bg-slate-800 {
-  background-color: var(--theme-surface) !important;
-}
-html:not(.dark) [data-theme-page] .bg-slate-800\/50 {
-  background-color: color-mix(in srgb, var(--theme-surface) 50%, transparent) !important;
-}
+/* Backgrounds */
+[data-theme-page] .bg-slate-950 { background-color: var(--theme-bg) !important; }
+[data-theme-page] .bg-slate-900,
+[data-theme-page] .bg-slate-900\/95 { background-color: var(--theme-card-bg) !important; box-shadow: var(--theme-shadow); }
+[data-theme-page] .bg-slate-800 { background-color: var(--theme-surface) !important; }
+[data-theme-page] .bg-slate-800\/50 { background-color: color-mix(in srgb, var(--theme-surface) 50%, transparent) !important; }
+[data-theme-page] .bg-white\/5,
+[data-theme-page] .bg-white\/\[0\.03\] { background-color: var(--theme-surface) !important; }
+[data-theme-page] .bg-white\/10 { background-color: var(--theme-surface) !important; }
+[data-theme-page] .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
+[data-theme-page] .bg-black\/70 { background-color: rgba(0,0,0,0.5) !important; }
+[data-theme-page] .bg-black\/40 { background-color: rgba(0,0,0,0.3) !important; }
 
-/* Semi-transparent dark backgrounds */
-html:not(.dark) [data-theme-page] .bg-white\/5,
-html:not(.dark) [data-theme-page] .bg-white\/\[0\.03\] {
-  background-color: color-mix(in srgb, var(--theme-text) 3%, var(--theme-bg)) !important;
-}
-html:not(.dark) [data-theme-page] .bg-white\/10 {
-  background-color: color-mix(in srgb, var(--theme-text) 6%, var(--theme-bg)) !important;
-}
-html:not(.dark) [data-theme-page] .bg-black\/20 {
-  background-color: color-mix(in srgb, var(--theme-text) 5%, var(--theme-bg)) !important;
-}
-html:not(.dark) [data-theme-page] .bg-black\/70 {
-  background-color: rgba(0, 0, 0, 0.6) !important;
-}
+/* Interactive elements: remap blue to team color */
+[data-theme-page] .bg-blue-500 { background-color: var(--theme-primary) !important; }
+[data-theme-page] .hover\:bg-blue-600:hover { background-color: var(--theme-secondary) !important; }
+[data-theme-page] .bg-blue-500\/20 { background-color: color-mix(in srgb, var(--theme-primary) 12%, transparent) !important; }
+[data-theme-page] .text-blue-400 { color: var(--theme-primary) !important; }
+[data-theme-page] .bg-blue-500\/15 { background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent) !important; }
+[data-theme-page] .border-blue-500\/20 { border-color: color-mix(in srgb, var(--theme-primary) 20%, transparent) !important; }
+[data-theme-page] .focus\:ring-blue-500:focus { --tw-ring-color: var(--theme-primary) !important; }
 
 /* Borders */
-html:not(.dark) [data-theme-page] .border-slate-800,
-html:not(.dark) [data-theme-page] .border-slate-700 {
-  border-color: var(--theme-card-border) !important;
-}
-html:not(.dark) [data-theme-page] .border-white\/5,
-html:not(.dark) [data-theme-page] .border-white\/10 {
-  border-color: color-mix(in srgb, var(--theme-text) 8%, transparent) !important;
-}
+[data-theme-page] .border-slate-800,
+[data-theme-page] .border-slate-700 { border-color: var(--theme-card-border) !important; }
+[data-theme-page] .border-white\/5,
+[data-theme-page] .border-white\/10,
+[data-theme-page] .border-white\/20 { border-color: var(--theme-card-border) !important; }
+[data-theme-page] .border-slate-900 { border-color: var(--theme-card-border) !important; }
 
-/* Form inputs in light mode */
-html:not(.dark) [data-theme-page] input,
-html:not(.dark) [data-theme-page] select,
-html:not(.dark) [data-theme-page] textarea {
-  background-color: var(--theme-surface) !important;
-  color: var(--theme-text) !important;
-  border-color: var(--theme-card-border) !important;
-}
-html:not(.dark) [data-theme-page] input::placeholder,
-html:not(.dark) [data-theme-page] textarea::placeholder {
-  color: var(--theme-text-muted) !important;
-}
-html:not(.dark) [data-theme-page] option {
+/* Form inputs */
+[data-theme-page] input,
+[data-theme-page] select,
+[data-theme-page] textarea {
   background-color: var(--theme-bg) !important;
   color: var(--theme-text) !important;
+  border-color: var(--theme-card-border) !important;
+}
+[data-theme-page] input::placeholder,
+[data-theme-page] textarea::placeholder {
+  color: var(--theme-text-muted) !important;
+}
+[data-theme-page] option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
 /* Hover states */
-html:not(.dark) [data-theme-page] .hover\:bg-slate-800:hover {
-  background-color: var(--theme-surface) !important;
-}
-html:not(.dark) [data-theme-page] .hover\:bg-slate-700:hover {
-  background-color: var(--theme-card-bg) !important;
-}
-html:not(.dark) [data-theme-page] .hover\:text-white:hover {
-  color: var(--theme-text) !important;
-}
+[data-theme-page] .hover\:bg-slate-800:hover { background-color: var(--theme-surface) !important; }
+[data-theme-page] .hover\:bg-slate-700:hover { background-color: var(--theme-surface) !important; }
+[data-theme-page] .hover\:text-white:hover { color: var(--theme-text) !important; }
 
 /* Dividers */
-html:not(.dark) [data-theme-page] .divide-y > * + * {
-  border-color: var(--theme-card-border);
-}
-
-/* Additional backgrounds for CTA bars and overlays */
-html:not(.dark) [data-theme-page] .bg-black\/40 {
-  background-color: rgba(0, 0, 0, 0.3) !important;
-}
-html:not(.dark) [data-theme-page] .bg-white\/\[0\.02\] {
-  background-color: color-mix(in srgb, var(--theme-text) 2%, var(--theme-bg)) !important;
-}
-
-/* Ring / focus for blue interactive elements */
-html:not(.dark) [data-theme-page] .bg-blue-500 {
-  background-color: var(--theme-primary) !important;
-}
-html:not(.dark) [data-theme-page] .hover\:bg-blue-600:hover {
-  background-color: var(--theme-secondary) !important;
-}
-
-/* Border-2 for image borders */
-html:not(.dark) [data-theme-page] .border-slate-900 {
-  border-color: var(--theme-card-border) !important;
-}
+[data-theme-page] .divide-y > * + * { border-color: var(--theme-card-border); }
 
 /* ─── Utility: Line Clamping ───────────────────── */
 .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }

@@ -301,7 +301,7 @@ export default function ClinicDetailPage() {
                 : 'Contact for pricing'}
             </p>
             {clinic.price.earlyBird && (
-              <p className="text-[10px] text-emerald-400 mt-0.5">
+              <p className="text-[10px] text-emerald-600 mt-0.5">
                 Early bird: {formatPrice(clinic.price.earlyBird.amount, clinic.price.currency)}
               </p>
             )}
@@ -491,7 +491,7 @@ export default function ClinicDetailPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {clinic.includes.map((item, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <Check size={12} className="text-emerald-400 shrink-0" />
+                      <Check size={12} className="text-emerald-600 shrink-0" />
                       <span className="text-xs text-slate-300">{item}</span>
                     </div>
                   ))}
@@ -705,7 +705,7 @@ export default function ClinicDetailPage() {
             className={cn(
               'flex-1 flex items-center justify-center gap-2 py-3.5 font-semibold rounded-xl transition-colors border',
               isRegistered
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
                 : 'bg-white/5 hover:bg-white/10 text-white border-white/10'
             )}
           >

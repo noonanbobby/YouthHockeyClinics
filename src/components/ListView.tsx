@@ -29,7 +29,7 @@ export default function ListView() {
   if (isLoading && filteredClinics.length === 0) {
     return (
       <div className="relative px-4 py-6 pb-24">
-        <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
+        {/* removed dark gradient */}
 
         {/* Hockey loader + scanning message */}
         <div className="flex flex-col items-center py-8 mb-6 relative z-10">
@@ -115,8 +115,7 @@ export default function ListView() {
   }
 
   return (
-    <div className="relative px-4 py-4 pb-24 lg:px-6 lg:py-5 ice-surface">
-      <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
+    <div className="relative px-4 py-4 pb-24 lg:px-6 lg:py-5">
 
       {/* Welcome / setup card for new users */}
       {needsSetup && (
@@ -139,7 +138,7 @@ export default function ListView() {
               <div className="space-y-2">
                 <button
                   onClick={() => router.push('/settings')}
-                  className="w-full flex items-center gap-2.5 p-2.5 bg-black/20 rounded-xl text-left active:scale-[0.98] transition-transform"
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-white/60 rounded-xl text-left active:scale-[0.98] transition-transform border border-white/80"
                 >
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                     style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
@@ -153,10 +152,10 @@ export default function ListView() {
                 </button>
                 <button
                   onClick={() => router.push('/settings')}
-                  className="w-full flex items-center gap-2.5 p-2.5 bg-black/20 rounded-xl text-left active:scale-[0.98] transition-transform"
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-white/60 rounded-xl text-left active:scale-[0.98] transition-transform border border-white/80"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center">
-                    <MapPin size={14} className="text-green-400" />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                    <MapPin size={14} className="text-emerald-600" />
                   </div>
                   <div>
                     <p className="text-xs font-semibold theme-text">Set Home Location</p>
@@ -218,7 +217,7 @@ export default function ListView() {
               .map((source, i) => (
                 <div key={i} className="flex items-center justify-between text-[10px]">
                   <span className="theme-text-secondary">{source.name}</span>
-                  <span className={source.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                  <span className={source.status === 'success' ? 'text-emerald-600' : 'text-red-500'}>
                     {source.count} results
                   </span>
                 </div>

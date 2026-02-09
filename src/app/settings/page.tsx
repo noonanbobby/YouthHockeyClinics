@@ -371,7 +371,7 @@ export default function SettingsPage() {
                       onChange={(e) => setChildDob(e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
                       min="2005-01-01"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:dark]"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:light]"
                     />
                   </div>
                   {/* Position selector */}
@@ -404,7 +404,7 @@ export default function SettingsPage() {
                     <select
                       value={childDivision}
                       onChange={(e) => setChildDivision(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:dark]"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:light]"
                     >
                       {AGE_GROUP_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value} className="bg-slate-900">
