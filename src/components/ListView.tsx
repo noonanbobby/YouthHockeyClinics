@@ -115,7 +115,7 @@ export default function ListView() {
   }
 
   return (
-    <div className="relative px-4 py-4 pb-24">
+    <div className="relative px-4 py-4 pb-24 lg:px-6 lg:py-5 ice-surface">
       <div className="fixed inset-0 theme-gradient-radial pointer-events-none z-0" />
 
       {/* Welcome / setup card for new users */}
@@ -173,37 +173,32 @@ export default function ListView() {
       {/* Status bar */}
       <div className="relative z-10 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold theme-text">
+          <p className="text-base font-bold theme-text">
             {filteredClinics.length} clinic{filteredClinics.length !== 1 ? 's' : ''} found
           </p>
           {searchMeta && (
-            <p className="text-[10px] theme-text-muted mt-0.5">
+            <p className="text-xs theme-text-muted mt-0.5">
               Scanned {searchMeta.sources.length} sources in {(searchMeta.searchDuration / 1000).toFixed(1)}s
+              {lastUpdated && ` · Updated ${new Date(lastUpdated).toLocaleTimeString()}`}
             </p>
           )}
         </div>
         <button
           onClick={() => refresh()}
           disabled={isRefreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
           style={{
-            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
             color: 'var(--theme-primary)',
           }}
         >
-          <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
           {isRefreshing ? 'Scanning...' : 'Refresh'}
         </button>
       </div>
 
-      {lastUpdated && (
-        <p className="relative z-10 text-[10px] theme-text-muted mt-3">
-          Last updated: {new Date(lastUpdated).toLocaleTimeString()}
-        </p>
-      )}
-
-      {/* Clinic cards */}
-      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-3">
+      {/* Clinic cards — single column for readability */}
+      <div className="relative z-10 flex flex-col gap-4 lg:gap-5 mt-4">
         {filteredClinics.map((clinic, i) => (
           <ClinicCard key={clinic.id} clinic={clinic} index={i} />
         ))}

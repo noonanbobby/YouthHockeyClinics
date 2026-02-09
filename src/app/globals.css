@@ -25,17 +25,17 @@
   --theme-text-muted: #94a3b8;
 }
 
-/* Dark mode overrides */
+/* Dark mode overrides — high contrast for readability */
 .dark {
-  --theme-bg: #020617;
-  --theme-header-bg: #020617;
-  --theme-card-bg: rgba(15, 23, 42, 0.8);
-  --theme-card-border: rgba(14, 165, 233, 0.12);
-  --theme-card-hover: rgba(14, 165, 233, 0.2);
-  --theme-surface: rgba(15, 23, 42, 0.9);
-  --theme-nav-bg: #020617;
+  --theme-bg: #030712;
+  --theme-header-bg: #0a0f1e;
+  --theme-card-bg: #111827;
+  --theme-card-border: rgba(255, 255, 255, 0.08);
+  --theme-card-hover: rgba(255, 255, 255, 0.12);
+  --theme-surface: #0f172a;
+  --theme-nav-bg: #0a0f1e;
   --theme-glow: rgba(14, 165, 233, 0.4);
-  --theme-text: #ffffff;
+  --theme-text: #f1f5f9;
   --theme-text-secondary: #94a3b8;
   --theme-text-muted: #64748b;
 }
@@ -87,14 +87,25 @@
   background: radial-gradient(ellipse at top, color-mix(in srgb, var(--theme-primary) 8%, transparent) 0%, transparent 60%);
 }
 
+/* ─── Hockey Arena Effects ────────────────────── */
+.ice-surface {
+  background-image:
+    radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--theme-primary) 5%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, color-mix(in srgb, var(--theme-secondary) 3%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--theme-primary) 6%, transparent) 0%, transparent 35%);
+}
+.arena-spotlight {
+  background-image: radial-gradient(ellipse at 50% -100%, color-mix(in srgb, var(--theme-primary) 15%, transparent) 0%, transparent 60%);
+}
+
 /* ─── Safe Areas for iPhone ────────────────────── */
 .safe-area-top { padding-top: env(safe-area-inset-top); }
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 /* ─── Scrollbar ────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--theme-card-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--theme-card-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--theme-card-hover); }
 
 /* ─── Global Overrides ─────────────────────────── */

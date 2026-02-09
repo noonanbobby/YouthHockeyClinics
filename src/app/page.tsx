@@ -31,24 +31,24 @@ export default function Home() {
   return (
     <main className="min-h-screen" style={{ backgroundColor: 'var(--theme-bg)' }}>
       <Header />
-      <div className="max-w-screen-2xl mx-auto">
-        {/* Desktop: side-by-side layout for list mode */}
+      <div>
+        {/* Desktop: side-by-side Airbnb-style split */}
         <div className={cn(
           'lg:flex',
           viewMode === 'list' ? 'lg:flex-row' : ''
         )}>
-          {/* List panel */}
+          {/* List panel — scrollable */}
           {viewMode === 'list' && (
-            <div className="w-full lg:w-[60%] pb-20 lg:pb-0 lg:overflow-y-auto lg:h-[calc(100vh-140px)]">
+            <div className="w-full lg:w-1/2 pb-20 lg:pb-0 lg:overflow-y-auto lg:h-[calc(100vh-140px)]">
               <ListView />
             </div>
           )}
 
-          {/* Map panel */}
+          {/* Map panel — sticky */}
           <div className={cn(
             viewMode === 'map'
               ? 'w-full'
-              : 'hidden lg:block lg:w-[40%] lg:h-[calc(100vh-140px)] lg:sticky lg:top-[140px]'
+              : 'hidden lg:block lg:w-1/2 lg:h-[calc(100vh-140px)] lg:sticky lg:top-[140px]'
           )}>
             <MapView />
           </div>

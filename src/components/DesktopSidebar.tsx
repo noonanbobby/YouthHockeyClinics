@@ -67,22 +67,22 @@ export default function DesktopSidebar() {
 
   return (
     <motion.aside
-      initial={{ x: -260, opacity: 0 }}
+      initial={{ x: -240, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40"
+      className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[240px] flex-col z-40"
       style={{
-        backgroundColor: 'var(--theme-header-bg)',
+        backgroundColor: 'var(--theme-nav-bg)',
         borderRight: '1px solid var(--theme-card-border)',
       }}
     >
-      {/* Logo / App Name */}
-      <div className="px-6 pt-8 pb-6">
-        <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--theme-primary)' }}>
+      {/* Logo / App Name — arena spotlight effect */}
+      <div className="px-5 pt-7 pb-5 arena-spotlight">
+        <h1 className="text-xl font-extrabold tracking-tight" style={{ color: 'var(--theme-primary)' }}>
           <span className="mr-2">&#127954;</span>
           Noonan Hockey
         </h1>
-        <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>
+        <p className="text-xs mt-1 font-medium" style={{ color: 'var(--theme-text-muted)' }}>
           Youth Hockey Clinics
         </p>
       </div>

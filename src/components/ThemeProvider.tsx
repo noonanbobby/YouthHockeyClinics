@@ -24,16 +24,16 @@ export default function TeamThemeProvider({ children }: { children: React.ReactN
     root.style.setProperty('--theme-accent', team.accent);
 
     if (isDark) {
-      // Dark mode: use team's dark background
+      // Dark mode: solid card backgrounds with clear contrast from page bg
       root.style.setProperty('--theme-bg', team.bg);
-      root.style.setProperty('--theme-header-bg', team.bg);
-      root.style.setProperty('--theme-card-bg', `color-mix(in srgb, ${team.primary} 5%, ${team.bg})`);
-      root.style.setProperty('--theme-card-border', `color-mix(in srgb, ${team.primary} 12%, transparent)`);
-      root.style.setProperty('--theme-card-hover', `color-mix(in srgb, ${team.primary} 20%, transparent)`);
-      root.style.setProperty('--theme-surface', `color-mix(in srgb, ${team.primary} 3%, ${team.bg})`);
-      root.style.setProperty('--theme-nav-bg', team.bg);
+      root.style.setProperty('--theme-header-bg', `color-mix(in srgb, ${team.bg} 80%, #1e293b)`);
+      root.style.setProperty('--theme-card-bg', `color-mix(in srgb, ${team.bg} 50%, #1e293b)`);
+      root.style.setProperty('--theme-card-border', `color-mix(in srgb, ${team.primary} 18%, rgba(255,255,255,0.06))`);
+      root.style.setProperty('--theme-card-hover', `color-mix(in srgb, ${team.primary} 25%, rgba(255,255,255,0.08))`);
+      root.style.setProperty('--theme-surface', `color-mix(in srgb, ${team.bg} 65%, #1e293b)`);
+      root.style.setProperty('--theme-nav-bg', `color-mix(in srgb, ${team.bg} 85%, #1e293b)`);
       root.style.setProperty('--theme-glow', `color-mix(in srgb, ${team.primary} 40%, transparent)`);
-      root.style.setProperty('--theme-text', '#ffffff');
+      root.style.setProperty('--theme-text', '#f1f5f9');
       root.style.setProperty('--theme-text-secondary', '#94a3b8');
       root.style.setProperty('--theme-text-muted', '#64748b');
       document.body.style.backgroundColor = team.bg;

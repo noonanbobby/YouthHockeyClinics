@@ -47,16 +47,25 @@ export default function Header() {
         backgroundColor: 'color-mix(in srgb, var(--theme-header-bg) 95%, transparent)',
         borderColor: 'var(--theme-card-border)',
       }}>
-      <div className="absolute inset-0 theme-gradient-radial pointer-events-none" />
+      <div className="absolute inset-0 arena-spotlight pointer-events-none" />
       <div className="safe-area-top" />
-      <div className="relative px-4 py-3 max-w-screen-2xl mx-auto">
+      <div className="relative px-4 py-3">
         <div className="flex items-center justify-between mb-3">
-          <div>
+          {/* App title — hidden on desktop (sidebar has it) */}
+          <div className="lg:hidden">
             <h1 className="text-lg font-bold theme-text tracking-tight flex items-center gap-2">
               <span className="text-xl font-black tracking-tighter" style={{ color: 'var(--theme-primary)' }}>NH</span>
               Noonan Hockey
             </h1>
-            <p className="text-[11px] theme-text-secondary mt-0.5">
+            <p className="text-xs theme-text-secondary mt-0.5">
+              {homeLocation
+                ? `${homeLocation.city}, ${homeLocation.state}`
+                : 'Discover youth hockey worldwide'}
+            </p>
+          </div>
+          {/* Desktop: location label */}
+          <div className="hidden lg:block">
+            <p className="text-sm font-medium theme-text-secondary">
               {homeLocation
                 ? `${homeLocation.city}, ${homeLocation.state}`
                 : 'Discover youth hockey worldwide'}
