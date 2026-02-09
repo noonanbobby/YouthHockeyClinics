@@ -40,7 +40,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { data: session } = useSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isAdmin = (session?.user as any)?.isAdmin || false;
+  const isAdmin = (session as any)?.isAdmin || false;
   const {
     notificationsEnabled,
     setNotificationsEnabled,

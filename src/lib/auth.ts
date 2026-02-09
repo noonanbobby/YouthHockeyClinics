@@ -4,12 +4,6 @@ import Google from 'next-auth/providers/google';
 import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 
-// Admin emails — set in Vercel env vars as comma-separated list
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
-
 // Only register OAuth providers when credentials are actually configured
 const providers: Provider[] = [];
 
@@ -52,6 +46,9 @@ providers.push(
   })
 );
 
+// Admin emails for admin dashboard access
+const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function(e) { return e.trim().toLowerCase(); }).filter(Boolean);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers,
   pages: {
@@ -59,26 +56,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async session({ session, token }) {
-      try {
-        if (token?.sub) {
-          session.user.id = token.sub;
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (session.user as any).isAdmin = !!token.isAdmin;
-      } catch {
-        // Fallback: ensure session still works even if augmentation fails
+      if (token?.sub) {
+        session.user.id = token.sub;
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (session as any).isAdmin = !!token.isAdmin;
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
-        try {
-          const email = (user.email || '').toLowerCase();
-          token.isAdmin = ADMIN_EMAILS.includes(email);
-        } catch {
-          token.isAdmin = false;
-        }
+        token.isAdmin = adminEmails.indexOf((user.email || '').toLowerCase()) !== -1;
       }
       return token;
     },
