@@ -489,7 +489,7 @@ export const useStore = create<AppState>()(
       // Child Profiles
       childProfiles: [],
       activeChildIds: [],
-      addChildProfile: (profile) =>
+      addChildProfile: (profile) => {
         set((state) => {
           const newProfile: ChildProfile = {
             ...profile,
@@ -502,18 +502,26 @@ export const useStore = create<AppState>()(
             // Auto-set as active if it's the first child
             activeChildIds: state.childProfiles.length === 0 ? [newProfile.id] : state.activeChildIds,
           };
-        }),
-      updateChildProfile: (id, updates) =>
+        });
+        // Re-apply filters (goalie/player position affects which clinics show)
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      updateChildProfile: (id, updates) => {
         set((state) => ({
           childProfiles: state.childProfiles.map((c) =>
             c.id === id ? { ...c, ...updates } : c
           ),
-        })),
-      removeChildProfile: (id) =>
+        }));
+        // Re-apply filters when position or division changes
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      removeChildProfile: (id) => {
         set((state) => ({
           childProfiles: state.childProfiles.filter((c) => c.id !== id),
           activeChildIds: state.activeChildIds.filter((cid) => cid !== id),
-        })),
+        }));
+        setTimeout(() => get().applyFilters(), 0);
+      },
       toggleActiveChild: (id) => {
         set((state) => {
           const isActive = state.activeChildIds.includes(id);
@@ -546,7 +554,7 @@ export const useStore = create<AppState>()(
 
       // Registrations
       registrations: [],
-      addRegistration: (reg) =>
+      addRegistration: (reg) => {
         set((state) => ({
           registrations: [
             {
@@ -556,17 +564,24 @@ export const useStore = create<AppState>()(
             },
             ...state.registrations,
           ],
-        })),
-      updateRegistration: (id, updates) =>
+        }));
+        // Re-filter: registered clinics get excluded from recommendations
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      updateRegistration: (id, updates) => {
         set((state) => ({
           registrations: state.registrations.map((r) =>
             r.id === id ? { ...r, ...updates } : r
           ),
-        })),
-      removeRegistration: (id) =>
+        }));
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      removeRegistration: (id) => {
         set((state) => ({
           registrations: state.registrations.filter((r) => r.id !== id),
-        })),
+        }));
+        setTimeout(() => get().applyFilters(), 0);
+      },
 
       // DaySmart / Dash
       daySmartConfig: {
@@ -687,6 +702,13 @@ export const useStore = create<AppState>()(
         iceHockeyProConfig: state.iceHockeyProConfig,
         emailScanConfig: state.emailScanConfig,
       }),
+      // Re-apply filters after store rehydrates from localStorage
+      // This ensures goalie/registration filters run with the user's saved child profiles
+      onRehydrateStorage: () => (state) => {
+        if (state && state.clinics.length > 0) {
+          setTimeout(() => state.applyFilters(), 0);
+        }
+      },
     }
   )
 );
