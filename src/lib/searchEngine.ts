@@ -38,10 +38,8 @@ import { geocodeLocation, calculateDistance } from './geocoder';
 import SEED_CLINICS from './seedClinics';
 
 export interface SearchConfig {
-  serpApiKey?: string;
-  googleApiKey?: string;
-  googleCseId?: string;
-  bingApiKey?: string;
+  braveApiKey?: string;
+  tavilyApiKey?: string;
   eventbriteApiKey?: string;
   maxResultsPerSource?: number;
   timeout?: number;
@@ -631,27 +629,21 @@ export class ClinicSearchEngine {
       }
     });
 
-    // PHASE 2 tasks: Search API queries
+    // PHASE 2 tasks: Search API queries (Brave + Tavily + Eventbrite)
     const searchTasks: (() => Promise<TaskResult>)[] = [];
     const searchQueries = query
       ? this.expandUserQuery(query)
       : this.selectSearchQueries();
 
-    if (this.config.serpApiKey) {
-      for (const q of searchQueries.slice(0, 8)) {
-        searchTasks.push(() => this.searchViaSerpApi(q));
+    if (this.config.braveApiKey) {
+      for (const q of searchQueries.slice(0, 10)) {
+        searchTasks.push(() => this.searchViaBrave(q));
       }
     }
 
-    if (this.config.googleApiKey && this.config.googleCseId) {
-      for (const q of searchQueries.slice(0, 5)) {
-        searchTasks.push(() => this.searchViaGoogleCSE(q));
-      }
-    }
-
-    if (this.config.bingApiKey) {
-      for (const q of searchQueries.slice(0, 5)) {
-        searchTasks.push(() => this.searchViaBing(q));
+    if (this.config.tavilyApiKey) {
+      for (const q of searchQueries.slice(0, 6)) {
+        searchTasks.push(() => this.searchViaTavily(q));
       }
     }
 
@@ -1150,103 +1142,79 @@ export class ClinicSearchEngine {
 
   // ── Search API Implementations ─────────────────────────────
 
-  private async searchViaSerpApi(query: string): Promise<{
+  /**
+   * Brave Search API — own index (30B+ pages), legally safe, 2K free queries/month
+   * https://api.search.brave.com/app/documentation/web-search
+   */
+  private async searchViaBrave(query: string): Promise<{
     name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
       const params = new URLSearchParams({
-        q: query, api_key: this.config.serpApiKey!, engine: 'google',
-        num: '20', gl: 'us', hl: 'en',
+        q: query, count: '20', safesearch: 'off', text_decorations: 'false',
       });
-      const response = await fetch(`https://serpapi.com/search.json?${params}`, {
+      const response = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': this.config.braveApiKey!,
+        },
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-      if (!response.ok) throw new Error(`SerpAPI HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`Brave HTTP ${response.status}`);
       const data = await response.json();
       const results: RawClinicData[] = [];
 
-      for (const result of data.organic_results || []) {
+      for (const result of data.web?.results || []) {
         results.push({
-          source: 'SerpAPI', sourceUrl: result.link, name: result.title,
-          description: result.snippet, websiteUrl: result.link,
-          registrationUrl: result.link,
-          imageUrl: result.thumbnail,
-          confidence: this.calculateConfidence(result.title, result.snippet),
-        });
-      }
-
-      // Also process local results (map pack)
-      for (const result of data.local_results || []) {
-        results.push({
-          source: 'SerpAPI Local', sourceUrl: result.link || result.website || '',
-          name: result.title, description: result.snippet || result.description,
-          location: result.address, city: result.city,
-          websiteUrl: result.website || result.link || '',
-          contactPhone: result.phone,
-          confidence: this.calculateConfidence(result.title, result.snippet || ''),
-        });
-      }
-
-      return { name: `SerpAPI: "${query}"`, results, status: 'success' };
-    } catch (error) {
-      return { name: `SerpAPI: "${query}"`, results: [], status: 'error', error: String(error) };
-    }
-  }
-
-  private async searchViaGoogleCSE(query: string): Promise<{
-    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
-  }> {
-    try {
-      const params = new URLSearchParams({
-        key: this.config.googleApiKey!, cx: this.config.googleCseId!,
-        q: query, num: '10',
-      });
-      const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`, {
-        signal: AbortSignal.timeout(this.config.timeout!),
-      });
-      if (!response.ok) throw new Error(`Google CSE HTTP ${response.status}`);
-      const data = await response.json();
-      const results: RawClinicData[] = [];
-
-      for (const item of data.items || []) {
-        results.push({
-          source: 'Google CSE', sourceUrl: item.link, name: item.title,
-          description: item.snippet,
-          imageUrl: item.pagemap?.cse_image?.[0]?.src,
-          websiteUrl: item.link, registrationUrl: item.link,
-          confidence: this.calculateConfidence(item.title, item.snippet),
-        });
-      }
-      return { name: `Google CSE: "${query}"`, results, status: 'success' };
-    } catch (error) {
-      return { name: `Google CSE: "${query}"`, results: [], status: 'error', error: String(error) };
-    }
-  }
-
-  private async searchViaBing(query: string): Promise<{
-    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
-  }> {
-    try {
-      const params = new URLSearchParams({ q: query, count: '20', mkt: 'en-US' });
-      const response = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
-        headers: { 'Ocp-Apim-Subscription-Key': this.config.bingApiKey! },
-        signal: AbortSignal.timeout(this.config.timeout!),
-      });
-      if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
-      const data = await response.json();
-      const results: RawClinicData[] = [];
-
-      for (const result of data.webPages?.value || []) {
-        results.push({
-          source: 'Bing', sourceUrl: result.url, name: result.name,
-          description: result.snippet, websiteUrl: result.url,
+          source: 'Brave Search', sourceUrl: result.url, name: result.title,
+          description: result.description, websiteUrl: result.url,
           registrationUrl: result.url,
-          confidence: this.calculateConfidence(result.name, result.snippet),
+          imageUrl: result.thumbnail?.src,
+          confidence: this.calculateConfidence(result.title, result.description),
         });
       }
-      return { name: `Bing: "${query}"`, results, status: 'success' };
+      return { name: `Brave: "${query}"`, results, status: 'success' };
     } catch (error) {
-      return { name: `Bing: "${query}"`, results: [], status: 'error', error: String(error) };
+      return { name: `Brave: "${query}"`, results: [], status: 'error', error: String(error) };
+    }
+  }
+
+  /**
+   * Tavily Search API — AI-native search, 1K free credits/month
+   * https://docs.tavily.com/documentation/api-reference/endpoint/search
+   */
+  private async searchViaTavily(query: string): Promise<{
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
+  }> {
+    try {
+      const response = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: this.config.tavilyApiKey!,
+          query,
+          search_depth: 'basic',
+          max_results: 15,
+          include_answer: false,
+        }),
+        signal: AbortSignal.timeout(this.config.timeout!),
+      });
+      if (!response.ok) throw new Error(`Tavily HTTP ${response.status}`);
+      const data = await response.json();
+      const results: RawClinicData[] = [];
+
+      for (const result of data.results || []) {
+        results.push({
+          source: 'Tavily', sourceUrl: result.url, name: result.title,
+          description: (result.content || '').substring(0, 500),
+          websiteUrl: result.url, registrationUrl: result.url,
+          confidence: this.calculateConfidence(result.title, result.content),
+        });
+      }
+      return { name: `Tavily: "${query}"`, results, status: 'success' };
+    } catch (error) {
+      return { name: `Tavily: "${query}"`, results: [], status: 'error', error: String(error) };
     }
   }
 

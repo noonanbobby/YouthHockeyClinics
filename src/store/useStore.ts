@@ -146,10 +146,8 @@ interface AppState {
   preferredCurrency: string;
   setPreferredCurrency: (currency: string) => void;
   apiKeys: {
-    serpApiKey: string;
-    googleApiKey: string;
-    googleCseId: string;
-    bingApiKey: string;
+    braveApiKey: string;
+    tavilyApiKey: string;
     eventbriteApiKey: string;
   };
   setApiKey: (key: keyof AppState['apiKeys'], value: string) => void;
@@ -655,10 +653,8 @@ export const useStore = create<AppState>()(
       preferredCurrency: 'USD',
       setPreferredCurrency: (currency) => set({ preferredCurrency: currency }),
       apiKeys: {
-        serpApiKey: '',
-        googleApiKey: '',
-        googleCseId: '',
-        bingApiKey: '',
+        braveApiKey: '',
+        tavilyApiKey: '',
         eventbriteApiKey: '',
       },
       setApiKey: (key, value) =>

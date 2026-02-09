@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
+import SEED_CLINICS from '@/lib/seedClinics';
 
 /**
  * Hook that manages the clinic search lifecycle:
@@ -51,10 +52,8 @@ export function useClinicSearch() {
         if (isRefresh) params.set('refresh', 'true');
 
         // Pass API keys as params
-        if (apiKeys.serpApiKey) params.set('serpApiKey', apiKeys.serpApiKey);
-        if (apiKeys.googleApiKey) params.set('googleApiKey', apiKeys.googleApiKey);
-        if (apiKeys.googleCseId) params.set('googleCseId', apiKeys.googleCseId);
-        if (apiKeys.bingApiKey) params.set('bingApiKey', apiKeys.bingApiKey);
+        if (apiKeys.braveApiKey) params.set('braveApiKey', apiKeys.braveApiKey);
+        if (apiKeys.tavilyApiKey) params.set('tavilyApiKey', apiKeys.tavilyApiKey);
         if (apiKeys.eventbriteApiKey) params.set('eventbriteApiKey', apiKeys.eventbriteApiKey);
 
         // Pass location for tiered search
@@ -94,10 +93,15 @@ export function useClinicSearch() {
         }
       } catch (err) {
         clearTimeout(clientTimeout);
+        // CRITICAL FALLBACK: If the API completely fails, load seed clinics directly
+        // so the user ALWAYS sees something (never a blank screen)
+        if (clinics.length === 0) {
+          setClinics(SEED_CLINICS);
+        }
         if (err instanceof DOMException && err.name === 'AbortError') {
-          setError('Search timed out. Try adding API keys in Settings for faster results.');
+          setError('Search timed out. Showing curated clinics. Add API keys in Settings for more results.');
         } else {
-          setError(err instanceof Error ? err.message : 'Network error');
+          setError('Network issue. Showing curated clinics.');
         }
       } finally {
         // ALWAYS clear loading state — never leave the UI stuck
@@ -105,7 +109,7 @@ export function useClinicSearch() {
         setRefreshing(false);
       }
     },
-    [apiKeys, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError, getEffectiveLocation, homeLocation]
+    [apiKeys, clinics, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError, getEffectiveLocation, homeLocation]
   );
 
   // Initial load

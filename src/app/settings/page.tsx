@@ -214,33 +214,21 @@ export default function SettingsPage() {
 
   const apiKeyConfigs = [
     {
-      key: 'serpApiKey' as const,
-      label: 'SerpAPI Key',
-      description: 'Enables Google search results scraping. Get a key at serpapi.com',
-      placeholder: 'Enter your SerpAPI key',
+      key: 'braveApiKey' as const,
+      label: 'Brave Search API Key',
+      description: 'Primary web search. Own index, 2K free queries/month. Get a key at brave.com/search/api/',
+      placeholder: 'Enter your Brave Search API key',
     },
     {
-      key: 'googleApiKey' as const,
-      label: 'Google Custom Search API Key',
-      description: 'Enables Google Custom Search. Get a key at console.cloud.google.com',
-      placeholder: 'Enter your Google API key',
-    },
-    {
-      key: 'googleCseId' as const,
-      label: 'Google CSE ID',
-      description: 'Your Custom Search Engine ID from programmablesearchengine.google.com',
-      placeholder: 'Enter your CSE ID',
-    },
-    {
-      key: 'bingApiKey' as const,
-      label: 'Bing Search API Key',
-      description: 'Enables Bing web search. Get a key at azure.microsoft.com',
-      placeholder: 'Enter your Bing API key',
+      key: 'tavilyApiKey' as const,
+      label: 'Tavily Search API Key',
+      description: 'AI-powered search. 1K free credits/month. Get a key at tavily.com',
+      placeholder: 'Enter your Tavily API key',
     },
     {
       key: 'eventbriteApiKey' as const,
       label: 'Eventbrite API Key',
-      description: 'Enables searching Eventbrite for hockey events. Get a key at eventbrite.com/platform',
+      description: 'Searches Eventbrite for hockey events. Get a key at eventbrite.com/platform',
       placeholder: 'Enter your Eventbrite API key',
     },
   ];
