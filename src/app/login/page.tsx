@@ -19,16 +19,16 @@ export default function LoginPage() {
 
   // Check if OAuth providers are configured (env vars exist on server)
   useEffect(() => {
-    fetch('/api/auth/providers')
+    fetch('/api/auth-check')
       .then((res) => res.json())
-      .then((providers) => {
+      .then((data) => {
         setOauthAvailable({
-          google: !!providers?.google,
-          apple: !!providers?.apple,
+          google: !!data?.google,
+          apple: !!data?.apple,
         });
       })
       .catch(() => {
-        // If the auth endpoint fails, OAuth is not configured
+        // If the check fails, don't show OAuth buttons
       });
   }, []);
 
