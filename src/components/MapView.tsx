@@ -1,14 +1,26 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
 import { Clinic, LiveBarnVenue, Registration } from '@/types';
 import { formatPrice, getCountryFlag, formatDateShort, cn } from '@/lib/utils';
-import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, ChevronRight, Video, MapPin, Calendar, Users, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LiveBarnLauncher from '@/components/LiveBarnLauncher';
-import 'leaflet/dist/leaflet.css';
+import type { VenueMarkerData } from './LeafletMap';
+
+// Dynamic import — SSR-safe. react-leaflet MUST NOT render on the server.
+const LeafletMap = dynamic(() => import('./LeafletMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--theme-primary)', borderTopColor: 'transparent' }} />
+    </div>
+  ),
+});
 
 interface VenueGroup {
   key: string;
@@ -24,25 +36,19 @@ interface VenueGroup {
 export default function MapView() {
   const { filteredClinics, isLoading, liveBarnConfig, homeLocation, registrations, childProfiles, activeChildIds } = useStore();
   const router = useRouter();
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.LayerGroup | null>(null);
   const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
   const [showCard, setShowCard] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
   const [launchVenue, setLaunchVenue] = useState<LiveBarnVenue | null>(null);
 
-  // Group clinics by venue
+  // ─── Group clinics by venue ───────────────────────────
   const venueGroups = useMemo(() => {
     const groups = new Map<string, VenueGroup>();
-
     filteredClinics
       .filter((c) => c.location.lat !== 0 && c.location.lng !== 0)
       .forEach((clinic) => {
         const key = clinic.location.venue
           ? clinic.location.venue.toLowerCase().trim()
           : `${clinic.location.lat.toFixed(3)},${clinic.location.lng.toFixed(3)}`;
-
         if (!groups.has(key)) {
           groups.set(key, {
             key,
@@ -57,25 +63,10 @@ export default function MapView() {
         }
         groups.get(key)!.clinics.push(clinic);
       });
-
     return groups;
   }, [filteredClinics]);
 
-  // --- STABLE REFs so marker click handlers and marker effects never go stale ---
-  const showCardRef = useRef(showCard);
-  useEffect(() => { showCardRef.current = showCard; }, [showCard]);
-  const venueGroupsRef = useRef(venueGroups);
-  useEffect(() => {
-    venueGroupsRef.current = venueGroups;
-  }, [venueGroups]);
-
-  // Selected venue data
-  const selectedVenue = useMemo(
-    () => (selectedVenueKey ? venueGroups.get(selectedVenueKey) || null : null),
-    [selectedVenueKey, venueGroups]
-  );
-
-  // LiveBarn connected venues for live indicators
+  // ─── LiveBarn helpers ─────────────────────────────────
   const liveVenueNames = useMemo(
     () =>
       liveBarnConfig.connected
@@ -84,7 +75,6 @@ export default function MapView() {
     [liveBarnConfig.connected, liveBarnConfig.venues]
   );
 
-  // Check if a venue name has a live stream
   const isVenueNameLive = useCallback(
     (venueName: string) => {
       if (!liveBarnConfig.connected) return false;
@@ -94,24 +84,12 @@ export default function MapView() {
     [liveBarnConfig.connected, liveVenueNames]
   );
 
-  // Check if any clinic in a group has live stream
   const isGroupLive = useCallback(
-    (group: VenueGroup) => {
-      return (
-        isVenueNameLive(group.venue) ||
-        group.clinics.some((c) => c.hasLiveStream)
-      );
-    },
+    (group: VenueGroup) =>
+      isVenueNameLive(group.venue) || group.clinics.some((c) => c.hasLiveStream),
     [isVenueNameLive]
   );
 
-  // Ref for isGroupLive too (used in marker creation)
-  const isGroupLiveRef = useRef(isGroupLive);
-  useEffect(() => {
-    isGroupLiveRef.current = isGroupLive;
-  }, [isGroupLive]);
-
-  // Get LiveBarn venue data for a venue name
   const getLiveBarnVenuesForName = useCallback(
     (venueName: string): LiveBarnVenue[] => {
       if (!liveBarnConfig.connected) return [];
@@ -124,226 +102,96 @@ export default function MapView() {
     [liveBarnConfig.connected, liveBarnConfig.venues]
   );
 
-  // Active children info
+  // ─── Build marker data for LeafletMap ─────────────────
+  const markerData: VenueMarkerData[] = useMemo(() => {
+    const result: VenueMarkerData[] = [];
+    venueGroups.forEach((group) => {
+      result.push({
+        key: group.key,
+        lat: group.lat,
+        lng: group.lng,
+        count: group.clinics.length,
+        isLive: isGroupLive(group),
+      });
+    });
+    return result;
+  }, [venueGroups, isGroupLive]);
+
+  // ─── Map config ───────────────────────────────────────
+  const mapCenter: [number, number] = homeLocation
+    ? [homeLocation.lat, homeLocation.lng]
+    : [45, -30];
+  const mapZoom = homeLocation ? 8 : 2;
+
+  // ─── Selected venue derived data ──────────────────────
+  const selectedVenue = useMemo(
+    () => (selectedVenueKey ? venueGroups.get(selectedVenueKey) || null : null),
+    [selectedVenueKey, venueGroups]
+  );
+
   const activeChildren = useMemo(
     () => childProfiles.filter((c) => activeChildIds.includes(c.id)),
     [childProfiles, activeChildIds]
   );
 
-  // Check if a child is registered for a clinic
   const getRegistrationForClinic = useCallback(
     (clinic: Clinic, childId: string): Registration | undefined => {
       const child = childProfiles.find((c) => c.id === childId);
       if (!child) return undefined;
       return registrations.find((r) => {
-        // Match by clinic name (fuzzy) and child name
         const nameMatch =
           r.clinicName.toLowerCase().includes(clinic.name.toLowerCase().slice(0, 20)) ||
           clinic.name.toLowerCase().includes(r.clinicName.toLowerCase().slice(0, 20));
         const childMatch =
-          r.playerName?.toLowerCase() === child.name.toLowerCase() ||
-          r.childId === childId;
+          r.playerName?.toLowerCase() === child.name.toLowerCase() || r.childId === childId;
         return nameMatch && childMatch;
       });
     },
     [registrations, childProfiles]
   );
 
-  // Get overlapping clinics from registrations for a given clinic
   const getOverlappingRegistrations = useCallback(
-    (clinic: Clinic): Registration[] => {
-      return registrations.filter((r) => {
-        if (r.status === 'cancelled') return false;
-        // Check date overlap
-        return clinic.dates.start <= r.endDate && r.startDate <= clinic.dates.end;
-      });
-    },
+    (clinic: Clinic): Registration[] =>
+      registrations.filter(
+        (r) => r.status !== 'cancelled' && clinic.dates.start <= r.endDate && r.startDate <= clinic.dates.end
+      ),
     [registrations]
   );
 
-  // Dismiss card
-  const dismissCard = useCallback(() => {
-    setShowCard(false);
-    setTimeout(() => setSelectedVenueKey(null), 300);
-  }, []);
-
-  // --- STABLE marker click handler using ref ---
-  // This avoids stale closures: markers call handleMarkerClickRef.current(key)
-  // which always points to the latest function that has access to current venueGroups.
-  const handleMarkerClickRef = useRef<(key: string) => void>(() => {});
-  useEffect(() => {
-    handleMarkerClickRef.current = (key: string) => {
-      const group = venueGroupsRef.current.get(key);
-      setSelectedVenueKey(key);
-      setShowCard(true);
-      if (group && mapInstanceRef.current) {
-        mapInstanceRef.current.flyTo([group.lat, group.lng], 13, { duration: 0.5 });
-      }
-    };
-  }, []); // No deps needed — reads from refs
-
-  // Initialize map
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-
-    const initMap = async () => {
-      const L = (await import('leaflet')).default;
-
-      const defaultCenter: [number, number] = homeLocation
-        ? [homeLocation.lat, homeLocation.lng]
-        : [45, -30];
-      const defaultZoom = homeLocation ? 8 : 2;
-
-      const map = L.map(mapRef.current!, {
-        center: defaultCenter,
-        zoom: defaultZoom,
-        zoomControl: false,
-        attributionControl: false,
-        // Prevent double-tap zoom from stealing marker clicks on mobile
-        doubleClickZoom: false,
-      });
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-      }).addTo(map);
-
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-      L.control.attribution({ position: 'bottomleft' }).addTo(map);
-      map.attributionControl.addAttribution(
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-      );
-
-      // Re-enable zoom via button/scroll, just not double-click
-      // (double-click interferes with marker taps on mobile)
-
-      mapInstanceRef.current = map;
-      markersRef.current = L.layerGroup().addTo(map);
-      setMapReady(true);
-    };
-
-    initMap();
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update markers when venue groups change
-  // IMPORTANT: Does NOT depend on selectVenue or selectedVenueKey to avoid stale closures
-  useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current || !markersRef.current) return;
-
-    const updateMarkers = async () => {
-      const L = (await import('leaflet')).default;
-      markersRef.current!.clearLayers();
-
-      const bounds: [number, number][] = [];
-
-      venueGroups.forEach((group) => {
-        const { lat, lng, clinics, key } = group;
-        bounds.push([lat, lng]);
-
-        const isLive = isGroupLiveRef.current(group);
-        const count = clinics.length;
-        const size = 38;
-
-        const icon = L.divIcon({
-          className: 'custom-marker',
-          html: `<div style="position:relative; cursor:pointer; pointer-events:auto;">
-            <div style="
-              background: ${isLive ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))'};
-              width: ${size}px;
-              height: ${size}px;
-              border-radius: 50% 50% 50% 0;
-              transform: rotate(-45deg);
-              border: 3px solid ${isLive ? '#fca5a5' : 'rgba(255,255,255,0.3)'};
-              display: flex; align-items: center; justify-content: center;
-              box-shadow: ${isLive ? '0 0 24px rgba(239,68,68,0.5), 0 0 8px rgba(239,68,68,0.3)' : '0 4px 12px rgba(0,0,0,0.4)'};
-              transition: all 0.2s;
-            ">
-              <span style="transform: rotate(45deg); font-size: 15px;">${isLive ? '📹' : '🏒'}</span>
-            </div>
-            ${count > 1 ? `<div style="
-              position: absolute; top: -8px; left: -4px;
-              min-width: 20px; height: 20px; border-radius: 10px;
-              background: var(--theme-primary, #0ea5e9); border: 2px solid #0f172a;
-              display: flex; align-items: center; justify-content: center;
-              padding: 0 4px;
-            "><span style="font-size: 9px; color: white; font-weight: 800;">${count}</span></div>` : ''}
-            ${isLive ? `<div style="
-              position: absolute; top: ${count > 1 ? '-8px' : '-6px'}; right: -6px;
-              width: 20px; height: 20px; border-radius: 50%;
-              background: #ef4444; border: 2px solid #0f172a;
-              display: flex; align-items: center; justify-content: center;
-              animation: marker-pulse 1.5s infinite;
-              box-shadow: 0 0 10px rgba(239,68,68,0.6);
-            "><span style="font-size: 6px; color: white; font-weight: 900;">LIVE</span></div>` : ''}
-          </div>`,
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size],
-        });
-
-        // Use ref-based click handler — never goes stale
-        const marker = L.marker([lat, lng], { icon }).on('click', () => {
-          handleMarkerClickRef.current(key);
-        });
-
-        markersRef.current!.addLayer(marker);
-      });
-
-      // Fit bounds if we have markers and nothing is selected
-      if (bounds.length > 0 && !showCardRef.current) {
-        try {
-          mapInstanceRef.current!.fitBounds(bounds as L.LatLngBoundsExpression, {
-            padding: [50, 50],
-            maxZoom: 12,
-          });
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    updateMarkers();
-  }, [venueGroups, mapReady]); // Only depends on data + mapReady, NOT callbacks
-
-  // LiveBarn venues for the selected venue
   const selectedLiveBarnVenues = useMemo(
     () => (selectedVenue ? getLiveBarnVenuesForName(selectedVenue.venue) : []),
     [selectedVenue, getLiveBarnVenuesForName]
   );
   const venueIsLive = selectedVenue ? isGroupLive(selectedVenue) : false;
-  const liveStreams = useMemo(
-    () => selectedLiveBarnVenues.filter((v) => v.isLive),
-    [selectedLiveBarnVenues]
-  );
-  const replayStreams = useMemo(
-    () => selectedLiveBarnVenues.filter((v) => !v.isLive),
-    [selectedLiveBarnVenues]
-  );
+  const liveStreams = useMemo(() => selectedLiveBarnVenues.filter((v) => v.isLive), [selectedLiveBarnVenues]);
+  const replayStreams = useMemo(() => selectedLiveBarnVenues.filter((v) => !v.isLive), [selectedLiveBarnVenues]);
 
+  // ─── Handlers ─────────────────────────────────────────
+  const dismissCard = useCallback(() => {
+    setShowCard(false);
+    setTimeout(() => setSelectedVenueKey(null), 300);
+  }, []);
+
+  const handleMarkerClick = useCallback((key: string) => {
+    setSelectedVenueKey(key);
+    setShowCard(true);
+  }, []);
+
+  // ─── Render ───────────────────────────────────────────
   return (
     <div className="relative h-[calc(100vh-180px)]">
-      <div ref={mapRef} className="w-full h-full bg-slate-900" />
-
-      <style jsx global>{`
-        @keyframes marker-pulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.3); opacity: 0.7; }
-        }
-        @keyframes live-glow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
-          50% { box-shadow: 0 0 24px 6px rgba(239, 68, 68, 0.12); }
-        }
-        .custom-marker { background: none !important; border: none !important; }
-      `}</style>
+      {/* The react-leaflet map — handles all touch, pinch, zoom natively */}
+      <LeafletMap
+        markers={markerData}
+        center={mapCenter}
+        zoom={mapZoom}
+        selectedKey={showCard ? selectedVenueKey : null}
+        onMarkerClick={handleMarkerClick}
+      />
 
       {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm z-10 pointer-events-none">
           <div className="flex flex-col items-center gap-3">
             <div
               className="w-10 h-10 border-2 border-t-transparent rounded-full animate-spin"
@@ -354,16 +202,16 @@ export default function MapView() {
         </div>
       )}
 
-      {/* Top info bar */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
-        <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/10">
+      {/* Top info bar — pointer-events-none on container, auto on pills */}
+      <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
+        <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/10 pointer-events-auto">
           <p className="text-xs font-medium text-white">
             {venueGroups.size} venues · {filteredClinics.filter((c) => c.location.lat !== 0).length} clinics
           </p>
         </div>
 
         {liveBarnConfig.connected && liveVenueNames.length > 0 && (
-          <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-red-500/30 flex items-center gap-1.5">
+          <div className="bg-slate-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-red-500/30 flex items-center gap-1.5 pointer-events-auto">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
@@ -375,22 +223,7 @@ export default function MapView() {
         )}
       </div>
 
-      {/* Re-center button */}
-      {homeLocation && (
-        <button
-          onClick={() => {
-            mapInstanceRef.current?.flyTo([homeLocation.lat, homeLocation.lng], 10, {
-              duration: 0.6,
-            });
-          }}
-          className="absolute bottom-24 right-3 z-10 bg-slate-900/90 backdrop-blur-sm rounded-full p-2.5 border border-white/10 active:scale-95 transition-transform"
-          title="Re-center on home"
-        >
-          <Navigation size={16} className="text-slate-300" />
-        </button>
-      )}
-
-      {/* Dismiss backdrop */}
+      {/* Dismiss backdrop — only rendered when card is open */}
       {showCard && (
         <div className="absolute inset-0 z-[18]" onClick={dismissCard} />
       )}
@@ -414,40 +247,28 @@ export default function MapView() {
               )}
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-bg) 97%, transparent)',
-                borderColor: venueIsLive
-                  ? 'rgba(239,68,68,0.3)'
-                  : 'var(--theme-card-border)',
+                borderColor: venueIsLive ? 'rgba(239,68,68,0.3)' : 'var(--theme-card-border)',
                 backdropFilter: 'blur(20px)',
-                animation: venueIsLive
-                  ? 'live-glow 2s ease-in-out infinite'
-                  : undefined,
+                animation: venueIsLive ? 'live-glow 2s ease-in-out infinite' : undefined,
               }}
             >
-              {/* Fixed header with close button */}
+              {/* Header */}
               <div className="relative px-4 pt-3 pb-2">
-                {/* Drag handle */}
                 <div className="flex justify-center mb-2">
                   <div className="w-12 h-1.5 rounded-full bg-white/20" />
                 </div>
-
-                {/* Close button */}
                 <button
                   onClick={dismissCard}
                   className="absolute top-2 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 z-30 transition-colors"
                 >
                   <X size={20} className="text-white" />
                 </button>
-
-                {/* Venue header */}
                 <div className="pr-10">
-                  <h3 className="text-base font-bold text-white leading-tight">
-                    {selectedVenue.venue}
-                  </h3>
+                  <h3 className="text-base font-bold text-white leading-tight">{selectedVenue.venue}</h3>
                   <div className="flex items-center gap-1 mt-0.5">
                     <MapPin size={10} className="text-slate-500 shrink-0" />
                     <p className="text-[11px] text-slate-400">
-                      {getCountryFlag(selectedVenue.countryCode)} {selectedVenue.city},{' '}
-                      {selectedVenue.country}
+                      {getCountryFlag(selectedVenue.countryCode)} {selectedVenue.city}, {selectedVenue.country}
                     </p>
                   </div>
                 </div>
@@ -455,36 +276,29 @@ export default function MapView() {
 
               {/* Scrollable content */}
               <div className="max-h-[55vh] overflow-y-auto overscroll-contain px-4 pb-4">
-                {/* LIVE NOW banner */}
+                {/* LIVE banner */}
                 {venueIsLive && (
                   <div className="flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
                     <span className="relative flex h-3 w-3 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
                     </span>
-                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-                      Live Now at This Venue
-                    </span>
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Live Now at This Venue</span>
                     <Video size={12} className="text-red-400 ml-auto" />
                   </div>
                 )}
 
-                {/* LiveBarn stream buttons — opens native app launcher */}
+                {/* LiveBarn streams */}
                 {liveStreams.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {liveStreams.map((lbv) => (
-                      <button
-                        key={lbv.id}
-                        onClick={() => setLaunchVenue(lbv)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors text-left"
-                      >
+                      <button key={lbv.id} onClick={() => setLaunchVenue(lbv)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors text-left">
                         <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
                           <Video size={20} className="text-red-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white">
-                            Watch Live — {lbv.surfaceName}
-                          </p>
+                          <p className="text-xs font-semibold text-white">Watch Live — {lbv.surfaceName}</p>
                           <p className="text-[10px] text-red-400/70">{lbv.name}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
@@ -499,20 +313,14 @@ export default function MapView() {
                   </div>
                 )}
 
-                {/* Replay buttons — opens native app launcher */}
                 {replayStreams.length > 0 && (
                   <div className="space-y-1.5 mb-3">
                     {replayStreams.map((lbv) => (
-                      <button
-                        key={lbv.id}
-                        onClick={() => setLaunchVenue(lbv)}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors text-left"
-                      >
+                      <button key={lbv.id} onClick={() => setLaunchVenue(lbv)}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors text-left">
                         <Video size={14} className="text-slate-500" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] text-slate-400">
-                            {lbv.surfaceName} — Watch Replay
-                          </p>
+                          <p className="text-[11px] text-slate-400">{lbv.surfaceName} — Watch Replay</p>
                         </div>
                         <ExternalLink size={10} className="text-slate-500" />
                       </button>
@@ -520,24 +328,20 @@ export default function MapView() {
                   </div>
                 )}
 
-                {/* Clinics section header */}
+                {/* Clinics list */}
                 <div className="flex items-center justify-between mb-2 mt-1">
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     {selectedVenue.clinics.length} Camp{selectedVenue.clinics.length !== 1 ? 's' : ''} at This Venue
                   </p>
                 </div>
 
-                {/* Clinic cards with registration status */}
                 <div className="space-y-2">
                   {selectedVenue.clinics.map((clinic) => {
-                    // Per-child registration status
                     const childStatuses = activeChildren.map((child) => ({
                       child,
                       registration: getRegistrationForClinic(clinic, child.id),
                     }));
                     const anyRegistered = childStatuses.some((s) => s.registration);
-
-                    // Schedule overlap detection
                     const overlaps = getOverlappingRegistrations(clinic);
                     const hasOverlap = overlaps.length > 0 && !anyRegistered;
 
@@ -555,38 +359,24 @@ export default function MapView() {
                         <div className="flex gap-3">
                           {clinic.imageUrl && (
                             <img // eslint-disable-line @next/next/no-img-element
-                              src={clinic.imageUrl}
-                              alt=""
+                              src={clinic.imageUrl} alt=""
                               className="w-14 h-14 rounded-lg object-cover shrink-0"
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">
-                              {clinic.name}
-                            </h4>
+                            <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">{clinic.name}</h4>
                             <div className="flex items-center gap-2 mt-1">
                               <div className="flex items-center gap-1">
                                 <Calendar size={9} className="text-slate-500" />
-                                <span
-                                  className="text-[10px]"
-                                  style={{ color: 'var(--theme-primary)' }}
-                                >
+                                <span className="text-[10px]" style={{ color: 'var(--theme-primary)' }}>
                                   {formatDateShort(clinic.dates.start)}
-                                  {clinic.dates.start !== clinic.dates.end &&
-                                    ` – ${formatDateShort(clinic.dates.end)}`}
+                                  {clinic.dates.start !== clinic.dates.end && ` – ${formatDateShort(clinic.dates.end)}`}
                                 </span>
                               </div>
                               {clinic.spotsRemaining > 0 && (
                                 <div className="flex items-center gap-1">
                                   <Users size={9} className="text-slate-500" />
-                                  <span
-                                    className={cn(
-                                      'text-[10px]',
-                                      clinic.spotsRemaining <= 5
-                                        ? 'text-red-400'
-                                        : 'text-slate-400'
-                                    )}
-                                  >
+                                  <span className={cn('text-[10px]', clinic.spotsRemaining <= 5 ? 'text-red-400' : 'text-slate-400')}>
                                     {clinic.spotsRemaining} spots
                                   </span>
                                 </div>
@@ -597,25 +387,19 @@ export default function MapView() {
                             {activeChildren.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1.5">
                                 {childStatuses.map(({ child, registration }) => (
-                                  <span
-                                    key={child.id}
+                                  <span key={child.id}
                                     className={cn(
                                       'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold',
-                                      registration
-                                        ? 'bg-emerald-500/15 text-emerald-400'
-                                        : 'bg-white/5 text-slate-500'
-                                    )}
-                                  >
-                                    {registration ? (
-                                      <CheckCircle2 size={8} />
-                                    ) : null}
+                                      registration ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-slate-500'
+                                    )}>
+                                    {registration ? <CheckCircle2 size={8} /> : null}
                                     {child.name}{registration ? ' Registered' : ''}
                                   </span>
                                 ))}
                               </div>
                             )}
 
-                            {/* Schedule overlap warning */}
+                            {/* Schedule overlap */}
                             {hasOverlap && (
                               <div className="flex items-center gap-1 mt-1">
                                 <AlertTriangle size={9} className="text-amber-400" />
@@ -632,17 +416,11 @@ export default function MapView() {
                                     {formatPrice(clinic.price.amount, clinic.price.currency)}
                                   </span>
                                 ) : (
-                                  <span className="text-sm font-bold text-emerald-400">
-                                    Free
-                                  </span>
+                                  <span className="text-sm font-bold text-emerald-400">Free</span>
                                 )}
                               </div>
-                              <div
-                                className="flex items-center gap-1 text-[10px] font-medium"
-                                style={{ color: 'var(--theme-primary)' }}
-                              >
-                                View Details
-                                <ChevronRight size={12} />
+                              <div className="flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--theme-primary)' }}>
+                                View Details <ChevronRight size={12} />
                               </div>
                             </div>
                           </div>
@@ -657,12 +435,17 @@ export default function MapView() {
         )}
       </AnimatePresence>
 
-      {/* LiveBarn app launcher modal */}
+      {/* live-glow animation for venue card */}
+      <style jsx global>{`
+        @keyframes live-glow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+          50% { box-shadow: 0 0 24px 6px rgba(239, 68, 68, 0.12); }
+        }
+      `}</style>
+
+      {/* LiveBarn launcher modal */}
       {launchVenue && (
-        <LiveBarnLauncher
-          venue={launchVenue}
-          onClose={() => setLaunchVenue(null)}
-        />
+        <LiveBarnLauncher venue={launchVenue} onClose={() => setLaunchVenue(null)} />
       )}
     </div>
   );
