@@ -45,30 +45,30 @@ function CredentialForm({
   return (
     <>
       <div>
-        <label className="text-xs font-medium text-white block mb-1">Email</label>
+        <label className="text-xs font-medium text-slate-700 block mb-1">Email</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={`Your ${placeholder} email`}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
         />
       </div>
       <div>
-        <label className="text-xs font-medium text-white block mb-1">Password</label>
+        <label className="text-xs font-medium text-slate-700 block mb-1">Password</label>
         <div className="relative">
           <input
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder={`Your ${placeholder} password`}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 pr-10 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
           />
           <button
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2"
           >
-            {showPassword ? <EyeOff size={14} className="text-slate-500" /> : <Eye size={14} className="text-slate-500" />}
+            {showPassword ? <EyeOff size={14} className="text-slate-400" /> : <Eye size={14} className="text-slate-400" />}
           </button>
         </div>
       </div>
@@ -98,28 +98,35 @@ function IntegrationCard({
   onToggle: () => void;
   children: React.ReactNode;
 }) {
+  const colorMap: Record<string, { bg: string; text: string }> = {
+    blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
+    orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
+    violet: { bg: 'bg-violet-50', text: 'text-violet-600' },
+  };
+  const colors = colorMap[color] || colorMap.blue;
+
   return (
-    <div className="bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between p-4"
       >
         <div className="flex items-center gap-3">
-          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', connected ? 'bg-emerald-500/10' : `bg-${color}-500/10`)}>
-            <Icon size={20} className={connected ? 'text-emerald-400' : `text-${color}-400`} />
+          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', connected ? 'bg-emerald-50' : colors.bg)}>
+            <Icon size={20} className={connected ? 'text-emerald-600' : colors.text} />
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-white">{title}</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm font-semibold text-slate-900">{title}</p>
+            <p className="text-xs text-slate-500">
               {connected ? (
-                <span className="text-emerald-400 flex items-center gap-1"><Wifi size={10} /> {connectedText}</span>
+                <span className="text-emerald-600 flex items-center gap-1"><Wifi size={10} /> {connectedText}</span>
               ) : (
                 <span className="flex items-center gap-1"><WifiOff size={10} /> {subtitle}</span>
               )}
             </p>
           </div>
         </div>
-        <ChevronRight size={18} className={cn('text-slate-500 transition-transform', expanded && 'rotate-90')} />
+        <ChevronRight size={18} className={cn('text-slate-400 transition-transform', expanded && 'rotate-90')} />
       </button>
       <AnimatePresence>
         {expanded && (
@@ -259,8 +266,6 @@ export default function IntegrationsPage() {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Step 4: Match billing details to linked children
-    // In production: scrape /my-account-2/orders/ → click "view" on each order →
-    // read billing details → match child name → import only matching orders
     setConnectionStatus('Matching billing details to your players...');
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -348,20 +353,20 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950" data-theme-page>
+    <div className="min-h-screen" style={{ backgroundColor: '#f0f4f8' }}>
       <div className="safe-area-top" />
       <div className="px-4 py-4 pb-28">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => router.push('/settings')}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100"
           >
-            <ArrowLeft size={18} className="text-slate-300" />
+            <ArrowLeft size={18} className="text-slate-600" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-white">Integrations</h1>
-            <p className="text-xs text-slate-400">Connect your hockey accounts</p>
+            <h1 className="text-xl font-bold text-slate-900">Integrations</h1>
+            <p className="text-xs text-slate-500">Connect your hockey accounts</p>
           </div>
         </div>
 
@@ -372,11 +377,11 @@ export default function IntegrationsPage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-4 p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl"
+              className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl"
             >
               <div className="flex items-center gap-2">
-                <AlertCircle size={14} className="text-sky-400 shrink-0" />
-                <p className="text-xs text-sky-300">{connectionStatus}</p>
+                <AlertCircle size={14} className="text-blue-600 shrink-0" />
+                <p className="text-xs text-blue-700">{connectionStatus}</p>
               </div>
             </motion.div>
           )}
@@ -395,20 +400,20 @@ export default function IntegrationsPage() {
             expanded={expandedSection === 'icehockeypro'}
             onToggle={() => setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')}
           >
-            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+            <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
               <div className="flex items-start gap-2">
-                <Trophy size={14} className="text-blue-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-300">
+                <Trophy size={14} className="text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700">
                   Connect your IceHockeyPro account to sync camps attended, upcoming registrations,
                   and spending. We scrape your order history at{' '}
-                  <span className="font-mono text-blue-200">icehockeypro.com/my-account-2/orders/</span>{' '}
+                  <span className="font-mono text-blue-800">icehockeypro.com/my-account-2/orders/</span>{' '}
                   and match billing details to your linked players.
                 </p>
               </div>
             </div>
 
             <div className="flex items-start gap-2">
-              <Shield size={12} className="text-slate-500 mt-0.5 shrink-0" />
+              <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
                 Credentials stored locally on your device. We only access your order history to match registrations by billing name.
               </p>
@@ -428,17 +433,18 @@ export default function IntegrationsPage() {
 
                 {/* Multi-child selector */}
                 <div>
-                  <label className="text-xs font-medium text-white block mb-2">
-                    Link Players <span className="text-slate-500">(select who to sync)</span>
+                  <label className="text-xs font-medium text-slate-700 block mb-2">
+                    Link Players <span className="text-slate-400">(select who to sync)</span>
                   </label>
                   {childProfiles.length === 0 ? (
-                    <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                      <p className="text-xs text-slate-400 mb-2">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <p className="text-xs text-slate-500 mb-2">
                         No players added yet. Add your children first so we can match their billing details.
                       </p>
                       <button
                         onClick={() => router.push('/settings')}
-                        className="text-xs font-medium text-sky-400 flex items-center gap-1"
+                        className="text-xs font-medium flex items-center gap-1"
+                        style={{ color: 'var(--theme-primary)' }}
                       >
                         Add players in Settings <ChevronRight size={12} />
                       </button>
@@ -460,8 +466,8 @@ export default function IntegrationsPage() {
                             className={cn(
                               'w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left',
                               isLinked
-                                ? 'bg-blue-500/10 border-blue-500/30'
-                                : 'bg-white/5 border-white/10'
+                                ? 'bg-blue-50 border-blue-200'
+                                : 'bg-slate-50 border-slate-200'
                             )}
                           >
                             <div
@@ -469,17 +475,17 @@ export default function IntegrationsPage() {
                                 'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0',
                                 isLinked
                                   ? 'bg-blue-500 border-blue-500'
-                                  : 'border-slate-600'
+                                  : 'border-slate-300'
                               )}
                             >
                               {isLinked && <Check size={12} className="text-white" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white font-medium">{child.name}</p>
-                              <p className="text-[10px] text-slate-400">{getChildLabel(child)}</p>
+                              <p className="text-sm text-slate-900 font-medium">{child.name}</p>
+                              <p className="text-[10px] text-slate-500">{getChildLabel(child)}</p>
                             </div>
                             {isLinked && (
-                              <UserCheck size={14} className="text-blue-400 shrink-0" />
+                              <UserCheck size={14} className="text-blue-600 shrink-0" />
                             )}
                           </button>
                         );
@@ -491,7 +497,7 @@ export default function IntegrationsPage() {
                 <button
                   onClick={handleIhpConnect}
                   disabled={syncing}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-blue-200"
                 >
                   {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Trophy size={14} />}
                   {syncing ? 'Connecting...' : 'Connect & Sync Orders'}
@@ -499,20 +505,20 @@ export default function IntegrationsPage() {
               </>
             ) : (
               <>
-                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
+                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Check size={14} className="text-emerald-400" />
-                    <p className="text-xs font-semibold text-emerald-300">Connected</p>
+                    <Check size={14} className="text-emerald-600" />
+                    <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
-                  <p className="text-[10px] text-slate-400">Account: {iceHockeyProConfig.email}</p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-slate-500">Account: {iceHockeyProConfig.email}</p>
+                  <p className="text-[10px] text-slate-500">
                     Linked players: {getLinkedChildNames()}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-1">
+                  <p className="text-[10px] text-slate-400 mt-1">
                     Source: icehockeypro.com/my-account-2/orders/ → View → Billing Details
                   </p>
                   {iceHockeyProConfig.lastSync && (
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-slate-500">
                       Last sync: {new Date(iceHockeyProConfig.lastSync).toLocaleString()}
                     </p>
                   )}
@@ -521,27 +527,31 @@ export default function IntegrationsPage() {
                   <button
                     onClick={handleIhpSync}
                     disabled={syncing}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, white)',
+                      color: 'var(--theme-primary)',
+                    }}
                   >
                     <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
                     Sync Now
                   </button>
                   <button
                     onClick={handleIhpDisconnect}
-                    className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-xl transition-colors"
+                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-xl transition-colors"
                   >
                     Disconnect
                   </button>
                 </div>
                 <button
                   onClick={() => router.push('/spending')}
-                  className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl"
+                  className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200"
                 >
                   <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-blue-400" />
-                    <span className="text-xs text-white">View Spending Breakdown</span>
+                    <Calendar size={14} className="text-blue-600" />
+                    <span className="text-xs text-slate-900">View Spending Breakdown</span>
                   </div>
-                  <ExternalLink size={14} className="text-slate-500" />
+                  <ExternalLink size={14} className="text-slate-400" />
                 </button>
               </>
             )}
@@ -559,17 +569,17 @@ export default function IntegrationsPage() {
             expanded={expandedSection === 'dash'}
             onToggle={() => setExpandedSection(expandedSection === 'dash' ? null : 'dash')}
           >
-            <div className="p-3 bg-orange-500/10 rounded-xl border border-orange-500/20">
+            <div className="p-3 bg-orange-50 rounded-xl border border-orange-200">
               <div className="flex items-start gap-2">
-                <Zap size={14} className="text-orange-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-orange-300">
+                <Zap size={14} className="text-orange-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-orange-700">
                   Connect your Dash by DaySmart account to automatically sync clinics,
                   camps, and registrations from Baptist Health IcePlex.
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Shield size={12} className="text-slate-500 mt-0.5 shrink-0" />
+              <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
                 Credentials stored locally. Used only to communicate directly with DaySmart.
               </p>
@@ -588,7 +598,7 @@ export default function IntegrationsPage() {
                 <button
                   onClick={handleDashConnect}
                   disabled={daySmartSyncing}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-orange-200"
                 >
                   {daySmartSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Wifi size={14} />}
                   {daySmartSyncing ? 'Connecting...' : 'Connect to Dash'}
@@ -596,42 +606,46 @@ export default function IntegrationsPage() {
               </>
             ) : (
               <>
-                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
+                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Check size={14} className="text-emerald-400" />
-                    <p className="text-xs font-semibold text-emerald-300">Connected</p>
+                    <Check size={14} className="text-emerald-600" />
+                    <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
-                  <p className="text-[10px] text-slate-400">Account: {daySmartConfig.email}</p>
-                  <p className="text-[10px] text-slate-400">Facility: {daySmartConfig.facilityName}</p>
+                  <p className="text-[10px] text-slate-500">Account: {daySmartConfig.email}</p>
+                  <p className="text-[10px] text-slate-500">Facility: {daySmartConfig.facilityName}</p>
                   {daySmartConfig.lastSync && (
-                    <p className="text-[10px] text-slate-400">Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}</p>
+                    <p className="text-[10px] text-slate-500">Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleDashSync}
                     disabled={daySmartSyncing}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, white)',
+                      color: 'var(--theme-primary)',
+                    }}
                   >
                     <RefreshCw size={14} className={daySmartSyncing ? 'animate-spin' : ''} />
                     Sync Now
                   </button>
                   <button
                     onClick={handleDashDisconnect}
-                    className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-xl transition-colors"
+                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-xl transition-colors"
                   >
                     Disconnect
                   </button>
                 </div>
                 <button
                   onClick={() => router.push('/registrations')}
-                  className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl"
+                  className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200"
                 >
                   <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-sky-400" />
-                    <span className="text-xs text-white">View My Registrations</span>
+                    <Calendar size={14} style={{ color: 'var(--theme-primary)' }} />
+                    <span className="text-xs text-slate-900">View My Registrations</span>
                   </div>
-                  <ExternalLink size={14} className="text-slate-500" />
+                  <ExternalLink size={14} className="text-slate-400" />
                 </button>
               </>
             )}
@@ -649,10 +663,10 @@ export default function IntegrationsPage() {
             expanded={expandedSection === 'email'}
             onToggle={() => setExpandedSection(expandedSection === 'email' ? null : 'email')}
           >
-            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
+            <div className="p-3 bg-violet-50 rounded-xl border border-violet-200">
               <div className="flex items-start gap-2">
-                <Mail size={14} className="text-violet-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-violet-300">
+                <Mail size={14} className="text-violet-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-violet-700">
                   Securely scan your inbox for hockey-related schedule changes, cancellations,
                   and announcements. Uses Gmail/Outlook API with read-only access and pattern
                   matching — no AI processing of email content, completely free.
@@ -661,7 +675,7 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="flex items-start gap-2">
-              <Shield size={12} className="text-slate-500 mt-0.5 shrink-0" />
+              <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
                 Uses OAuth — we never see your password. Read-only access to messages matching
                 hockey keywords only. Revoke access anytime from your Google/Microsoft account.
@@ -673,7 +687,7 @@ export default function IntegrationsPage() {
                 <button
                   onClick={() => handleEmailConnect('gmail')}
                   disabled={syncing}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-xl transition-colors border border-white/10 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-slate-50 hover:bg-slate-100 text-slate-900 text-sm font-medium rounded-xl transition-colors border border-slate-200 disabled:opacity-50"
                 >
                   <span className="text-base">📧</span>
                   {syncing ? 'Connecting...' : 'Connect Gmail'}
@@ -681,14 +695,14 @@ export default function IntegrationsPage() {
                 <button
                   onClick={() => handleEmailConnect('outlook')}
                   disabled={syncing}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-xl transition-colors border border-white/10 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-slate-50 hover:bg-slate-100 text-slate-900 text-sm font-medium rounded-xl transition-colors border border-slate-200 disabled:opacity-50"
                 >
                   <span className="text-base">📨</span>
                   {syncing ? 'Connecting...' : 'Connect Outlook'}
                 </button>
 
-                <div className="p-3 bg-white/[0.02] rounded-xl">
-                  <h4 className="text-[10px] font-semibold text-slate-400 uppercase mb-2">What We Look For</h4>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <h4 className="text-[10px] font-semibold text-slate-500 uppercase mb-2">What We Look For</h4>
                   <div className="space-y-1.5">
                     {[
                       'Schedule changes & time updates',
@@ -698,8 +712,8 @@ export default function IntegrationsPage() {
                       'Game schedule notifications',
                     ].map((item) => (
                       <div key={item} className="flex items-center gap-2">
-                        <Check size={10} className="text-violet-400" />
-                        <p className="text-[10px] text-slate-400">{item}</p>
+                        <Check size={10} className="text-violet-600" />
+                        <p className="text-[10px] text-slate-500">{item}</p>
                       </div>
                     ))}
                   </div>
@@ -707,19 +721,19 @@ export default function IntegrationsPage() {
               </div>
             ) : (
               <>
-                <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
+                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Check size={14} className="text-emerald-400" />
-                    <p className="text-xs font-semibold text-emerald-300">Active</p>
+                    <Check size={14} className="text-emerald-600" />
+                    <p className="text-xs font-semibold text-emerald-700">Active</p>
                   </div>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-slate-500">
                     Provider: {emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'}
                   </p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-slate-500">
                     Frequency: {emailScanConfig.scanFrequency}
                   </p>
                   {emailScanConfig.lastScan && (
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[10px] text-slate-500">
                       Last scan: {new Date(emailScanConfig.lastScan).toLocaleString()}
                     </p>
                   )}
@@ -727,7 +741,7 @@ export default function IntegrationsPage() {
 
                 {/* Frequency selector */}
                 <div>
-                  <label className="text-xs font-medium text-white block mb-2">Scan Frequency</label>
+                  <label className="text-xs font-medium text-slate-700 block mb-2">Scan Frequency</label>
                   <div className="flex gap-2">
                     {(['hourly', 'daily', 'manual'] as const).map((freq) => (
                       <button
@@ -736,8 +750,8 @@ export default function IntegrationsPage() {
                         className={cn(
                           'flex-1 py-2 text-xs font-medium rounded-xl border transition-all capitalize',
                           emailScanConfig.scanFrequency === freq
-                            ? 'bg-violet-500/20 border-violet-500/40 text-violet-200'
-                            : 'bg-white/5 border-white/10 text-slate-400'
+                            ? 'bg-violet-50 border-violet-200 text-violet-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-500'
                         )}
                       >
                         {freq}
@@ -748,7 +762,7 @@ export default function IntegrationsPage() {
 
                 <button
                   onClick={handleEmailDisconnect}
-                  className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-xl transition-colors"
+                  className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-xl transition-colors"
                 >
                   Disconnect
                 </button>
@@ -757,18 +771,18 @@ export default function IntegrationsPage() {
           </IntegrationCard>
 
           {/* What gets synced */}
-          <div className="bg-gradient-to-br from-sky-500/10 to-indigo-500/10 rounded-2xl border border-sky-500/20 p-4">
-            <h3 className="text-sm font-bold text-white mb-3">What Gets Synced</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900 mb-3">What Gets Synced</h3>
             <div className="space-y-2">
               {[
-                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', color: 'text-blue-400' },
-                { icon: Calendar, text: 'Programs & registrations from DaySmart', color: 'text-orange-400' },
-                { icon: Mail, text: 'Schedule changes detected in your email', color: 'text-violet-400' },
-                { icon: Zap, text: 'Spending tracked across all sources', color: 'text-amber-400' },
+                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', color: 'text-blue-600' },
+                { icon: Calendar, text: 'Programs & registrations from DaySmart', color: 'text-orange-600' },
+                { icon: Mail, text: 'Schedule changes detected in your email', color: 'text-violet-600' },
+                { icon: Zap, text: 'Spending tracked across all sources', color: 'text-amber-600' },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <item.icon size={14} className={item.color} />
-                  <p className="text-xs text-slate-300">{item.text}</p>
+                  <p className="text-xs text-slate-600">{item.text}</p>
                 </div>
               ))}
             </div>

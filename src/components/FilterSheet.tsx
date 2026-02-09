@@ -55,7 +55,7 @@ export default function FilterSheet() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setFilterOpen(false)}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm"
           />
 
           {/* Sheet */}
@@ -64,21 +64,21 @@ export default function FilterSheet() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl max-h-[85vh] overflow-hidden"
-            data-theme-page
-            style={{ backgroundColor: '#ffffff', boxShadow: '0 -4px 30px rgba(0,0,0,0.12)' }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[85vh] overflow-hidden"
+            style={{ boxShadow: '0 -4px 30px rgba(0,0,0,0.12)' }}
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#cbd5e1' }} />
+              <div className="w-10 h-1 rounded-full bg-slate-300" />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
               <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold text-white">Filters</h2>
+                <h2 className="text-lg font-bold text-slate-900">Filters</h2>
                 {count > 0 && (
-                  <span className="px-2 py-0.5 theme-bg-primary-20 text-white text-xs font-semibold rounded-full">
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full text-white"
+                    style={{ backgroundColor: 'var(--theme-primary)' }}>
                     {count} active
                   </span>
                 )}
@@ -87,7 +87,7 @@ export default function FilterSheet() {
                 {count > 0 && (
                   <button
                     onClick={resetFilters}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
                   >
                     <RotateCcw size={12} />
                     Reset
@@ -95,9 +95,9 @@ export default function FilterSheet() {
                 )}
                 <button
                   onClick={() => setFilterOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5"
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100"
                 >
-                  <X size={18} className="text-slate-400" />
+                  <X size={18} className="text-slate-500" />
                 </button>
               </div>
             </div>
@@ -106,28 +106,28 @@ export default function FilterSheet() {
             <div className="overflow-y-auto max-h-[70vh] p-5 space-y-6 pb-32">
               {/* Date Range */}
               <div>
-                <h3 className="text-sm font-semibold text-white mb-3">Date Range</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Date Range</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">From</label>
+                    <label className="text-xs text-slate-500 mb-1 block">From</label>
                     <input
                       type="date"
                       value={filters.dateRange.start || ''}
                       onChange={(e) =>
                         setFilter('dateRange', { ...filters.dateRange, start: e.target.value || null })
                       }
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-slate-400 [color-scheme:light]"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">To</label>
+                    <label className="text-xs text-slate-500 mb-1 block">To</label>
                     <input
                       type="date"
                       value={filters.dateRange.end || ''}
                       onChange={(e) =>
                         setFilter('dateRange', { ...filters.dateRange, end: e.target.value || null })
                       }
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-slate-400 [color-scheme:light]"
                     />
                   </div>
                 </div>
@@ -135,7 +135,7 @@ export default function FilterSheet() {
 
               {/* Age Groups */}
               <div>
-                <h3 className="text-sm font-semibold text-white mb-3">Age Groups</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Age Groups</h3>
                 <div className="flex flex-wrap gap-2">
                   {AGE_GROUPS.map((ag) => (
                     <button
@@ -144,9 +144,10 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.ageGroups.includes(ag)
-                          ? 'border text-white'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                          ? 'text-white border-transparent'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
+                      style={filters.ageGroups.includes(ag) ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                       {getAgeGroupLabel(ag)}
                     </button>
@@ -156,7 +157,7 @@ export default function FilterSheet() {
 
               {/* Skill Levels */}
               <div>
-                <h3 className="text-sm font-semibold text-white mb-3">Skill Level</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Skill Level</h3>
                 <div className="flex flex-wrap gap-2">
                   {SKILL_LEVELS.map((sl) => (
                     <button
@@ -165,9 +166,10 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.skillLevels.includes(sl)
-                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                          ? 'text-white border-transparent'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
+                      style={filters.skillLevels.includes(sl) ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                       {getSkillLevelLabel(sl)}
                     </button>
@@ -177,7 +179,7 @@ export default function FilterSheet() {
 
               {/* Clinic Types */}
               <div>
-                <h3 className="text-sm font-semibold text-white mb-3">Type</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Type</h3>
                 <div className="flex flex-wrap gap-2">
                   {CLINIC_TYPES.map((ct) => (
                     <button
@@ -186,9 +188,10 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.clinicTypes.includes(ct)
-                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                          ? 'text-white border-transparent'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
+                      style={filters.clinicTypes.includes(ct) ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                       {getClinicTypeLabel(ct)}
                     </button>
@@ -199,11 +202,11 @@ export default function FilterSheet() {
               {/* Country */}
               {countries.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-white mb-3">Country</h3>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3">Country</h3>
                   <select
                     value={filters.country || ''}
                     onChange={(e) => setFilter('country', e.target.value || null)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:theme-border-primary-strong appearance-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-slate-400 appearance-none [color-scheme:light]"
                   >
                     <option value="">All Countries</option>
                     {countries.map((c) => (
@@ -217,7 +220,7 @@ export default function FilterSheet() {
 
               {/* Sort */}
               <div>
-                <h3 className="text-sm font-semibold text-white mb-3">Sort By</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Sort By</h3>
                 <div className="flex flex-wrap gap-2">
                   {SORT_OPTIONS.map((opt) => (
                     <button
@@ -226,9 +229,10 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.sortBy === opt.value
-                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                          ? 'text-white border-transparent'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
+                      style={filters.sortBy === opt.value ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                       {opt.label}
                     </button>
@@ -242,9 +246,10 @@ export default function FilterSheet() {
                       className={cn(
                         'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
                         filters.sortOrder === order
-                          ? 'theme-bg-primary-20 theme-border-primary-strong text-white'
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                          ? 'text-white border-transparent'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
+                      style={filters.sortOrder === order ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                       {order === 'asc' ? 'Ascending' : 'Descending'}
                     </button>
@@ -256,52 +261,55 @@ export default function FilterSheet() {
               <div className="space-y-3">
                 <label className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">🥅 Goalie Clinics Only</span>
+                    <span className="text-sm text-slate-900">🥅 Goalie Clinics Only</span>
                   </div>
                   <button
                     onClick={() => setFilter('goalieOnly', !filters.goalieOnly)}
                     className={cn(
                       'w-11 h-6 rounded-full transition-colors relative',
-                      filters.goalieOnly ? 'theme-bg-primary' : 'bg-white/10'
+                      filters.goalieOnly ? '' : 'bg-slate-200'
                     )}
+                    style={filters.goalieOnly ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                   >
                     <div
                       className={cn(
-                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform',
+                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform shadow-sm',
                         filters.goalieOnly ? 'translate-x-[22px]' : 'translate-x-0.5'
                       )}
                     />
                   </button>
                 </label>
                 <label className="flex items-center justify-between">
-                  <span className="text-sm text-white">Spots Available Only</span>
+                  <span className="text-sm text-slate-900">Spots Available Only</span>
                   <button
                     onClick={() => setFilter('spotsAvailable', !filters.spotsAvailable)}
                     className={cn(
                       'w-11 h-6 rounded-full transition-colors relative',
-                      filters.spotsAvailable ? 'theme-bg-primary' : 'bg-white/10'
+                      filters.spotsAvailable ? '' : 'bg-slate-200'
                     )}
+                    style={filters.spotsAvailable ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                   >
                     <div
                       className={cn(
-                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform',
+                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform shadow-sm',
                         filters.spotsAvailable ? 'translate-x-[22px]' : 'translate-x-0.5'
                       )}
                     />
                   </button>
                 </label>
                 <label className="flex items-center justify-between">
-                  <span className="text-sm text-white">Featured Only</span>
+                  <span className="text-sm text-slate-900">Featured Only</span>
                   <button
                     onClick={() => setFilter('featured', !filters.featured)}
                     className={cn(
                       'w-11 h-6 rounded-full transition-colors relative',
-                      filters.featured ? 'theme-bg-primary' : 'bg-white/10'
+                      filters.featured ? '' : 'bg-slate-200'
                     )}
+                    style={filters.featured ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                   >
                     <div
                       className={cn(
-                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform',
+                        'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform shadow-sm',
                         filters.featured ? 'translate-x-[22px]' : 'translate-x-0.5'
                       )}
                     />
@@ -311,11 +319,11 @@ export default function FilterSheet() {
             </div>
 
             {/* Footer */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 border-t safe-area-bottom"
-              style={{ backgroundColor: 'var(--theme-bg)', borderColor: 'var(--theme-card-border)' }}>
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 safe-area-bottom">
               <button
                 onClick={() => setFilterOpen(false)}
-                className="w-full py-3 theme-bg-primary hover:opacity-90 text-white font-semibold rounded-xl transition-colors"
+                className="w-full py-3 text-white font-semibold rounded-xl transition-colors hover:opacity-90"
+                style={{ backgroundColor: 'var(--theme-primary)' }}
               >
                 Show {filteredClinics.length} Result{filteredClinics.length !== 1 ? 's' : ''}
               </button>

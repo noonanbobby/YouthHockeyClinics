@@ -183,11 +183,10 @@ export default function MapView() {
           >
             <div
               className="mx-2 mb-2 rounded-2xl border overflow-hidden"
-              data-theme-page
               style={{
                 backgroundColor: '#ffffff',
-                borderColor: 'var(--theme-card-border)',
-                boxShadow: 'var(--theme-shadow-lg)',
+                borderColor: '#e2e8f0',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.03)',
               }}
             >
               {/* Header */}
