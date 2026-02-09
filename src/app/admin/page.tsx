@@ -85,7 +85,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!session?.user?.isAdmin) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(session?.user as any)?.isAdmin) {
       setLoading(false);
       return;
     }
@@ -110,7 +111,8 @@ export default function AdminPage() {
   }
 
   // Not logged in or not admin
-  if (!session?.user?.isAdmin) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!(session?.user as any)?.isAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
         <motion.div

@@ -39,7 +39,8 @@ import TeamPicker from '@/components/TeamPicker';
 export default function SettingsPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const isAdmin = session?.user?.isAdmin || false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isAdmin = (session?.user as any)?.isAdmin || false;
   const {
     notificationsEnabled,
     setNotificationsEnabled,
