@@ -25,6 +25,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LiveBarnVenue } from '@/types';
+import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 
 function CredentialForm({
   email,
@@ -166,6 +168,7 @@ export default function IntegrationsPage() {
   );
   const [connectionStatus, setConnectionStatus] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [liveBarnLaunchVenue, setLiveBarnLaunchVenue] = useState<LiveBarnVenue | null>(null);
 
   // Get linked children names for display
   const getLinkedChildNames = () => {
@@ -843,12 +846,10 @@ export default function IntegrationsPage() {
                   <p className="text-[10px] text-slate-400 mb-2">Account: {liveBarnConfig.email}</p>
                   <div className="space-y-2 mt-3">
                     {liveBarnConfig.venues.map((venue) => (
-                      <a
+                      <button
                         key={venue.id}
-                        href={venue.streamUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-2 bg-black/20 rounded-lg active:bg-black/30 transition-colors"
+                        onClick={() => setLiveBarnLaunchVenue(venue)}
+                        className="w-full flex items-center justify-between p-2 bg-black/20 rounded-lg active:bg-black/30 transition-colors text-left"
                       >
                         <div>
                           <p className="text-xs text-white font-medium">{venue.surfaceName}</p>
@@ -871,7 +872,7 @@ export default function IntegrationsPage() {
                             </>
                           )}
                         </div>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1024,6 +1025,14 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </div>
+
+      {/* LiveBarn app launcher modal */}
+      {liveBarnLaunchVenue && (
+        <LiveBarnLauncher
+          venue={liveBarnLaunchVenue}
+          onClose={() => setLiveBarnLaunchVenue(null)}
+        />
+      )}
     </div>
   );
 }

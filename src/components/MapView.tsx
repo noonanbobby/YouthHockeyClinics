@@ -7,6 +7,7 @@ import { Clinic, LiveBarnVenue } from '@/types';
 import { formatPrice, getCountryFlag, formatDateShort, cn } from '@/lib/utils';
 import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 import 'leaflet/dist/leaflet.css';
 
 interface VenueGroup {
@@ -29,6 +30,7 @@ export default function MapView() {
   const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
   const [showCard, setShowCard] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [launchVenue, setLaunchVenue] = useState<LiveBarnVenue | null>(null);
 
   // Group clinics by venue
   const venueGroups = useMemo(() => {
@@ -412,16 +414,14 @@ export default function MapView() {
                   </div>
                 )}
 
-                {/* LiveBarn stream links */}
+                {/* LiveBarn stream buttons — opens native app launcher */}
                 {liveStreams.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {liveStreams.map((lbv) => (
-                      <a
+                      <button
                         key={lbv.id}
-                        href={lbv.streamUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors"
+                        onClick={() => setLaunchVenue(lbv)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 active:bg-red-500/20 transition-colors text-left"
                       >
                         <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
                           <Video size={20} className="text-red-400" />
@@ -439,21 +439,19 @@ export default function MapView() {
                           </span>
                           <ExternalLink size={12} className="text-red-400" />
                         </div>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
 
-                {/* Replay links */}
+                {/* Replay buttons — opens native app launcher */}
                 {replayStreams.length > 0 && (
                   <div className="space-y-1.5 mb-3">
                     {replayStreams.map((lbv) => (
-                      <a
+                      <button
                         key={lbv.id}
-                        href={lbv.streamUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors"
+                        onClick={() => setLaunchVenue(lbv)}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/10 transition-colors text-left"
                       >
                         <Video size={14} className="text-slate-500" />
                         <div className="flex-1 min-w-0">
@@ -462,7 +460,7 @@ export default function MapView() {
                           </p>
                         </div>
                         <ExternalLink size={10} className="text-slate-500" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -552,6 +550,14 @@ export default function MapView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* LiveBarn app launcher modal */}
+      {launchVenue && (
+        <LiveBarnLauncher
+          venue={launchVenue}
+          onClose={() => setLaunchVenue(null)}
+        />
+      )}
     </div>
   );
 }
