@@ -19,7 +19,6 @@ export function useClinicSearch() {
     setLastUpdated,
     setSearchMeta,
     setError,
-    apiKeys,
     autoRefreshInterval,
     isLoading,
     isRefreshing,
@@ -30,8 +29,6 @@ export function useClinicSearch() {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadDone = useRef(false);
-  // Track API keys to auto-refresh when they change
-  const prevApiKeysRef = useRef(apiKeys);
 
   const fetchClinics = useCallback(
     async (query?: string, isRefresh = false) => {
@@ -51,12 +48,8 @@ export function useClinicSearch() {
         if (query) params.set('q', query);
         if (isRefresh) params.set('refresh', 'true');
 
-        // Pass API keys as params
-        if (apiKeys.googleApiKey) params.set('googleApiKey', apiKeys.googleApiKey);
-        if (apiKeys.googleCseId) params.set('googleCseId', apiKeys.googleCseId);
-        if (apiKeys.braveApiKey) params.set('braveApiKey', apiKeys.braveApiKey);
-        if (apiKeys.tavilyApiKey) params.set('tavilyApiKey', apiKeys.tavilyApiKey);
-        if (apiKeys.eventbriteApiKey) params.set('eventbriteApiKey', apiKeys.eventbriteApiKey);
+        // API keys are now server-side only (Vercel env vars)
+        // No longer passed as URL params for security
 
         // Pass location for tiered search
         const loc = getEffectiveLocation();
@@ -116,7 +109,7 @@ export function useClinicSearch() {
         setRefreshing(false);
       }
     },
-    [apiKeys, clinics, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError, getEffectiveLocation, homeLocation]
+    [clinics, setClinics, setLoading, setRefreshing, setLastUpdated, setSearchMeta, setError, getEffectiveLocation, homeLocation]
   );
 
   // Initial load
@@ -126,18 +119,6 @@ export function useClinicSearch() {
       fetchClinics();
     }
   }, [fetchClinics]);
-
-  // Auto-refresh when API keys change (user added/removed a key in Settings)
-  useEffect(() => {
-    const prev = prevApiKeysRef.current;
-    const changed = Object.keys(apiKeys).some(
-      (k) => apiKeys[k as keyof typeof apiKeys] !== prev[k as keyof typeof prev]
-    );
-    prevApiKeysRef.current = apiKeys;
-    if (changed && initialLoadDone.current) {
-      fetchClinics(undefined, true);
-    }
-  }, [apiKeys, fetchClinics]);
 
   // Auto-refresh
   useEffect(() => {

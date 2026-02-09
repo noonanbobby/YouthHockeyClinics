@@ -97,13 +97,13 @@ export async function GET(request: NextRequest) {
   // Prepare seed clinics (always available, no network needed)
   const seedClinics = scoreAndSort(SEED_CLINICS, userLat || undefined, userLng || undefined, query);
 
-  // Build search config for network-based sources
+  // Build search config from server-side environment variables only (secure)
   const config: SearchConfig = {
-    googleApiKey: process.env.GOOGLE_API_KEY || searchParams.get('googleApiKey') || undefined,
-    googleCseId: process.env.GOOGLE_CSE_ID || searchParams.get('googleCseId') || undefined,
-    braveApiKey: process.env.BRAVE_API_KEY || searchParams.get('braveApiKey') || undefined,
-    tavilyApiKey: process.env.TAVILY_API_KEY || searchParams.get('tavilyApiKey') || undefined,
-    eventbriteApiKey: process.env.EVENTBRITE_API_KEY || searchParams.get('eventbriteApiKey') || undefined,
+    googleApiKey: process.env.GOOGLE_API_KEY || undefined,
+    googleCseId: process.env.GOOGLE_CSE_ID || undefined,
+    braveApiKey: process.env.BRAVE_API_KEY || undefined,
+    tavilyApiKey: process.env.TAVILY_API_KEY || undefined,
+    eventbriteApiKey: process.env.EVENTBRITE_API_KEY || undefined,
     maxResultsPerSource: 50,
     timeout: 4000,
     maxConcurrent: 6,

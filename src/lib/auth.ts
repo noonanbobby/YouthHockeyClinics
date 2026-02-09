@@ -4,6 +4,12 @@ import Google from 'next-auth/providers/google';
 import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 
+// Admin emails — set in Vercel env vars as comma-separated list
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
 // Only register OAuth providers when credentials are actually configured
 const providers: Provider[] = [];
 
@@ -56,11 +62,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token?.sub) {
         session.user.id = token.sub;
       }
+      session.user.isAdmin = token.isAdmin || false;
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        const email = user.email?.toLowerCase() || '';
+        token.isAdmin = ADMIN_EMAILS.includes(email);
       }
       return token;
     },

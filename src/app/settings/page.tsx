@@ -1,21 +1,17 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { useStore, getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
 import { requestNotificationPermission } from '@/hooks/useServiceWorker';
 import { getAgeGroupLabel } from '@/lib/utils';
 import {
   ArrowLeft,
-  Key,
   Bell,
+  Check,
   RefreshCw,
   Database,
-  Zap,
-  ChevronRight,
-  Check,
-  Eye,
-  EyeOff,
   Info,
   Heart,
   CalendarCheck,
@@ -32,6 +28,8 @@ import {
   Baby,
   Trash2,
   Cake,
+  Shield,
+  ChevronRight,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -40,6 +38,8 @@ import TeamPicker from '@/components/TeamPicker';
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin || false;
   const {
     notificationsEnabled,
     setNotificationsEnabled,
@@ -47,8 +47,6 @@ export default function SettingsPage() {
     setUserLocation,
     homeLocation,
     setHomeLocation,
-    apiKeys,
-    setApiKey,
     autoRefreshInterval,
     setAutoRefreshInterval,
     searchMeta,
@@ -65,9 +63,6 @@ export default function SettingsPage() {
     toggleActiveChild,
   } = useStore();
   const { refresh } = useClinicSearch();
-  const [showApiKeys, setShowApiKeys] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
-  const [savedMessage, setSavedMessage] = useState('');
   const [homeInput, setHomeInput] = useState(homeLocation ? `${homeLocation.city}, ${homeLocation.state}` : '');
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
@@ -185,12 +180,6 @@ export default function SettingsPage() {
     }
   };
 
-  const saveApiKey = (key: keyof typeof apiKeys, value: string) => {
-    setApiKey(key, value);
-    setSavedMessage(`${key} saved!`);
-    setTimeout(() => setSavedMessage(''), 2000);
-  };
-
   const handleSaveChild = () => {
     if (!childName.trim() || !childDob) return;
     const divisionValue = childDivision || undefined;
@@ -212,40 +201,6 @@ export default function SettingsPage() {
     resetForm();
   };
 
-  const apiKeyConfigs = [
-    {
-      key: 'googleApiKey' as const,
-      label: 'Google API Key',
-      description: 'Primary search. 100 free queries/day. Get a key at console.cloud.google.com',
-      placeholder: 'Enter your Google API key',
-    },
-    {
-      key: 'googleCseId' as const,
-      label: 'Google Search Engine ID',
-      description: 'Your Programmable Search Engine ID from programmablesearchengine.google.com',
-      placeholder: 'Enter your Search Engine ID',
-    },
-    {
-      key: 'braveApiKey' as const,
-      label: 'Brave Search API Key',
-      description: 'Secondary web search. Independent index, 2K free/month. Get a key at brave.com/search/api/',
-      placeholder: 'Enter your Brave Search API key',
-    },
-    {
-      key: 'tavilyApiKey' as const,
-      label: 'Tavily Search API Key',
-      description: 'AI-powered search. 1K free credits/month. Get a key at tavily.com',
-      placeholder: 'Enter your Tavily API key',
-    },
-    {
-      key: 'eventbriteApiKey' as const,
-      label: 'Eventbrite API Key',
-      description: 'Searches Eventbrite for hockey events. Get a key at eventbrite.com/platform',
-      placeholder: 'Enter your Eventbrite API key',
-    },
-  ];
-
-  const configuredKeyCount = Object.values(apiKeys).filter((v) => v).length;
   const upcomingRegs = registrations.filter(
     (r) => r.status !== 'cancelled' && r.endDate >= new Date().toISOString().split('T')[0]
   ).length;
@@ -625,89 +580,24 @@ export default function SettingsPage() {
 
         {/* Sections */}
         <div className="space-y-3">
-          {/* Search API Keys */}
-          <div className="bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden">
+          {/* Admin Dashboard Link — only visible to admins */}
+          {isAdmin && (
             <button
-              onClick={() => setExpandedSection(expandedSection === 'api' ? null : 'api')}
-              className="w-full flex items-center justify-between p-4"
+              onClick={() => router.push('/admin')}
+              className="w-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-2xl border border-amber-500/20 p-4 flex items-center justify-between active:scale-[0.98] transition-transform"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                  <Key size={18} className="text-amber-400" />
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                  <Shield size={18} className="text-amber-400" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-white">Search API Keys</p>
-                  <p className="text-xs text-slate-400">
-                    {configuredKeyCount} of {apiKeyConfigs.length} configured
-                  </p>
+                  <p className="text-sm font-semibold text-white">Admin Dashboard</p>
+                  <p className="text-xs text-slate-400">API keys, server config, users</p>
                 </div>
               </div>
-              <ChevronRight
-                size={18}
-                className={cn(
-                  'text-slate-500 transition-transform',
-                  expandedSection === 'api' && 'rotate-90'
-                )}
-              />
+              <ChevronRight size={18} className="text-slate-500" />
             </button>
-
-            <AnimatePresence>
-              {expandedSection === 'api' && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: 'auto' }}
-                  exit={{ height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-4 pb-4 space-y-4">
-                    <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                      <div className="flex items-start gap-2">
-                        <Zap size={14} className="text-amber-400 mt-0.5 shrink-0" />
-                        <p className="text-xs text-amber-300">
-                          Adding search API keys dramatically increases the number of clinics
-                          discovered. Without keys, the engine scrapes known hockey organization
-                          websites. With keys, it searches the entire internet.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setShowApiKeys(!showApiKeys)}
-                      className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors"
-                    >
-                      {showApiKeys ? <EyeOff size={14} /> : <Eye size={14} />}
-                      {showApiKeys ? 'Hide keys' : 'Show keys'}
-                    </button>
-
-                    {apiKeyConfigs.map((config) => (
-                      <div key={config.key}>
-                        <label className="text-xs font-medium text-white block mb-1">
-                          {config.label}
-                          {apiKeys[config.key] && (
-                            <Check size={12} className="inline text-emerald-400 ml-1" />
-                          )}
-                        </label>
-                        <p className="text-[10px] text-slate-500 mb-1.5">{config.description}</p>
-                        <div className="flex gap-2">
-                          <input
-                            type={showApiKeys ? 'text' : 'password'}
-                            value={apiKeys[config.key]}
-                            onChange={(e) => saveApiKey(config.key, e.target.value)}
-                            placeholder={config.placeholder}
-                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
-                          />
-                        </div>
-                      </div>
-                    ))}
-
-                    {savedMessage && (
-                      <p className="text-xs text-emerald-400">{savedMessage}</p>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          )}
 
           {/* Auto-refresh */}
           <div className="bg-white/[0.03] rounded-2xl border border-white/5 p-4">

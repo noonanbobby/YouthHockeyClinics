@@ -3,7 +3,7 @@
 import { useStore } from '@/store/useStore';
 import ClinicCard from './ClinicCard';
 import { HockeyLoader, ClinicListSkeleton } from './HockeyLoader';
-import { RefreshCw, Key, ArrowRight, MapPin, UserPlus } from 'lucide-react';
+import { RefreshCw, MapPin, UserPlus, ArrowRight } from 'lucide-react';
 import { useClinicSearch } from '@/hooks/useClinicSearch';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -21,9 +21,6 @@ export default function ListView() {
   } = useStore();
   const { refresh } = useClinicSearch();
   const router = useRouter();
-
-  const hasApiKeys = searchMeta?.hasApiKeys &&
-    (searchMeta.hasApiKeys.google || searchMeta.hasApiKeys.brave || searchMeta.hasApiKeys.tavily || searchMeta.hasApiKeys.eventbrite);
 
   // Check if user needs onboarding (no location AND no children)
   const needsSetup = !homeLocation && childProfiles.length === 0;
@@ -104,32 +101,6 @@ export default function ListView() {
         )}
 
         <div className="relative z-10 w-full max-w-sm mt-4 space-y-3">
-          {!hasApiKeys && (
-            <div className="p-4 rounded-2xl border"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)',
-                borderColor: 'var(--theme-card-border)',
-              }}>
-              <div className="flex items-center gap-2 mb-2">
-                <Key size={16} style={{ color: 'var(--theme-primary)' }} />
-                <p className="text-sm font-semibold text-white">Unlock More Results</p>
-              </div>
-              <p className="text-xs text-slate-400 mb-3">
-                Add a Google API key to unlock powerful search and discover more clinics.
-              </p>
-              <button
-                onClick={() => router.push('/settings')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors"
-                style={{
-                  backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-                  color: 'var(--theme-primary)',
-                }}
-              >
-                Add API Keys <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
-
           <button
             onClick={() => refresh()}
             disabled={isRefreshing}
@@ -258,11 +229,6 @@ export default function ListView() {
                 </div>
               ))}
           </div>
-          {!hasApiKeys && (
-            <p className="text-[10px] mt-2" style={{ color: 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' }}>
-              Add search API keys in Settings to unlock more sources
-            </p>
-          )}
         </div>
       )}
     </div>
