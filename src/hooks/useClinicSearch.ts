@@ -76,20 +76,25 @@ export function useClinicSearch() {
         const data = await response.json();
 
         if (data.success && data.clinics) {
-          setClinics(data.clinics);
-          setLastUpdated(data.meta.timestamp);
+          // If the API returned clinics, use them. Otherwise, ALWAYS fall back to seeds.
+          const clinicsToUse = data.clinics.length > 0 ? data.clinics : SEED_CLINICS;
+          setClinics(clinicsToUse);
+          setLastUpdated(data.meta?.timestamp || new Date().toISOString());
           setSearchMeta({
-            totalRaw: data.meta.totalRawResults,
-            sources: data.meta.sources,
-            searchDuration: data.meta.searchDuration,
-            hasApiKeys: data.meta.hasApiKeys,
+            totalRaw: data.meta?.totalRawResults || clinicsToUse.length,
+            sources: data.meta?.sources || [{ name: 'Curated Database', count: clinicsToUse.length, status: 'success' }],
+            searchDuration: data.meta?.searchDuration || 0,
+            hasApiKeys: data.meta?.hasApiKeys || { brave: false, tavily: false, eventbrite: false },
           });
-
-          if (data.clinics.length === 0) {
-            setError('No clinics found. Add search API keys in Settings for better results.');
-          }
         } else {
-          setError(data.error || 'Search returned no results');
+          // API returned an error — still load seeds
+          setClinics(SEED_CLINICS);
+          setSearchMeta({
+            totalRaw: SEED_CLINICS.length,
+            sources: [{ name: 'Curated Database', count: SEED_CLINICS.length, status: 'success' }],
+            searchDuration: 0,
+            hasApiKeys: { brave: false, tavily: false, eventbrite: false },
+          });
         }
       } catch (err) {
         clearTimeout(clientTimeout);

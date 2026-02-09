@@ -1084,7 +1084,7 @@ export class ClinicSearchEngine {
           const skipDomains = [
             'google.com', 'bing.com', 'facebook.com', 'twitter.com', 'instagram.com',
             'youtube.com', 'linkedin.com', 'wikipedia.org', 'amazon.com', 'reddit.com',
-            'eventbrite.com', 'active.com', 'serpapi.com',
+            'eventbrite.com', 'active.com',
           ];
           if (skipDomains.some((d) => domain.includes(d))) continue;
 

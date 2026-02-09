@@ -676,6 +676,20 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
+      version: 1,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as Record<string, unknown>;
+        if (version === 0) {
+          // Migrate from old API keys (serpApi/google/bing) to new (brave/tavily)
+          const oldKeys = state.apiKeys as Record<string, string> | undefined;
+          state.apiKeys = {
+            braveApiKey: oldKeys?.braveApiKey || '',
+            tavilyApiKey: oldKeys?.tavilyApiKey || '',
+            eventbriteApiKey: oldKeys?.eventbriteApiKey || '',
+          };
+        }
+        return state;
+      },
       partialize: (state) => ({
         favoriteIds: state.favoriteIds,
         recentSearches: state.recentSearches,
