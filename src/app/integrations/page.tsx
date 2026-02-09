@@ -150,6 +150,8 @@ export default function IntegrationsPage() {
     emailScanConfig,
     setEmailScanConfig,
     addRegistration,
+    removeRegistration,
+    registrations,
     addNotification,
   } = useStore();
 
@@ -351,6 +353,12 @@ export default function IntegrationsPage() {
     setConnectionStatus('Navigating to My Account → Orders...');
     await new Promise((resolve) => setTimeout(resolve, 800));
 
+    // Step 2b: Clear old IHP registrations before adding fresh ones
+    const oldIhpRegs = registrations.filter((r) => r.source === 'icehockeypro');
+    for (const reg of oldIhpRegs) {
+      removeRegistration(reg.id);
+    }
+
     // Step 3: Scrape order list
     const totalOrders = linkedChildren.length * 2 + 3; // Simulate finding extra orders for other families
     setConnectionStatus(`Found ${totalOrders} orders. Clicking "View" on each to check billing details...`);
@@ -456,6 +464,11 @@ export default function IntegrationsPage() {
   };
 
   const handleIhpDisconnect = () => {
+    // Remove all IHP-sourced registrations
+    const ihpRegs = registrations.filter((r) => r.source === 'icehockeypro');
+    for (const reg of ihpRegs) {
+      removeRegistration(reg.id);
+    }
     setIceHockeyProConfig({
       email: '',
       password: '',
@@ -467,7 +480,7 @@ export default function IntegrationsPage() {
     setIhpEmail('');
     setIhpPassword('');
     setIhpLinkedChildIds([]);
-    setConnectionStatus('Disconnected from IceHockeyPro.');
+    setConnectionStatus('Disconnected from IceHockeyPro. Registrations cleared.');
   };
 
   // --- Email Scanning ---
