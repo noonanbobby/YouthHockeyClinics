@@ -29,6 +29,8 @@ export function useClinicSearch() {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadDone = useRef(false);
+  // Track API keys to auto-refresh when they change
+  const prevApiKeysRef = useRef(apiKeys);
 
   const fetchClinics = useCallback(
     async (query?: string, isRefresh = false) => {
@@ -113,6 +115,18 @@ export function useClinicSearch() {
       fetchClinics();
     }
   }, [fetchClinics]);
+
+  // Auto-refresh when API keys change (user added/removed a key in Settings)
+  useEffect(() => {
+    const prev = prevApiKeysRef.current;
+    const changed = Object.keys(apiKeys).some(
+      (k) => apiKeys[k as keyof typeof apiKeys] !== prev[k as keyof typeof prev]
+    );
+    prevApiKeysRef.current = apiKeys;
+    if (changed && initialLoadDone.current) {
+      fetchClinics(undefined, true);
+    }
+  }, [apiKeys, fetchClinics]);
 
   // Auto-refresh
   useEffect(() => {

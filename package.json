@@ -9,18 +9,16 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@react-leaflet/core": "^2.1.0",
-    "@types/leaflet": "^1.9.21",
     "cheerio": "^1.2.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.33.0",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
+    "maplibre-gl": "^5.17.0",
     "next": "14.2.35",
     "next-auth": "^5.0.0-beta.30",
     "react": "^18",
     "react-dom": "^18",
-    "react-leaflet": "^4.2.1",
+    "react-map-gl": "^8.1.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

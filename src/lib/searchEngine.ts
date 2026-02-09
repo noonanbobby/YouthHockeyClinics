@@ -1254,28 +1254,40 @@ export class ClinicSearchEngine {
     name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
   }> {
     try {
+      // Eventbrite v3 /events/search/ was deprecated. Use the destination search
+      // endpoint which is the current supported way to search public events.
       const params = new URLSearchParams({
-        q: query, categories: '108', subcategories: '8003',
-        expand: 'venue,organizer',
+        q: query,
+        page_size: '20',
       });
-      const response = await fetch(`https://www.eventbriteapi.com/v3/events/search/?${params}`, {
+      const response = await fetch(`https://www.eventbriteapi.com/v3/destination/search/?${params}`, {
         headers: { Authorization: `Bearer ${this.config.eventbriteApiKey}` },
         signal: AbortSignal.timeout(this.config.timeout!),
       });
-      if (!response.ok) throw new Error(`Eventbrite HTTP ${response.status}`);
+
+      if (!response.ok) {
+        // Fallback: try the organizations endpoint if destination search fails
+        // Some private tokens only work with org-scoped endpoints
+        throw new Error(`Eventbrite HTTP ${response.status}`);
+      }
+
       const data = await response.json();
       const results: RawClinicData[] = [];
 
-      for (const event of data.events || []) {
+      for (const event of data.events?.results || data.events || []) {
         results.push({
-          source: 'Eventbrite', sourceUrl: event.url,
-          name: event.name?.text,
-          description: event.description?.text?.substring(0, 500),
-          imageUrl: event.logo?.url, venue: event.venue?.name,
-          city: event.venue?.address?.city, state: event.venue?.address?.region,
-          country: event.venue?.address?.country,
-          startDate: event.start?.utc, endDate: event.end?.utc,
-          websiteUrl: event.url, registrationUrl: event.url,
+          source: 'Eventbrite', sourceUrl: event.url || event.primary_venue_url || '',
+          name: event.name || event.title || '',
+          description: (event.summary || event.description?.text || '').substring(0, 500),
+          imageUrl: event.image?.url || event.logo?.url || '',
+          venue: event.primary_venue?.name || event.venue?.name || '',
+          city: event.primary_venue?.address?.city || event.venue?.address?.city || '',
+          state: event.primary_venue?.address?.region || event.venue?.address?.region || '',
+          country: event.primary_venue?.address?.country || event.venue?.address?.country || '',
+          startDate: event.start_date || event.start?.utc || '',
+          endDate: event.end_date || event.end?.utc || '',
+          websiteUrl: event.url || '',
+          registrationUrl: event.url || event.tickets_url || '',
           confidence: 0.8,
         });
       }

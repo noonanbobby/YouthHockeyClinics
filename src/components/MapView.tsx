@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 import type { VenueMarkerData } from './LeafletMap';
 
-// Dynamic import — SSR-safe. react-leaflet MUST NOT render on the server.
+// Dynamic import — SSR-safe. MapLibre GL must not render on the server.
 const LeafletMap = dynamic(() => import('./LeafletMap'), {
   ssr: false,
   loading: () => (
