@@ -672,11 +672,10 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 3,
+      version: 4,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
-          // Migrate API keys — preserve any existing keys, add new ones
           const oldKeys = state.apiKeys as Record<string, string> | undefined;
           state.apiKeys = {
             googleApiKey: oldKeys?.googleApiKey || '',
@@ -687,10 +686,29 @@ export const useStore = create<AppState>()(
           };
         }
         if (version < 3) {
-          // Remove LiveBarn config, add color mode
           delete state.liveBarnConfig;
           if (!state.colorMode) {
             state.colorMode = 'dark';
+          }
+        }
+        if (version < 4) {
+          // Clear fake/demo registrations from simulated integration syncs
+          const regs = state.registrations as Array<Record<string, unknown>> | undefined;
+          if (regs && regs.length > 0) {
+            state.registrations = regs.filter((r) => {
+              const src = r.source as string;
+              if (src === 'dash' || src === 'icehockeypro') return false;
+              return true;
+            });
+          }
+          // Reset integration connection status
+          if (state.daySmartConfig) {
+            (state.daySmartConfig as Record<string, unknown>).connected = false;
+            (state.daySmartConfig as Record<string, unknown>).lastSync = null;
+          }
+          if (state.iceHockeyProConfig) {
+            (state.iceHockeyProConfig as Record<string, unknown>).connected = false;
+            (state.iceHockeyProConfig as Record<string, unknown>).lastSync = null;
           }
         }
         return state;

@@ -144,7 +144,6 @@ export default function IntegrationsPage() {
     setIceHockeyProConfig,
     emailScanConfig,
     setEmailScanConfig,
-    addRegistration,
     removeRegistration,
     registrations,
     addNotification,
@@ -199,63 +198,14 @@ export default function IntegrationsPage() {
       lastSync: new Date().toISOString(),
     });
 
-    const icePlexClinics = [
-      {
-        clinicId: 'dash-skating-101',
-        clinicName: 'Learn to Skate - Session 3',
-        venue: 'Baptist Health IcePlex',
-        city: 'Fort Lauderdale',
-        startDate: '2026-03-01',
-        endDate: '2026-04-05',
-        price: 189,
-        currency: 'USD',
-        status: 'confirmed' as const,
-        source: 'dash' as const,
-        notes: 'Sundays 10:00 AM',
-        playerName: '',
-      },
-      {
-        clinicId: 'dash-power-skating',
-        clinicName: 'Power Skating Clinic',
-        venue: 'Baptist Health IcePlex',
-        city: 'Fort Lauderdale',
-        startDate: '2026-02-15',
-        endDate: '2026-02-15',
-        price: 45,
-        currency: 'USD',
-        status: 'confirmed' as const,
-        source: 'dash' as const,
-        notes: 'Saturday 2:00 PM - 3:30 PM',
-        playerName: '',
-      },
-      {
-        clinicId: 'dash-spring-camp',
-        clinicName: 'Spring Break Hockey Camp',
-        venue: 'Baptist Health IcePlex',
-        city: 'Fort Lauderdale',
-        startDate: '2026-03-16',
-        endDate: '2026-03-20',
-        price: 425,
-        currency: 'USD',
-        status: 'pending' as const,
-        source: 'dash' as const,
-        notes: 'Full day camp 9 AM - 3 PM',
-        playerName: '',
-      },
-    ];
-
-    for (const clinic of icePlexClinics) {
-      addRegistration(clinic);
-    }
-
     addNotification({
       title: 'Dash Connected',
-      body: `Synced ${icePlexClinics.length} activities from Baptist Health IcePlex`,
+      body: 'Connected to Baptist Health IcePlex. Real-time billing sync coming soon.',
       clinicId: '',
       type: 'new_clinic',
     });
 
-    setConnectionStatus('Connected! Synced activities from Baptist Health IcePlex.');
+    setConnectionStatus('Connected to Baptist Health IcePlex! Real-time registration & billing sync will import your actual data — coming in the next update.');
     setDaySmartSyncing(false);
   };
 
@@ -314,61 +264,6 @@ export default function IntegrationsPage() {
     setConnectionStatus('Matching billing details to your players...');
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const matchedActivities: Array<{
-      clinicId: string;
-      clinicName: string;
-      venue: string;
-      city: string;
-      startDate: string;
-      endDate: string;
-      price: number;
-      currency: string;
-      status: 'confirmed' | 'pending';
-      source: 'icehockeypro';
-      notes: string;
-      playerName: string;
-      childId: string;
-    }> = [];
-
-    linkedChildren.forEach((child, idx) => {
-      // Each linked child has a Max Ivanov Spring Skills registration
-      matchedActivities.push({
-        clinicId: `ihp-max-ivanov-spring-${child.id}`,
-        clinicName: 'Max Ivanov Spring Skills Camp',
-        venue: 'Panthers IceDen',
-        city: 'Coral Springs',
-        startDate: '2026-03-22',
-        endDate: '2026-03-26',
-        price: 695,
-        currency: 'USD',
-        status: 'confirmed',
-        source: 'icehockeypro',
-        notes: `Order #IHP-2026-${142 + idx} · Billing: ${child.name} · Advanced skills, 9 AM - 1 PM daily`,
-        playerName: child.name,
-        childId: child.id,
-      });
-
-      // Each linked child has an Elite Summer registration
-      matchedActivities.push({
-        clinicId: `ihp-summer-elite-${child.id}`,
-        clinicName: 'Elite Summer Hockey Program',
-        venue: 'Baptist Health IcePlex',
-        city: 'Fort Lauderdale',
-        startDate: '2026-06-15',
-        endDate: '2026-06-26',
-        price: 1250,
-        currency: 'USD',
-        status: 'confirmed',
-        source: 'icehockeypro',
-        notes: `Order #IHP-2026-${156 + idx} · Billing: ${child.name} · 2-week elite program`,
-        playerName: child.name,
-        childId: child.id,
-      });
-    });
-
-    // Skipped orders (other families' registrations on the account)
-    const skippedOrders = totalOrders - matchedActivities.length;
-
     setIceHockeyProConfig({
       email: ihpEmail,
       password: ihpPassword,
@@ -378,20 +273,16 @@ export default function IntegrationsPage() {
       linkedChildIds: ihpLinkedChildIds,
     });
 
-    for (const activity of matchedActivities) {
-      addRegistration(activity);
-    }
-
     addNotification({
       title: 'IceHockeyPro Connected',
-      body: `Synced ${matchedActivities.length} registrations for ${linkedChildren.map((c) => c.name).join(' & ')}`,
+      body: `Linked ${linkedChildren.map((c) => c.name).join(' & ')}. Real-time order sync coming soon.`,
       clinicId: '',
       type: 'new_clinic',
     });
 
     setConnectionStatus(
-      `Synced ${matchedActivities.length} registrations for ${linkedChildren.map((c) => c.name).join(' & ')}. ` +
-      `Skipped ${skippedOrders} order(s) not matching your players.`
+      `Connected for ${linkedChildren.map((c) => c.name).join(' & ')}! ` +
+      `Real-time order scraping from icehockeypro.com/my-account-2/orders/ coming in the next update.`
     );
     setSyncing(false);
   };
@@ -457,7 +348,7 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950" data-theme-page>
       <div className="safe-area-top" />
       <div className="px-4 py-4 pb-28">
         {/* Header */}

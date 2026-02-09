@@ -88,7 +88,7 @@ export default function RegistrationsPage() {
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white" data-theme-page>
       {/* Header */}
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -370,7 +370,13 @@ function RegistrationCard({
               {registration.playerName && (
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 shrink-0" />
-                  <span>{registration.playerName}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {registration.playerName.split(/[,&\/]/).map((name, i) => (
+                      <span key={i} className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                        {name.trim()}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

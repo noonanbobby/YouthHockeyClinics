@@ -208,7 +208,7 @@ export default function SettingsPage() {
     .reduce((sum, r) => sum + r.price, 0);
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950" data-theme-page>
       <div className="safe-area-top" />
       <div className="px-4 py-4 pb-28">
         {/* Header */}
@@ -221,6 +221,34 @@ export default function SettingsPage() {
           </button>
           <h1 className="text-xl font-bold text-white">Settings</h1>
         </div>
+
+        {/* Sync Status Banner */}
+        {session?.user && (
+          <div className="mb-6 p-4 rounded-2xl border"
+            style={{
+              background: 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 8%, transparent), color-mix(in srgb, var(--theme-secondary) 8%, transparent))',
+              borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+            }}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}>
+                <RefreshCw size={18} style={{ color: 'var(--theme-primary)' }} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Cloud Sync</p>
+                <p className="text-[10px] text-slate-400">
+                  Signed in as {session.user.email}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Your settings are saved locally on this device. To sync across devices (Mac &harr; iPhone),
+              set up Supabase — a free cloud database. Add <code className="text-[10px] px-1 py-0.5 rounded bg-white/5">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+              <code className="text-[10px] px-1 py-0.5 rounded bg-white/5">SUPABASE_SERVICE_ROLE_KEY</code> to your Vercel environment variables.
+            </p>
+          </div>
+        )}
 
         {/* Quick Links */}
         <div className="grid grid-cols-2 gap-2 mb-6">

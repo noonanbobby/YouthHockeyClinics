@@ -153,6 +153,113 @@ main { animation: fadeIn 0.2s ease-out; }
   animation: shimmer 1.5s infinite;
 }
 
+/* ═══════════════════════════════════════════════════════
+   Light-Mode Overrides for Hardcoded-Dark Pages
+   Pages using bg-slate-950/text-white get auto-remapped
+   when marked with data-theme-page attribute.
+   Dark mode is unaffected — these only apply in light.
+   ═══════════════════════════════════════════════════════ */
+
+/* Base container */
+html:not(.dark) [data-theme-page] {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text);
+}
+
+/* Text colors: remap hardcoded dark text to theme vars */
+html:not(.dark) [data-theme-page] .text-white {
+  color: var(--theme-text) !important;
+}
+html:not(.dark) [data-theme-page] .text-slate-200,
+html:not(.dark) [data-theme-page] .text-slate-300 {
+  color: var(--theme-text-secondary) !important;
+}
+html:not(.dark) [data-theme-page] .text-slate-400 {
+  color: var(--theme-text-secondary) !important;
+}
+html:not(.dark) [data-theme-page] .text-slate-500 {
+  color: var(--theme-text-muted) !important;
+}
+html:not(.dark) [data-theme-page] .text-slate-600 {
+  color: var(--theme-text-muted) !important;
+}
+html:not(.dark) [data-theme-page] .placeholder\:text-slate-600::placeholder {
+  color: var(--theme-text-muted) !important;
+}
+
+/* Backgrounds: remap solid dark backgrounds */
+html:not(.dark) [data-theme-page] .bg-slate-950 {
+  background-color: var(--theme-bg) !important;
+}
+html:not(.dark) [data-theme-page] .bg-slate-900,
+html:not(.dark) [data-theme-page] .bg-slate-900\/95 {
+  background-color: var(--theme-card-bg) !important;
+}
+html:not(.dark) [data-theme-page] .bg-slate-800 {
+  background-color: var(--theme-surface) !important;
+}
+html:not(.dark) [data-theme-page] .bg-slate-800\/50 {
+  background-color: color-mix(in srgb, var(--theme-surface) 50%, transparent) !important;
+}
+
+/* Semi-transparent dark backgrounds */
+html:not(.dark) [data-theme-page] .bg-white\/5,
+html:not(.dark) [data-theme-page] .bg-white\/\[0\.03\] {
+  background-color: color-mix(in srgb, var(--theme-text) 3%, var(--theme-bg)) !important;
+}
+html:not(.dark) [data-theme-page] .bg-white\/10 {
+  background-color: color-mix(in srgb, var(--theme-text) 6%, var(--theme-bg)) !important;
+}
+html:not(.dark) [data-theme-page] .bg-black\/20 {
+  background-color: color-mix(in srgb, var(--theme-text) 5%, var(--theme-bg)) !important;
+}
+html:not(.dark) [data-theme-page] .bg-black\/70 {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Borders */
+html:not(.dark) [data-theme-page] .border-slate-800,
+html:not(.dark) [data-theme-page] .border-slate-700 {
+  border-color: var(--theme-card-border) !important;
+}
+html:not(.dark) [data-theme-page] .border-white\/5,
+html:not(.dark) [data-theme-page] .border-white\/10 {
+  border-color: color-mix(in srgb, var(--theme-text) 8%, transparent) !important;
+}
+
+/* Form inputs in light mode */
+html:not(.dark) [data-theme-page] input,
+html:not(.dark) [data-theme-page] select,
+html:not(.dark) [data-theme-page] textarea {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+  border-color: var(--theme-card-border) !important;
+}
+html:not(.dark) [data-theme-page] input::placeholder,
+html:not(.dark) [data-theme-page] textarea::placeholder {
+  color: var(--theme-text-muted) !important;
+}
+html:not(.dark) [data-theme-page] option {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+/* Hover states */
+html:not(.dark) [data-theme-page] .hover\:bg-slate-800:hover {
+  background-color: var(--theme-surface) !important;
+}
+html:not(.dark) [data-theme-page] .hover\:bg-slate-700:hover {
+  background-color: var(--theme-card-bg) !important;
+}
+html:not(.dark) [data-theme-page] .hover\:text-white:hover {
+  color: var(--theme-text) !important;
+}
+
+/* Dividers */
+html:not(.dark) [data-theme-page] .divide-y > * + * {
+  border-color: var(--theme-card-border);
+}
+
 /* ─── Utility: Line Clamping ───────────────────── */
 .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
