@@ -52,6 +52,8 @@ export function useClinicSearch() {
         if (isRefresh) params.set('refresh', 'true');
 
         // Pass API keys as params
+        if (apiKeys.googleApiKey) params.set('googleApiKey', apiKeys.googleApiKey);
+        if (apiKeys.googleCseId) params.set('googleCseId', apiKeys.googleCseId);
         if (apiKeys.braveApiKey) params.set('braveApiKey', apiKeys.braveApiKey);
         if (apiKeys.tavilyApiKey) params.set('tavilyApiKey', apiKeys.tavilyApiKey);
         if (apiKeys.eventbriteApiKey) params.set('eventbriteApiKey', apiKeys.eventbriteApiKey);
@@ -84,7 +86,7 @@ export function useClinicSearch() {
             totalRaw: data.meta?.totalRawResults || clinicsToUse.length,
             sources: data.meta?.sources || [{ name: 'Curated Database', count: clinicsToUse.length, status: 'success' }],
             searchDuration: data.meta?.searchDuration || 0,
-            hasApiKeys: data.meta?.hasApiKeys || { brave: false, tavily: false, eventbrite: false },
+            hasApiKeys: data.meta?.hasApiKeys || { google: false, brave: false, tavily: false, eventbrite: false },
           });
         } else {
           // API returned an error — still load seeds

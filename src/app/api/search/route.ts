@@ -99,6 +99,8 @@ export async function GET(request: NextRequest) {
 
   // Build search config for network-based sources
   const config: SearchConfig = {
+    googleApiKey: process.env.GOOGLE_API_KEY || searchParams.get('googleApiKey') || undefined,
+    googleCseId: process.env.GOOGLE_CSE_ID || searchParams.get('googleCseId') || undefined,
     braveApiKey: process.env.BRAVE_API_KEY || searchParams.get('braveApiKey') || undefined,
     tavilyApiKey: process.env.TAVILY_API_KEY || searchParams.get('tavilyApiKey') || undefined,
     eventbriteApiKey: process.env.EVENTBRITE_API_KEY || searchParams.get('eventbriteApiKey') || undefined,
@@ -112,7 +114,7 @@ export async function GET(request: NextRequest) {
     userCountry,
   };
 
-  const hasAnyApiKey = !!(config.braveApiKey || config.tavilyApiKey || config.eventbriteApiKey);
+  const hasAnyApiKey = !!((config.googleApiKey && config.googleCseId) || config.braveApiKey || config.tavilyApiKey || config.eventbriteApiKey);
 
   // If no API keys and no force refresh, just return seeds immediately (fast path)
   if (!hasAnyApiKey && !forceRefresh && !query) {
@@ -126,7 +128,7 @@ export async function GET(request: NextRequest) {
         searchDuration: 0,
         timestamp: new Date().toISOString(),
         query: null,
-        hasApiKeys: { brave: false, tavily: false, eventbrite: false },
+        hasApiKeys: { google: false, brave: false, tavily: false, eventbrite: false },
       },
     };
     cachedResults = { data: responseData, timestamp: Date.now(), key: cacheKey };
@@ -194,6 +196,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
       query: query || null,
       hasApiKeys: {
+        google: !!(config.googleApiKey && config.googleCseId),
         brave: !!config.braveApiKey,
         tavily: !!config.tavilyApiKey,
         eventbrite: !!config.eventbriteApiKey,

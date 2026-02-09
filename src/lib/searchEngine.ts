@@ -38,6 +38,8 @@ import { geocodeLocation, calculateDistance } from './geocoder';
 import SEED_CLINICS from './seedClinics';
 
 export interface SearchConfig {
+  googleApiKey?: string;
+  googleCseId?: string;
   braveApiKey?: string;
   tavilyApiKey?: string;
   eventbriteApiKey?: string;
@@ -629,24 +631,34 @@ export class ClinicSearchEngine {
       }
     });
 
-    // PHASE 2 tasks: Search API queries (Brave + Tavily + Eventbrite)
+    // PHASE 2 tasks: Search API queries (Google + Brave + Tavily + Eventbrite)
     const searchTasks: (() => Promise<TaskResult>)[] = [];
     const searchQueries = query
       ? this.expandUserQuery(query)
       : this.selectSearchQueries();
 
-    if (this.config.braveApiKey) {
+    // Google Programmable Search Engine — primary, best quality
+    if (this.config.googleApiKey && this.config.googleCseId) {
       for (const q of searchQueries.slice(0, 10)) {
+        searchTasks.push(() => this.searchViaGoogle(q));
+      }
+    }
+
+    // Brave Search — secondary, own independent index
+    if (this.config.braveApiKey) {
+      for (const q of searchQueries.slice(0, 8)) {
         searchTasks.push(() => this.searchViaBrave(q));
       }
     }
 
+    // Tavily — AI-native search, structured extraction
     if (this.config.tavilyApiKey) {
       for (const q of searchQueries.slice(0, 6)) {
         searchTasks.push(() => this.searchViaTavily(q));
       }
     }
 
+    // Eventbrite — domain-specific event platform
     if (this.config.eventbriteApiKey) {
       const ebQueries = query
         ? [query]
@@ -1141,6 +1153,40 @@ export class ClinicSearchEngine {
   }
 
   // ── Search API Implementations ─────────────────────────────
+
+  /**
+   * Google Programmable Search Engine — best quality, 100 free queries/day
+   * https://developers.google.com/custom-search/v1/overview
+   */
+  private async searchViaGoogle(query: string): Promise<{
+    name: string; results: RawClinicData[]; status: 'success' | 'error'; error?: string;
+  }> {
+    try {
+      const params = new URLSearchParams({
+        key: this.config.googleApiKey!, cx: this.config.googleCseId!,
+        q: query, num: '10',
+      });
+      const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`, {
+        signal: AbortSignal.timeout(this.config.timeout!),
+      });
+      if (!response.ok) throw new Error(`Google HTTP ${response.status}`);
+      const data = await response.json();
+      const results: RawClinicData[] = [];
+
+      for (const item of data.items || []) {
+        results.push({
+          source: 'Google', sourceUrl: item.link, name: item.title,
+          description: item.snippet,
+          imageUrl: item.pagemap?.cse_image?.[0]?.src,
+          websiteUrl: item.link, registrationUrl: item.link,
+          confidence: this.calculateConfidence(item.title, item.snippet),
+        });
+      }
+      return { name: `Google: "${query}"`, results, status: 'success' };
+    } catch (error) {
+      return { name: `Google: "${query}"`, results: [], status: 'error', error: String(error) };
+    }
+  }
 
   /**
    * Brave Search API — own index (30B+ pages), legally safe, 2K free queries/month

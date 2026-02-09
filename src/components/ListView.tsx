@@ -23,7 +23,7 @@ export default function ListView() {
   const router = useRouter();
 
   const hasApiKeys = searchMeta?.hasApiKeys &&
-    (searchMeta.hasApiKeys.brave || searchMeta.hasApiKeys.tavily || searchMeta.hasApiKeys.eventbrite);
+    (searchMeta.hasApiKeys.google || searchMeta.hasApiKeys.brave || searchMeta.hasApiKeys.tavily || searchMeta.hasApiKeys.eventbrite);
 
   // Check if user needs onboarding (no location AND no children)
   const needsSetup = !homeLocation && childProfiles.length === 0;
@@ -115,7 +115,7 @@ export default function ListView() {
                 <p className="text-sm font-semibold text-white">Unlock More Results</p>
               </div>
               <p className="text-xs text-slate-400 mb-3">
-                Add a free Brave Search API key to discover even more clinics and camps.
+                Add a Google API key to unlock powerful search and discover more clinics.
               </p>
               <button
                 onClick={() => router.push('/settings')}

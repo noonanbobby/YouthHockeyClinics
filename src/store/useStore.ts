@@ -146,6 +146,8 @@ interface AppState {
   preferredCurrency: string;
   setPreferredCurrency: (currency: string) => void;
   apiKeys: {
+    googleApiKey: string;
+    googleCseId: string;
     braveApiKey: string;
     tavilyApiKey: string;
     eventbriteApiKey: string;
@@ -653,6 +655,8 @@ export const useStore = create<AppState>()(
       preferredCurrency: 'USD',
       setPreferredCurrency: (currency) => set({ preferredCurrency: currency }),
       apiKeys: {
+        googleApiKey: '',
+        googleCseId: '',
         braveApiKey: '',
         tavilyApiKey: '',
         eventbriteApiKey: '',
@@ -676,13 +680,15 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 1,
+      version: 2,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
-        if (version === 0) {
-          // Migrate from old API keys (serpApi/google/bing) to new (brave/tavily)
+        if (version < 2) {
+          // Migrate API keys — preserve any existing keys, add new ones
           const oldKeys = state.apiKeys as Record<string, string> | undefined;
           state.apiKeys = {
+            googleApiKey: oldKeys?.googleApiKey || '',
+            googleCseId: oldKeys?.googleCseId || '',
             braveApiKey: oldKeys?.braveApiKey || '',
             tavilyApiKey: oldKeys?.tavilyApiKey || '',
             eventbriteApiKey: oldKeys?.eventbriteApiKey || '',

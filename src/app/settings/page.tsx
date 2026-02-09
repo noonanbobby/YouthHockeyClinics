@@ -214,9 +214,21 @@ export default function SettingsPage() {
 
   const apiKeyConfigs = [
     {
+      key: 'googleApiKey' as const,
+      label: 'Google API Key',
+      description: 'Primary search. 100 free queries/day. Get a key at console.cloud.google.com',
+      placeholder: 'Enter your Google API key',
+    },
+    {
+      key: 'googleCseId' as const,
+      label: 'Google Search Engine ID',
+      description: 'Your Programmable Search Engine ID from programmablesearchengine.google.com',
+      placeholder: 'Enter your Search Engine ID',
+    },
+    {
       key: 'braveApiKey' as const,
       label: 'Brave Search API Key',
-      description: 'Primary web search. Own index, 2K free queries/month. Get a key at brave.com/search/api/',
+      description: 'Secondary web search. Independent index, 2K free/month. Get a key at brave.com/search/api/',
       placeholder: 'Enter your Brave Search API key',
     },
     {
