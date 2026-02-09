@@ -46,9 +46,6 @@ providers.push(
   })
 );
 
-// Admin emails for admin dashboard access
-const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(function(e) { return e.trim().toLowerCase(); }).filter(Boolean);
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers,
   pages: {
@@ -59,14 +56,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token?.sub) {
         session.user.id = token.sub;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (session as any).isAdmin = !!token.isAdmin;
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
-        token.isAdmin = adminEmails.indexOf((user.email || '').toLowerCase()) !== -1;
       }
       return token;
     },
