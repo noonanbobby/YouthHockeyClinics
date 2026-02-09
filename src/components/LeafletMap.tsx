@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useCallback } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, ZoomControl, AttributionControl, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -24,8 +24,9 @@ interface LeafletMapProps {
 }
 
 // ─── Marker Icon Factory ────────────────────────────────
-// 48px outer touch target (exceeds iOS 44pt minimum), 34px visual circle
-// ALL inner elements use pointer-events:none so taps always reach Leaflet's handler
+// 48px outer touch target (exceeds iOS 44pt minimum), 34px visual circle.
+// ALL inner elements use pointer-events:none so taps reach the Leaflet wrapper.
+// touch-action:manipulation eliminates 300ms iOS tap delay.
 function makeIcon(count: number, isLive: boolean, isSelected: boolean): L.DivIcon {
   const touch = 48;
   const vis = isSelected ? 40 : 34;
@@ -50,13 +51,11 @@ function makeIcon(count: number, isLive: boolean, isSelected: boolean): L.DivIco
   const emoji = isLive ? '📹' : '🏒';
   const fontSize = isSelected ? '17px' : '14px';
 
-  // Outer div is the touch target. All children have pointer-events:none
-  // so that touch/click events pass through to Leaflet's marker handler.
   return L.divIcon({
-    className: '', // No default leaflet-div-icon styles
+    className: '',
     iconSize: [touch, touch],
     iconAnchor: [touch / 2, touch / 2],
-    html: `<div style="width:${touch}px;height:${touch}px;position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+    html: `<div style="width:${touch}px;height:${touch}px;position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">
       <div style="
         pointer-events:none;
         position:absolute;top:${offset}px;left:${offset}px;
@@ -87,9 +86,21 @@ function makeIcon(count: number, isLive: boolean, isSelected: boolean): L.DivIco
 }
 
 // ─── Map click handler (dismiss card) ───────────────────
+// Includes zoom guard: iOS fires spurious click events during pinch-zoom
+// (Leaflet issue #7465). We suppress clicks that arrive while zooming.
 function MapClickHandler({ onClick }: { onClick: () => void }) {
+  const isZoomingRef = useRef(false);
+
   useMapEvents({
-    click: onClick,
+    zoomstart: () => { isZoomingRef.current = true; },
+    zoomend: () => {
+      setTimeout(() => { isZoomingRef.current = false; }, 300);
+    },
+    click: () => {
+      if (!isZoomingRef.current) {
+        onClick();
+      }
+    },
   });
   return null;
 }
@@ -111,37 +122,95 @@ function FitBounds({ markers, skip }: { markers: VenueMarkerData[]; skip: boolea
 function FlyTo({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
   useEffect(() => {
-    map.flyTo([lat, lng], 13, { duration: 0.5 });
+    map.flyTo([lat, lng], 13, { duration: 0.3 });
   }, [lat, lng, map]);
   return null;
 }
 
-// ─── Single Venue Marker (react-leaflet) ────────────────
+// ─── Single Venue Marker ────────────────────────────────
+// Uses DIRECT DOM event listeners instead of Leaflet's eventHandlers.
+// This bypasses Leaflet's _findEventTargets / _draggableMoved which
+// can swallow clicks after a map pan (Leaflet issue #2619) and has
+// various iOS-specific quirks with pointer event translation.
 function VenueMarker({
   data,
   isSelected,
-  onClick,
+  onClickRef,
 }: {
   data: VenueMarkerData;
   isSelected: boolean;
-  onClick: () => void;
+  onClickRef: React.MutableRefObject<(key: string) => void>;
 }) {
   const icon = useMemo(
     () => makeIcon(data.count, data.isLive, isSelected),
     [data.count, data.isLive, isSelected]
   );
 
-  // Wrap onClick to stop propagation — prevents map click from also firing
-  const handleClick = useCallback((e: L.LeafletMouseEvent) => {
-    L.DomEvent.stopPropagation(e);
-    onClick();
-  }, [onClick]);
+  const markerRef = useRef<L.Marker>(null);
+  const dataKeyRef = useRef(data.key);
+  dataKeyRef.current = data.key;
+
+  // Attach a direct DOM click listener to the marker's icon element.
+  // This completely bypasses Leaflet's event pipeline, avoiding:
+  // - _draggableMoved swallowing clicks after pan
+  // - pointer event translation issues on iOS
+  // - The 200ms tap handler legacy
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return;
+
+    const el = marker.getElement();
+    if (!el) return;
+
+    let touchStartTime = 0;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartTime = Date.now();
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const dt = Date.now() - touchStartTime;
+      if (dt > 500) return; // not a tap (long press)
+
+      const touch = e.changedTouches[0];
+      const dx = Math.abs(touch.clientX - touchStartX);
+      const dy = Math.abs(touch.clientY - touchStartY);
+      if (dx > 15 || dy > 15) return; // finger moved too much (drag/scroll)
+
+      // This is a genuine tap on the marker
+      e.preventDefault(); // prevent subsequent click event from firing
+      e.stopPropagation(); // prevent map from seeing this touch
+      onClickRef.current(dataKeyRef.current);
+    };
+
+    const onClickFallback = (e: MouseEvent) => {
+      // Fallback for desktop / non-touch devices
+      e.stopPropagation();
+      onClickRef.current(dataKeyRef.current);
+    };
+
+    // Touch events for mobile — these fire BEFORE click on iOS
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: false });
+    // Click for desktop fallback
+    el.addEventListener('click', onClickFallback);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('click', onClickFallback);
+    };
+  }); // intentionally no deps — re-attach after every render in case icon element changed
 
   return (
     <Marker
+      ref={markerRef}
       position={[data.lat, data.lng]}
       icon={icon}
-      eventHandlers={{ click: handleClick }}
     />
   );
 }
@@ -157,15 +226,30 @@ export default function LeafletMap({
 }: LeafletMapProps) {
   const selectedMarker = selectedKey ? markers.find((m) => m.key === selectedKey) : null;
 
+  // Stable ref for the click handler — avoids stale closures in DOM listeners
+  const onMarkerClickRef = useRef(onMarkerClick);
+  onMarkerClickRef.current = onMarkerClick;
+
   return (
     <>
-      {/* CSS fixes: Tailwind img{max-width:100%} breaks Leaflet tiles; animation for LIVE pulse */}
+      {/* CSS fixes:
+          - touch-action:manipulation eliminates 300ms iOS tap delay
+          - Tailwind img{max-width:100%} breaks Leaflet tiles
+          - leaflet-interactive gets cursor pointer for markers
+      */}
       <style jsx global>{`
-        .leaflet-container { font-family: inherit; }
+        .leaflet-container {
+          font-family: inherit;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
         .leaflet-container img,
         .leaflet-container svg { max-width: none !important; max-height: none !important; }
         .leaflet-tile-pane { pointer-events: none; }
-        .leaflet-marker-icon { outline: none !important; }
+        .leaflet-marker-icon {
+          outline: none !important;
+          touch-action: manipulation;
+        }
         @keyframes lm-pulse {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.25); opacity: 0.7; }
@@ -188,16 +272,17 @@ export default function LeafletMap({
         <ZoomControl position="bottomright" />
         <AttributionControl position="bottomleft" />
 
-        {/* Clicking the map background dismisses the venue card */}
+        {/* Clicking the map background dismisses the venue card.
+            Zoom guard prevents spurious iOS clicks during pinch-zoom. */}
         {onMapClick && <MapClickHandler onClick={onMapClick} />}
 
-        {/* Render markers — react-leaflet handles event binding cleanly */}
+        {/* Render markers with direct DOM tap handlers */}
         {markers.map((m) => (
           <VenueMarker
             key={m.key}
             data={m}
             isSelected={selectedKey === m.key}
-            onClick={() => onMarkerClick(m.key)}
+            onClickRef={onMarkerClickRef}
           />
         ))}
 
