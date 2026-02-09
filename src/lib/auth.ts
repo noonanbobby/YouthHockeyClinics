@@ -59,17 +59,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async session({ session, token }) {
-      if (token?.sub) {
-        session.user.id = token.sub;
+      try {
+        if (token?.sub) {
+          session.user.id = token.sub;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).isAdmin = !!token.isAdmin;
+      } catch {
+        // Fallback: ensure session still works even if augmentation fails
       }
-      session.user.isAdmin = token.isAdmin || false;
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
-        const email = user.email?.toLowerCase() || '';
-        token.isAdmin = ADMIN_EMAILS.includes(email);
+        try {
+          const email = (user.email || '').toLowerCase();
+          token.isAdmin = ADMIN_EMAILS.includes(email);
+        } catch {
+          token.isAdmin = false;
+        }
       }
       return token;
     },
