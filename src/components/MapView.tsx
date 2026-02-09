@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useRouter } from 'next/navigation';
-import { Clinic, LiveBarnVenue } from '@/types';
+import { Clinic, LiveBarnVenue, Registration } from '@/types';
 import { formatPrice, getCountryFlag, formatDateShort, cn } from '@/lib/utils';
-import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation, ExternalLink } from 'lucide-react';
+import { X, ChevronRight, Video, MapPin, Calendar, Users, Navigation, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LiveBarnLauncher from '@/components/LiveBarnLauncher';
 import 'leaflet/dist/leaflet.css';
@@ -22,7 +22,7 @@ interface VenueGroup {
 }
 
 export default function MapView() {
-  const { filteredClinics, isLoading, liveBarnConfig, homeLocation } = useStore();
+  const { filteredClinics, isLoading, liveBarnConfig, homeLocation, registrations, childProfiles, activeChildIds } = useStore();
   const router = useRouter();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -61,6 +61,14 @@ export default function MapView() {
     return groups;
   }, [filteredClinics]);
 
+  // --- STABLE REFs so marker click handlers and marker effects never go stale ---
+  const showCardRef = useRef(showCard);
+  useEffect(() => { showCardRef.current = showCard; }, [showCard]);
+  const venueGroupsRef = useRef(venueGroups);
+  useEffect(() => {
+    venueGroupsRef.current = venueGroups;
+  }, [venueGroups]);
+
   // Selected venue data
   const selectedVenue = useMemo(
     () => (selectedVenueKey ? venueGroups.get(selectedVenueKey) || null : null),
@@ -97,6 +105,12 @@ export default function MapView() {
     [isVenueNameLive]
   );
 
+  // Ref for isGroupLive too (used in marker creation)
+  const isGroupLiveRef = useRef(isGroupLive);
+  useEffect(() => {
+    isGroupLiveRef.current = isGroupLive;
+  }, [isGroupLive]);
+
   // Get LiveBarn venue data for a venue name
   const getLiveBarnVenuesForName = useCallback(
     (venueName: string): LiveBarnVenue[] => {
@@ -110,28 +124,63 @@ export default function MapView() {
     [liveBarnConfig.connected, liveBarnConfig.venues]
   );
 
+  // Active children info
+  const activeChildren = useMemo(
+    () => childProfiles.filter((c) => activeChildIds.includes(c.id)),
+    [childProfiles, activeChildIds]
+  );
+
+  // Check if a child is registered for a clinic
+  const getRegistrationForClinic = useCallback(
+    (clinic: Clinic, childId: string): Registration | undefined => {
+      const child = childProfiles.find((c) => c.id === childId);
+      if (!child) return undefined;
+      return registrations.find((r) => {
+        // Match by clinic name (fuzzy) and child name
+        const nameMatch =
+          r.clinicName.toLowerCase().includes(clinic.name.toLowerCase().slice(0, 20)) ||
+          clinic.name.toLowerCase().includes(r.clinicName.toLowerCase().slice(0, 20));
+        const childMatch =
+          r.playerName?.toLowerCase() === child.name.toLowerCase() ||
+          r.childId === childId;
+        return nameMatch && childMatch;
+      });
+    },
+    [registrations, childProfiles]
+  );
+
+  // Get overlapping clinics from registrations for a given clinic
+  const getOverlappingRegistrations = useCallback(
+    (clinic: Clinic): Registration[] => {
+      return registrations.filter((r) => {
+        if (r.status === 'cancelled') return false;
+        // Check date overlap
+        return clinic.dates.start <= r.endDate && r.startDate <= clinic.dates.end;
+      });
+    },
+    [registrations]
+  );
+
   // Dismiss card
   const dismissCard = useCallback(() => {
     setShowCard(false);
     setTimeout(() => setSelectedVenueKey(null), 300);
   }, []);
 
-  // Select a venue
-  const selectVenue = useCallback(
-    (key: string | null) => {
-      if (key) {
-        const group = venueGroups.get(key);
-        setSelectedVenueKey(key);
-        setShowCard(true);
-        if (group) {
-          mapInstanceRef.current?.flyTo([group.lat, group.lng], 13, { duration: 0.5 });
-        }
-      } else {
-        dismissCard();
+  // --- STABLE marker click handler using ref ---
+  // This avoids stale closures: markers call handleMarkerClickRef.current(key)
+  // which always points to the latest function that has access to current venueGroups.
+  const handleMarkerClickRef = useRef<(key: string) => void>(() => {});
+  useEffect(() => {
+    handleMarkerClickRef.current = (key: string) => {
+      const group = venueGroupsRef.current.get(key);
+      setSelectedVenueKey(key);
+      setShowCard(true);
+      if (group && mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([group.lat, group.lng], 13, { duration: 0.5 });
       }
-    },
-    [dismissCard, venueGroups]
-  );
+    };
+  }, []); // No deps needed — reads from refs
 
   // Initialize map
   useEffect(() => {
@@ -150,6 +199,8 @@ export default function MapView() {
         zoom: defaultZoom,
         zoomControl: false,
         attributionControl: false,
+        // Prevent double-tap zoom from stealing marker clicks on mobile
+        doubleClickZoom: false,
       });
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -161,6 +212,9 @@ export default function MapView() {
       map.attributionControl.addAttribution(
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
       );
+
+      // Re-enable zoom via button/scroll, just not double-click
+      // (double-click interferes with marker taps on mobile)
 
       mapInstanceRef.current = map;
       markersRef.current = L.layerGroup().addTo(map);
@@ -178,6 +232,7 @@ export default function MapView() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update markers when venue groups change
+  // IMPORTANT: Does NOT depend on selectVenue or selectedVenueKey to avoid stale closures
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !markersRef.current) return;
 
@@ -191,26 +246,25 @@ export default function MapView() {
         const { lat, lng, clinics, key } = group;
         bounds.push([lat, lng]);
 
-        const isLive = isGroupLive(group);
-        const isSelected = selectedVenueKey === key;
+        const isLive = isGroupLiveRef.current(group);
         const count = clinics.length;
-        const size = isSelected ? 46 : 36;
+        const size = 38;
 
         const icon = L.divIcon({
           className: 'custom-marker',
-          html: `<div style="position:relative; cursor:pointer;">
+          html: `<div style="position:relative; cursor:pointer; pointer-events:auto;">
             <div style="
-              background: ${isSelected ? 'var(--theme-primary)' : isLive ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))'};
+              background: ${isLive ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))'};
               width: ${size}px;
               height: ${size}px;
               border-radius: 50% 50% 50% 0;
               transform: rotate(-45deg);
-              border: 3px solid ${isSelected ? '#fff' : isLive ? '#fca5a5' : 'rgba(255,255,255,0.3)'};
+              border: 3px solid ${isLive ? '#fca5a5' : 'rgba(255,255,255,0.3)'};
               display: flex; align-items: center; justify-content: center;
-              box-shadow: ${isLive ? '0 0 24px rgba(239,68,68,0.5), 0 0 8px rgba(239,68,68,0.3)' : isSelected ? '0 0 16px rgba(var(--theme-primary-rgb, 56,189,248),0.3)' : '0 4px 12px rgba(0,0,0,0.4)'};
+              box-shadow: ${isLive ? '0 0 24px rgba(239,68,68,0.5), 0 0 8px rgba(239,68,68,0.3)' : '0 4px 12px rgba(0,0,0,0.4)'};
               transition: all 0.2s;
             ">
-              <span style="transform: rotate(45deg); font-size: ${isSelected ? '19px' : '15px'};">${isLive ? '📹' : '🏒'}</span>
+              <span style="transform: rotate(45deg); font-size: 15px;">${isLive ? '📹' : '🏒'}</span>
             </div>
             ${count > 1 ? `<div style="
               position: absolute; top: -8px; left: -4px;
@@ -232,16 +286,16 @@ export default function MapView() {
           iconAnchor: [size / 2, size],
         });
 
-        const marker = L.marker([lat, lng], { icon }).on('click', (e: L.LeafletEvent) => {
-          L.DomEvent.stopPropagation(e as L.LeafletMouseEvent);
-          selectVenue(key);
+        // Use ref-based click handler — never goes stale
+        const marker = L.marker([lat, lng], { icon }).on('click', () => {
+          handleMarkerClickRef.current(key);
         });
 
         markersRef.current!.addLayer(marker);
       });
 
       // Fit bounds if we have markers and nothing is selected
-      if (bounds.length > 0 && !selectedVenueKey) {
+      if (bounds.length > 0 && !showCardRef.current) {
         try {
           mapInstanceRef.current!.fitBounds(bounds as L.LatLngBoundsExpression, {
             padding: [50, 50],
@@ -254,7 +308,7 @@ export default function MapView() {
     };
 
     updateMarkers();
-  }, [venueGroups, mapReady, selectedVenueKey, isGroupLive, selectVenue]);
+  }, [venueGroups, mapReady]); // Only depends on data + mapReady, NOT callbacks
 
   // LiveBarn venues for the selected venue
   const selectedLiveBarnVenues = useMemo(
@@ -284,6 +338,7 @@ export default function MapView() {
           0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
           50% { box-shadow: 0 0 24px 6px rgba(239, 68, 68, 0.12); }
         }
+        .custom-marker { background: none !important; border: none !important; }
       `}</style>
 
       {/* Loading overlay */}
@@ -472,78 +527,129 @@ export default function MapView() {
                   </p>
                 </div>
 
-                {/* Clinic cards */}
+                {/* Clinic cards with registration status */}
                 <div className="space-y-2">
-                  {selectedVenue.clinics.map((clinic) => (
-                    <button
-                      key={clinic.id}
-                      onClick={() => router.push(`/clinic/${clinic.id}`)}
-                      className="w-full text-left p-3 rounded-xl bg-white/[0.03] border border-white/5 active:bg-white/[0.06] transition-colors"
-                    >
-                      <div className="flex gap-3">
-                        {clinic.imageUrl && (
-                          <img // eslint-disable-line @next/next/no-img-element
-                            src={clinic.imageUrl}
-                            alt=""
-                            className="w-14 h-14 rounded-lg object-cover shrink-0"
-                          />
+                  {selectedVenue.clinics.map((clinic) => {
+                    // Per-child registration status
+                    const childStatuses = activeChildren.map((child) => ({
+                      child,
+                      registration: getRegistrationForClinic(clinic, child.id),
+                    }));
+                    const anyRegistered = childStatuses.some((s) => s.registration);
+
+                    // Schedule overlap detection
+                    const overlaps = getOverlappingRegistrations(clinic);
+                    const hasOverlap = overlaps.length > 0 && !anyRegistered;
+
+                    return (
+                      <button
+                        key={clinic.id}
+                        onClick={() => router.push(`/clinic/${clinic.id}`)}
+                        className={cn(
+                          'w-full text-left p-3 rounded-xl border transition-colors',
+                          anyRegistered
+                            ? 'bg-emerald-500/[0.06] border-emerald-500/20 active:bg-emerald-500/10'
+                            : 'bg-white/[0.03] border-white/5 active:bg-white/[0.06]'
                         )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">
-                            {clinic.name}
-                          </h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex items-center gap-1">
-                              <Calendar size={9} className="text-slate-500" />
-                              <span
-                                className="text-[10px]"
-                                style={{ color: 'var(--theme-primary)' }}
-                              >
-                                {formatDateShort(clinic.dates.start)}
-                                {clinic.dates.start !== clinic.dates.end &&
-                                  ` – ${formatDateShort(clinic.dates.end)}`}
-                              </span>
-                            </div>
-                            {clinic.spotsRemaining > 0 && (
+                      >
+                        <div className="flex gap-3">
+                          {clinic.imageUrl && (
+                            <img // eslint-disable-line @next/next/no-img-element
+                              src={clinic.imageUrl}
+                              alt=""
+                              className="w-14 h-14 rounded-lg object-cover shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">
+                              {clinic.name}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-1">
                               <div className="flex items-center gap-1">
-                                <Users size={9} className="text-slate-500" />
+                                <Calendar size={9} className="text-slate-500" />
                                 <span
-                                  className={cn(
-                                    'text-[10px]',
-                                    clinic.spotsRemaining <= 5
-                                      ? 'text-red-400'
-                                      : 'text-slate-400'
-                                  )}
+                                  className="text-[10px]"
+                                  style={{ color: 'var(--theme-primary)' }}
                                 >
-                                  {clinic.spotsRemaining} spots
+                                  {formatDateShort(clinic.dates.start)}
+                                  {clinic.dates.start !== clinic.dates.end &&
+                                    ` – ${formatDateShort(clinic.dates.end)}`}
+                                </span>
+                              </div>
+                              {clinic.spotsRemaining > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <Users size={9} className="text-slate-500" />
+                                  <span
+                                    className={cn(
+                                      'text-[10px]',
+                                      clinic.spotsRemaining <= 5
+                                        ? 'text-red-400'
+                                        : 'text-slate-400'
+                                    )}
+                                  >
+                                    {clinic.spotsRemaining} spots
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Registration status per child */}
+                            {activeChildren.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {childStatuses.map(({ child, registration }) => (
+                                  <span
+                                    key={child.id}
+                                    className={cn(
+                                      'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold',
+                                      registration
+                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                        : 'bg-white/5 text-slate-500'
+                                    )}
+                                  >
+                                    {registration ? (
+                                      <CheckCircle2 size={8} />
+                                    ) : null}
+                                    {child.name}{registration ? ' Registered' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Schedule overlap warning */}
+                            {hasOverlap && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <AlertTriangle size={9} className="text-amber-400" />
+                                <span className="text-[9px] text-amber-400 font-medium">
+                                  Overlaps with {overlaps[0].clinicName}
                                 </span>
                               </div>
                             )}
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <div>
-                              {clinic.price.amount > 0 ? (
-                                <span className="text-sm font-bold text-white">
-                                  {formatPrice(clinic.price.amount, clinic.price.currency)}
-                                </span>
-                              ) : (
-                                <span className="text-sm font-bold text-emerald-400">
-                                  Free
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className="flex items-center gap-1 text-[10px] font-medium"
-                              style={{ color: 'var(--theme-primary)' }}
-                            >
-                              View Details
-                              <ChevronRight size={12} />
+
+                            <div className="flex items-center justify-between mt-1.5">
+                              <div>
+                                {clinic.price.amount > 0 ? (
+                                  <span className="text-sm font-bold text-white">
+                                    {formatPrice(clinic.price.amount, clinic.price.currency)}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-bold text-emerald-400">
+                                    Free
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className="flex items-center gap-1 text-[10px] font-medium"
+                                style={{ color: 'var(--theme-primary)' }}
+                              >
+                                View Details
+                                <ChevronRight size={12} />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

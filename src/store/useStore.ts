@@ -265,7 +265,7 @@ export const useStore = create<AppState>()(
         get().applyFilters();
       },
       applyFilters: () => {
-        const { filters, clinics } = get();
+        const { filters, clinics, activeChildIds, childProfiles, registrations } = get();
         let result = [...clinics];
 
         // Search (with basic fuzzy tolerance — ignores extra spaces, case)
@@ -326,12 +326,46 @@ export const useStore = create<AppState>()(
           result = result.filter((c) => c.price.amount <= filters.maxPrice! || c.price.amount === 0);
         }
 
-        // Goalie-specific
+        // Goalie-specific: when goalieOnly is ON, show only goalie clinics
         if (filters.goalieOnly) {
           result = result.filter((c) => {
             const text = `${c.name} ${c.description} ${c.tags.join(' ')}`.toLowerCase();
             return text.includes('goalie') || text.includes('goaltend') || text.includes('goaltending') || text.includes('netminder');
           });
+        }
+
+        // Auto-filter: when all active children are players (not goalies), hide goalie-specific clinics
+        // This prevents recommending goalie clinics to kids who are players
+        if (!filters.goalieOnly && activeChildIds.length > 0) {
+          const activeKids = childProfiles.filter((c) => activeChildIds.includes(c.id));
+          const allPlayers = activeKids.length > 0 && activeKids.every((c) => c.position === 'player');
+          if (allPlayers) {
+            result = result.filter((c) => {
+              const text = `${c.name} ${c.description} ${c.tags.join(' ')}`.toLowerCase();
+              // Only exclude clinics that are specifically goalie-focused
+              const isGoalieOnly =
+                (text.includes('goalie') || text.includes('goaltend') || text.includes('goaltending') || text.includes('netminder')) &&
+                !text.includes('skater') && !text.includes('player') && !text.includes('all positions');
+              return !isGoalieOnly;
+            });
+          }
+        }
+
+        // Exclude clinics the kids are already registered for
+        // Registered clinics shouldn't show up as recommendations
+        if (registrations.length > 0) {
+          const activeRegs = registrations.filter((r) => r.status !== 'cancelled');
+          if (activeRegs.length > 0) {
+            result = result.filter((c) => {
+              const clinicName = c.name.toLowerCase();
+              return !activeRegs.some((r) => {
+                const regName = r.clinicName.toLowerCase();
+                // Fuzzy match: check if first 20 chars of either match
+                return regName.includes(clinicName.slice(0, 20)) ||
+                  clinicName.includes(regName.slice(0, 20));
+              });
+            });
+          }
         }
 
         // Spots available

@@ -2,7 +2,7 @@
 
 import { Clinic } from '@/types';
 import { formatDateRange, formatPrice, getClinicTypeLabel, getSpotsColor, getCountryFlag, cn, timeUntil } from '@/lib/utils';
-import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video, Award } from 'lucide-react';
+import { Calendar, MapPin, Users, Star, Heart, Clock, ChevronRight, Video, Award, AlertTriangle } from 'lucide-react';
 import { useStore, getAgeGroupFromDOB } from '@/store/useStore';
 import { calculateDistance } from '@/lib/geocoder';
 import { motion } from 'framer-motion';
@@ -29,6 +29,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     getEffectiveLocation,
     childProfiles,
     activeChildIds,
+    registrations,
   } = useStore();
   const router = useRouter();
   const fav = isFavorite(clinic.id);
@@ -58,6 +59,13 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     return clinic.ageGroups.includes(ag) || clinic.ageGroups.includes('all');
   });
   const isAgeMatch = matchingChildren.length > 0;
+
+  // Schedule overlap detection — warn if this clinic overlaps with any active registration
+  const activeRegs = registrations.filter((r) => r.status !== 'cancelled');
+  const overlappingRegs = activeRegs.filter((r) => {
+    return clinic.dates.start <= r.endDate && r.startDate <= clinic.dates.end;
+  });
+  const hasOverlap = overlappingRegs.length > 0;
 
   return (
     <motion.div
@@ -112,6 +120,11 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
             {isAgeMatch && matchingChildren.length > 0 && (
               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-violet-500/15 text-violet-300">
                 Fits {matchingChildren.map((c) => c.name).join(' & ')}
+              </span>
+            )}
+            {hasOverlap && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400">
+                <AlertTriangle size={9} /> Overlap
               </span>
             )}
             {hasLiveStream && (
