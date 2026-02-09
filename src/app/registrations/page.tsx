@@ -528,7 +528,7 @@ function CalendarView({
                   'aspect-square p-2 rounded-lg text-sm transition-all relative',
                   isCurrentMonth
                     ? 'text-slate-900 hover:bg-slate-100'
-                    : 'text-slate-300',
+                    : 'text-slate-400',
                   isSelected ? 'text-white' : '',
                   !isSelected && hasRegistrations ? 'font-semibold' : ''
                 )}

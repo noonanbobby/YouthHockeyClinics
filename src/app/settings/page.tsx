@@ -222,31 +222,23 @@ export default function SettingsPage() {
           <h1 className="text-xl font-bold text-slate-900">Settings</h1>
         </div>
 
-        {/* Sync Status Banner */}
+        {/* Sync Status Banner — only show when signed in */}
         {session?.user && (
-          <div className="mb-6 p-4 rounded-2xl border"
-            style={{
-              background: 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 8%, transparent), color-mix(in srgb, var(--theme-secondary) 8%, transparent))',
-              borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-            }}
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}>
-                <RefreshCw size={18} style={{ color: 'var(--theme-primary)' }} />
+          <div className="mb-6 p-4 rounded-2xl border bg-white border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                <RefreshCw size={18} className="text-emerald-600" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-900">Cloud Sync</p>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-slate-500 truncate">
                   Signed in as {session.user.email}
                 </p>
               </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                Active
+              </span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Your settings are saved locally on this device. To sync across devices (Mac &harr; iPhone),
-              set up Supabase — a free cloud database. Add <code className="text-[10px] px-1 py-0.5 rounded bg-slate-50">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-              <code className="text-[10px] px-1 py-0.5 rounded bg-slate-50">SUPABASE_SERVICE_ROLE_KEY</code> to your Vercel environment variables.
-            </p>
           </div>
         )}
 
@@ -361,7 +353,7 @@ export default function SettingsPage() {
                     value={childName}
                     onChange={(e) => setChildName(e.target.value)}
                     placeholder="Child's first name"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-600 focus:outline-none focus:border-violet-400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-violet-400"
                   />
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-1">Date of Birth</label>
@@ -586,11 +578,8 @@ export default function SettingsPage() {
           )}
           <button
             onClick={() => refresh()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors"
-            style={{
-              backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-              color: 'var(--theme-accent)',
-            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl transition-colors text-white"
+            style={{ backgroundColor: 'var(--theme-primary)' }}
           >
             <RefreshCw size={14} />
             Scan Now
@@ -639,13 +628,11 @@ export default function SettingsPage() {
                   className={cn(
                     'flex-1 py-2 text-xs font-medium rounded-lg transition-colors border',
                     autoRefreshInterval === minutes
-                      ? 'border-transparent'
+                      ? 'text-white border-transparent'
                       : 'bg-slate-50 text-slate-500 border-slate-200'
                   )}
                   style={autoRefreshInterval === minutes ? {
-                    backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-                    color: 'var(--theme-accent)',
-                    borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                    backgroundColor: 'var(--theme-primary)',
                   } : undefined}
                 >
                   {minutes === 0 ? 'Off' : `${minutes}m`}
@@ -670,7 +657,7 @@ export default function SettingsPage() {
                 onClick={handleNotificationToggle}
                 className={cn(
                   'w-11 h-6 rounded-full transition-colors relative',
-                  notificationsEnabled ? '' : 'bg-slate-100'
+                  notificationsEnabled ? '' : 'bg-slate-200'
                 )}
                 style={notificationsEnabled ? { backgroundColor: 'var(--theme-primary)' } : undefined}
               >
@@ -726,12 +713,12 @@ export default function SettingsPage() {
                   if (e.key === 'Enter') geocodeHome(homeInput);
                 }}
                 placeholder="Enter city (e.g. Fort Lauderdale, FL)"
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-600 focus:outline-none focus:border-green-500/50"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-green-500/50"
               />
               <button
                 onClick={() => geocodeHome(homeInput)}
                 disabled={isGeolocating || !homeInput.trim()}
-                className="px-3 py-2.5 text-slate-900 text-xs font-medium rounded-xl disabled:opacity-40 transition-colors"
+                className="px-4 py-2.5 text-white text-xs font-semibold rounded-xl disabled:opacity-40 transition-colors"
                 style={{ backgroundColor: 'var(--theme-primary)' }}
               >
                 {isGeolocating ? <Loader2 size={14} className="animate-spin" /> : 'Set'}
@@ -780,11 +767,8 @@ export default function SettingsPage() {
               <div className="mt-3 pt-3 border-t border-slate-200">
                 <p className="text-[10px] text-slate-500 font-medium mb-1">SEARCH PRIORITY</p>
                 <div className="flex flex-wrap gap-1">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                    style={{
-                      backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-                      color: 'var(--theme-accent)',
-                    }}>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
+                    style={{ backgroundColor: 'var(--theme-primary)' }}>
                     1. {homeLocation.city}
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">

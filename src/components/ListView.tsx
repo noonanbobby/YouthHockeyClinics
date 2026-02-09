@@ -138,7 +138,7 @@ export default function ListView() {
               <div className="space-y-2">
                 <button
                   onClick={() => router.push('/settings')}
-                  className="w-full flex items-center gap-2.5 p-2.5 bg-white/60 rounded-xl text-left active:scale-[0.98] transition-transform border border-white/80"
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-white rounded-xl text-left active:scale-[0.98] transition-transform border border-slate-200"
                 >
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                     style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
@@ -152,7 +152,7 @@ export default function ListView() {
                 </button>
                 <button
                   onClick={() => router.push('/settings')}
-                  className="w-full flex items-center gap-2.5 p-2.5 bg-white/60 rounded-xl text-left active:scale-[0.98] transition-transform border border-white/80"
+                  className="w-full flex items-center gap-2.5 p-2.5 bg-white rounded-xl text-left active:scale-[0.98] transition-transform border border-slate-200"
                 >
                   <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                     <MapPin size={14} className="text-emerald-600" />

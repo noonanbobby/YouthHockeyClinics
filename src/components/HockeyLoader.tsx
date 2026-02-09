@@ -37,7 +37,7 @@ export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'l
 
         {/* Bouncing shadow */}
         <motion.div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-white/5"
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-slate-200"
           animate={{
             width: [puckSize * 0.6, puckSize * 0.8, puckSize * 0.6],
             height: [3, 5, 3],
@@ -61,7 +61,7 @@ export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'l
 
       {message && (
         <motion.p
-          className={cn(textSize, 'text-slate-400 text-center')}
+          className={cn(textSize, 'text-slate-500 text-center')}
           animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
@@ -78,27 +78,27 @@ export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'l
  */
 export function ClinicCardSkeleton() {
   return (
-    <div className="bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden animate-pulse">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden animate-pulse shadow-sm">
       {/* Image skeleton */}
-      <div className="h-36 bg-white/[0.04] relative">
-        <div className="absolute top-3 left-3 w-16 h-5 bg-white/[0.06] rounded-full" />
-        <div className="absolute top-3 right-3 w-8 h-8 bg-white/[0.06] rounded-full" />
+      <div className="h-36 bg-slate-100 relative">
+        <div className="absolute top-3 left-3 w-16 h-5 bg-slate-200 rounded-full" />
+        <div className="absolute top-3 right-3 w-8 h-8 bg-slate-200 rounded-full" />
       </div>
       {/* Content skeleton */}
       <div className="p-3 space-y-2.5">
-        <div className="h-4 bg-white/[0.06] rounded-lg w-3/4" />
+        <div className="h-4 bg-slate-200 rounded-lg w-3/4" />
         <div className="flex items-center gap-2">
-          <div className="h-3 bg-white/[0.04] rounded w-20" />
-          <div className="h-3 bg-white/[0.04] rounded w-16" />
+          <div className="h-3 bg-slate-100 rounded w-20" />
+          <div className="h-3 bg-slate-100 rounded w-16" />
         </div>
         <div className="flex items-center justify-between pt-1">
-          <div className="h-3.5 bg-white/[0.06] rounded w-14" />
-          <div className="h-3 bg-white/[0.04] rounded w-24" />
+          <div className="h-3.5 bg-slate-200 rounded w-14" />
+          <div className="h-3 bg-slate-100 rounded w-24" />
         </div>
         <div className="flex gap-1.5 pt-0.5">
-          <div className="h-5 bg-white/[0.04] rounded-full w-14" />
-          <div className="h-5 bg-white/[0.04] rounded-full w-18" />
-          <div className="h-5 bg-white/[0.04] rounded-full w-12" />
+          <div className="h-5 bg-slate-100 rounded-full w-14" />
+          <div className="h-5 bg-slate-100 rounded-full w-18" />
+          <div className="h-5 bg-slate-100 rounded-full w-12" />
         </div>
       </div>
     </div>

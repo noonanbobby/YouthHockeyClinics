@@ -98,7 +98,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide"
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
-                color: 'var(--theme-accent)',
+                color: 'var(--theme-primary)',
               }}
             >
               {TYPE_ICONS[clinic.type] || '🏒'} {getClinicTypeLabel(clinic.type)}
@@ -224,7 +224,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
           style={{ borderColor: 'var(--theme-card-border)' }}
         >
           <div className="flex items-center gap-4">
-            <span className="text-xl font-extrabold" style={{ color: 'var(--theme-accent)' }}>
+            <span className="text-xl font-extrabold" style={{ color: 'var(--theme-primary)' }}>
               {clinic.price.amount > 0
                 ? formatPrice(clinic.price.amount, clinic.price.currency)
                 : 'Free'}

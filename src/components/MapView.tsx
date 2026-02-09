@@ -202,10 +202,10 @@ export default function MapView() {
                   <X size={20} style={{ color: '#475569' }} />
                 </button>
                 <div className="pr-10">
-                  <h3 className="text-base font-bold text-white leading-tight">{selectedVenue.venue}</h3>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">{selectedVenue.venue}</h3>
                   <div className="flex items-center gap-1 mt-0.5">
                     <MapPin size={10} className="text-slate-500 shrink-0" />
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-500">
                       {getCountryFlag(selectedVenue.countryCode)} {selectedVenue.city}, {selectedVenue.country}
                     </p>
                   </div>
@@ -216,7 +216,7 @@ export default function MapView() {
               <div className="max-h-[55vh] overflow-y-auto overscroll-contain px-4 pb-4">
                 {/* Clinics list */}
                 <div className="flex items-center justify-between mb-2 mt-1">
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                     {selectedVenue.clinics.length} Camp{selectedVenue.clinics.length !== 1 ? 's' : ''} at This Venue
                   </p>
                 </div>
@@ -250,7 +250,7 @@ export default function MapView() {
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-semibold text-white leading-tight line-clamp-2">{clinic.name}</h4>
+                            <h4 className="text-sm font-semibold text-slate-900 leading-tight line-clamp-2">{clinic.name}</h4>
                             <div className="flex items-center gap-2 mt-1">
                               <div className="flex items-center gap-1">
                                 <Calendar size={9} className="text-slate-500" />
@@ -299,11 +299,11 @@ export default function MapView() {
                             <div className="flex items-center justify-between mt-1.5">
                               <div>
                                 {clinic.price.amount > 0 ? (
-                                  <span className="text-sm font-bold text-white">
+                                  <span className="text-sm font-bold text-slate-900">
                                     {formatPrice(clinic.price.amount, clinic.price.currency)}
                                   </span>
                                 ) : (
-                                  <span className="text-sm font-bold text-emerald-400">Free</span>
+                                  <span className="text-sm font-bold text-emerald-600">Free</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--theme-primary)' }}>

@@ -117,7 +117,7 @@ export default function LoginPage() {
                   disabled={!!isLoading}
                   className={cn(
                     'w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border transition-all font-medium text-sm',
-                    'bg-white text-slate-900 border-white/20 hover:bg-slate-100 active:scale-[0.98]',
+                    'bg-white text-slate-900 border-slate-200 hover:bg-slate-50 active:scale-[0.98]',
                     isLoading === 'google' && 'opacity-70'
                   )}
                 >
@@ -141,7 +141,7 @@ export default function LoginPage() {
                   disabled={!!isLoading}
                   className={cn(
                     'w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border transition-all font-medium text-sm',
-                    'bg-black text-white border-white/20 hover:bg-slate-900 active:scale-[0.98]',
+                    'bg-black text-white border-slate-800 hover:bg-slate-800 active:scale-[0.98]',
                     isLoading === 'apple' && 'opacity-70'
                   )}
                 >
@@ -180,7 +180,7 @@ export default function LoginPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-400 focus:outline-none focus:border-sky-500/50"
               style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-card-border)' }}
             />
           </div>
@@ -192,7 +192,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email address"
-              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-600 focus:outline-none focus:border-sky-500/50"
+              className="w-full border rounded-xl pl-11 pr-4 py-3 text-sm theme-text placeholder:text-slate-400 focus:outline-none focus:border-sky-500/50"
               style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-card-border)' }}
             />
           </div>
@@ -212,7 +212,7 @@ export default function LoginPage() {
             }}
           >
             {isLoading === 'email' ? (
-              <div className="w-5 h-5 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
                 Continue with Email

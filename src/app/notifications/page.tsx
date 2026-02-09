@@ -61,17 +61,17 @@ export default function NotificationsPage() {
   const getAccentColor = (type: string) => {
     switch (type) {
       case 'new_clinic':
-        return { bg: 'bg-sky-500/5', border: 'border-sky-500/20', dot: 'bg-sky-400' };
+        return { bg: 'bg-sky-50', border: 'border-sky-200', dot: 'bg-sky-500' };
       case 'spots_low':
-        return { bg: 'bg-orange-500/5', border: 'border-orange-500/20', dot: 'bg-orange-400' };
+        return { bg: 'bg-orange-50', border: 'border-orange-200', dot: 'bg-orange-500' };
       case 'price_drop':
-        return { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', dot: 'bg-emerald-400' };
+        return { bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-500' };
       case 'registration_reminder':
-        return { bg: 'bg-purple-500/5', border: 'border-purple-500/20', dot: 'bg-purple-400' };
+        return { bg: 'bg-purple-50', border: 'border-purple-200', dot: 'bg-purple-500' };
       case 'child_match':
-        return { bg: 'bg-violet-500/5', border: 'border-violet-500/20', dot: 'bg-violet-400' };
+        return { bg: 'bg-violet-50', border: 'border-violet-200', dot: 'bg-violet-500' };
       default:
-        return { bg: 'bg-white/[0.02]', border: 'border-white/5', dot: 'bg-slate-400' };
+        return { bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-400' };
     }
   };
 
@@ -102,7 +102,7 @@ export default function NotificationsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full"
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
-                color: 'var(--theme-accent)',
+                color: 'var(--theme-primary)',
               }}
             >
               <CheckCheck size={14} />
@@ -130,7 +130,7 @@ export default function NotificationsPage() {
                   style={isActive ? {
                     backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
                     borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
-                    color: 'var(--theme-accent)',
+                    color: 'var(--theme-primary)',
                   } : {
                     backgroundColor: 'var(--theme-surface)',
                     borderColor: 'var(--theme-card-border)',
