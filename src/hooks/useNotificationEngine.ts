@@ -16,12 +16,12 @@ export function useNotificationEngine() {
     registrations,
     clinics,
     childProfiles,
-    activeChildId,
+    activeChildIds,
     favoriteIds,
     notificationsEnabled,
     notifications,
     addNotification,
-    getActiveChildAgeGroup,
+    getActiveChildAgeGroups,
   } = useStore();
 
   const lastCheckRef = useRef<number>(0);
@@ -115,26 +115,27 @@ export function useNotificationEngine() {
       }
 
       // ── CHILD AGE GROUP MATCH ────────────────────────
-      const activeAg = getActiveChildAgeGroup();
-      const activeChild = childProfiles.find((c) => c.id === activeChildId);
-      if (activeAg && activeChild) {
+      const activeAgs = getActiveChildAgeGroups();
+      const activeKids = childProfiles.filter((c) => activeChildIds.includes(c.id));
+      if (activeAgs.length > 0 && activeKids.length > 0) {
         const matchingClinics = clinics.filter(
           (c) =>
-            (c.ageGroups.includes(activeAg) || c.ageGroups.includes('all')) &&
+            activeAgs.some((ag) => c.ageGroups.includes(ag) || c.ageGroups.includes('all')) &&
             c.spotsRemaining > 0 &&
             c.dates.start >= todayStr
         );
 
         // Only notify about clinics not already notified
         for (const mc of matchingClinics.slice(0, 2)) {
-          const key = `child-match-${activeChild.id}-${mc.id}`;
-          if (!sentRemindersRef.current.has(key)) {
-            const alreadyNotified = notifications.some(
-              (n) => n.type === 'child_match' && n.clinicId === mc.id
-            );
-            if (!alreadyNotified) {
-              sentRemindersRef.current.add(key);
-              // Don't double-notify — setClinics already handles new clinic matches
+          for (const child of activeKids) {
+            const key = `child-match-${child.id}-${mc.id}`;
+            if (!sentRemindersRef.current.has(key)) {
+              const alreadyNotified = notifications.some(
+                (n) => n.type === 'child_match' && n.clinicId === mc.id
+              );
+              if (!alreadyNotified) {
+                sentRemindersRef.current.add(key);
+              }
             }
           }
         }
@@ -151,11 +152,11 @@ export function useNotificationEngine() {
     registrations,
     clinics,
     childProfiles,
-    activeChildId,
+    activeChildIds,
     favoriteIds,
     notificationsEnabled,
     notifications,
     addNotification,
-    getActiveChildAgeGroup,
+    getActiveChildAgeGroups,
   ]);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, SlidersHorizontal, UserCircle, ChevronDown } from 'lucide-react';
+import { Search, SlidersHorizontal, UserCircle, ChevronDown, Check } from 'lucide-react';
 import { useStore, getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import { getAgeGroupLabel, cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,8 +16,9 @@ export default function Header() {
     viewMode,
     setViewMode,
     childProfiles,
-    activeChildId,
-    setActiveChild,
+    activeChildIds,
+    toggleActiveChild,
+    setActiveChildren,
     homeLocation,
   } = useStore();
   const filterCount = activeFilterCount();
@@ -25,8 +26,20 @@ export default function Header() {
   const router = useRouter();
   const [showChildPicker, setShowChildPicker] = useState(false);
 
-  const activeChild = childProfiles.find((c) => c.id === activeChildId);
-  const childAgeGroup = activeChild ? getAgeGroupFromDOB(activeChild.dateOfBirth) : null;
+  const activeChildren = childProfiles.filter((c) => activeChildIds.includes(c.id));
+  const allSelected = activeChildIds.length === childProfiles.length && childProfiles.length > 0;
+
+  // Build label for the pill
+  let pillLabel = 'Select player';
+  if (activeChildren.length === 1) {
+    const child = activeChildren[0];
+    const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+    pillLabel = `${child.name} · ${getAgeGroupLabel(ag)} · Age ${getChildAge(child.dateOfBirth)}`;
+  } else if (activeChildren.length === childProfiles.length && childProfiles.length > 1) {
+    pillLabel = `All Players (${childProfiles.length})`;
+  } else if (activeChildren.length > 1) {
+    pillLabel = activeChildren.map((c) => c.name).join(' & ');
+  }
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl border-b"
@@ -90,27 +103,33 @@ export default function Header() {
               onClick={() => setShowChildPicker(!showChildPicker)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all active:scale-[0.97]"
               style={{
-                backgroundColor: activeChild
+                backgroundColor: activeChildren.length > 0
                   ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)'
                   : 'rgba(255,255,255,0.03)',
-                borderColor: activeChild
+                borderColor: activeChildren.length > 0
                   ? 'color-mix(in srgb, var(--theme-primary) 25%, transparent)'
                   : 'rgba(255,255,255,0.05)',
               }}
             >
-              <div className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold',
-                activeChild ? 'text-white' : 'bg-white/10 text-slate-400'
-              )}
-                style={activeChild ? { backgroundColor: 'var(--theme-primary)' } : undefined}
-              >
-                {activeChild ? activeChild.name.charAt(0) : '?'}
+              {/* Avatar stack */}
+              <div className="flex -space-x-1.5">
+                {activeChildren.length > 0 ? (
+                  activeChildren.slice(0, 3).map((child) => (
+                    <div
+                      key={child.id}
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white border border-slate-900"
+                      style={{ backgroundColor: 'var(--theme-primary)' }}
+                    >
+                      {child.name.charAt(0)}
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-slate-400">
+                    ?
+                  </div>
+                )}
               </div>
-              <span className="text-[11px] font-medium text-slate-300">
-                {activeChild
-                  ? `${activeChild.name} · ${getAgeGroupLabel(childAgeGroup!)} · Age ${getChildAge(activeChild.dateOfBirth)}`
-                  : 'Select player'}
-              </span>
+              <span className="text-[11px] font-medium text-slate-300">{pillLabel}</span>
               <ChevronDown size={12} className={cn('text-slate-500 transition-transform', showChildPicker && 'rotate-180')} />
             </button>
 
@@ -125,29 +144,40 @@ export default function Header() {
                 >
                   <div className="mt-2 p-1.5 rounded-xl border bg-slate-900/90 backdrop-blur-xl"
                     style={{ borderColor: 'var(--theme-card-border)' }}>
-                    {/* No filter option */}
+                    {/* Select all / none */}
                     <button
-                      onClick={() => { setActiveChild(null); setShowChildPicker(false); }}
+                      onClick={() => {
+                        if (allSelected) {
+                          setActiveChildren([]);
+                        } else {
+                          setActiveChildren(childProfiles.map((c) => c.id));
+                        }
+                      }}
                       className={cn(
                         'w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-colors',
-                        !activeChildId ? 'bg-white/5' : 'hover:bg-white/[0.03]'
+                        allSelected ? 'bg-white/5' : 'hover:bg-white/[0.03]'
                       )}
                     >
                       <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs">
-                        🌐
+                        {allSelected ? '✅' : '👥'}
                       </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-300">All Players</p>
-                        <p className="text-[10px] text-slate-500">Show clinics for everyone</p>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-slate-300">
+                          {allSelected ? 'Deselect All' : 'Select All Players'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {allSelected ? 'Clear selection' : 'Show clinics for everyone'}
+                        </p>
                       </div>
                     </button>
+
                     {childProfiles.map((child) => {
-                      const ag = getAgeGroupFromDOB(child.dateOfBirth);
-                      const isActive = child.id === activeChildId;
+                      const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+                      const isActive = activeChildIds.includes(child.id);
                       return (
                         <button
                           key={child.id}
-                          onClick={() => { setActiveChild(child.id); setShowChildPicker(false); }}
+                          onClick={() => toggleActiveChild(child.id)}
                           className={cn(
                             'w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-colors',
                             isActive ? 'bg-white/5' : 'hover:bg-white/[0.03]'
@@ -161,20 +191,20 @@ export default function Header() {
                           >
                             {child.name.charAt(0)}
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <p className={cn('text-xs font-medium', isActive ? 'text-white' : 'text-slate-300')}>
                               {child.name}
                             </p>
                             <p className="text-[10px] text-slate-500">
                               Age {getChildAge(child.dateOfBirth)} · {getAgeGroupLabel(ag)}
+                              {child.currentDivision && child.currentDivision !== getAgeGroupFromDOB(child.dateOfBirth) && (
+                                <span className="text-amber-400"> (playing up)</span>
+                              )}
+                              {' · '}{child.position === 'goalie' ? '🥅' : '🏒'}
                             </p>
                           </div>
                           {isActive && (
-                            <span className="ml-auto text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                              style={{
-                                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-                                color: 'var(--theme-accent)',
-                              }}>Active</span>
+                            <Check size={14} style={{ color: 'var(--theme-primary)' }} />
                           )}
                         </button>
                       );

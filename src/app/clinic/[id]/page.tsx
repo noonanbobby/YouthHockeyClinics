@@ -49,7 +49,7 @@ export default function ClinicDetailPage() {
     addRegistration,
     registrations,
     childProfiles,
-    activeChildId,
+    activeChildIds,
     getEffectiveLocation,
   } = useStore();
   const [clinic, setClinic] = useState<Clinic | null>(null);
@@ -95,12 +95,14 @@ export default function ClinicDetailPage() {
     return mi < 100 ? `${Math.round(mi)} mi away` : `${Math.round(mi).toLocaleString()} mi away`;
   }, [clinic, getEffectiveLocation]);
 
-  // Child age group match
-  const activeChild = childProfiles.find((c) => c.id === activeChildId);
-  const childAgeGroup = activeChild ? getAgeGroupFromDOB(activeChild.dateOfBirth) : null;
-  const isAgeMatch = clinic && childAgeGroup
-    ? clinic.ageGroups.includes(childAgeGroup) || clinic.ageGroups.includes('all')
-    : false;
+  // Child age group match — any active child
+  const activeChildren = childProfiles.filter((c) => activeChildIds.includes(c.id));
+  const matchingChildren = clinic ? activeChildren.filter((child) => {
+    const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+    return clinic.ageGroups.includes(ag) || clinic.ageGroups.includes('all');
+  }) : [];
+  const isAgeMatch = matchingChildren.length > 0;
+  const activeChild = activeChildren[0] || null;
 
   if (!clinic) {
     return (
@@ -243,9 +245,9 @@ export default function ClinicDetailPage() {
               Featured
             </span>
           )}
-          {isAgeMatch && activeChild && (
+          {isAgeMatch && matchingChildren.length > 0 && (
             <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-              Fits {activeChild.name}
+              Fits {matchingChildren.map((c) => c.name).join(' & ')}
             </span>
           )}
         </div>
@@ -435,7 +437,13 @@ export default function ClinicDetailPage() {
                   <p className="text-xs text-slate-400 mb-1.5">Age Groups</p>
                   <div className="flex flex-wrap gap-1.5">
                     {clinic.ageGroups.map((ag) => {
-                      const matches = childAgeGroup && (ag === childAgeGroup || ag === 'all');
+                      const matchNames = activeChildren
+                        .filter((child) => {
+                          const cag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+                          return ag === cag || ag === 'all';
+                        })
+                        .map((c) => c.name);
+                      const matches = matchNames.length > 0;
                       return (
                         <span
                           key={ag}
@@ -452,8 +460,8 @@ export default function ClinicDetailPage() {
                           } : undefined}
                         >
                           {getAgeGroupLabel(ag)}
-                          {matches && activeChild && (
-                            <span className="ml-1 text-[9px]">({activeChild.name})</span>
+                          {matches && (
+                            <span className="ml-1 text-[9px]">({matchNames.join(', ')})</span>
                           )}
                         </span>
                       );

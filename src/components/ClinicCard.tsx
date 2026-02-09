@@ -28,7 +28,7 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     liveBarnConfig,
     getEffectiveLocation,
     childProfiles,
-    activeChildId,
+    activeChildIds,
   } = useStore();
   const router = useRouter();
   const fav = isFavorite(clinic.id);
@@ -51,12 +51,13 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
     distanceLabel = mi < 100 ? `${Math.round(mi)} mi` : `${Math.round(mi).toLocaleString()} mi`;
   }
 
-  // Child age group match
-  const activeChild = childProfiles.find((c) => c.id === activeChildId);
-  const childAgeGroup = activeChild ? getAgeGroupFromDOB(activeChild.dateOfBirth) : null;
-  const isAgeMatch = childAgeGroup
-    ? clinic.ageGroups.includes(childAgeGroup) || clinic.ageGroups.includes('all')
-    : false;
+  // Child age group match — check all active children
+  const activeChildren = childProfiles.filter((c) => activeChildIds.includes(c.id));
+  const matchingChildren = activeChildren.filter((child) => {
+    const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+    return clinic.ageGroups.includes(ag) || clinic.ageGroups.includes('all');
+  });
+  const isAgeMatch = matchingChildren.length > 0;
 
   return (
     <motion.div
@@ -108,9 +109,9 @@ export default function ClinicCard({ clinic, index }: ClinicCardProps) {
                 New
               </span>
             )}
-            {isAgeMatch && activeChild && (
+            {isAgeMatch && matchingChildren.length > 0 && (
               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-violet-500/15 text-violet-300">
-                Fits {activeChild.name}
+                Fits {matchingChildren.map((c) => c.name).join(' & ')}
               </span>
             )}
             {hasLiveStream && (

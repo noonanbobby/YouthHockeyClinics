@@ -88,12 +88,13 @@ interface AppState {
 
   // Child Profiles
   childProfiles: ChildProfile[];
-  activeChildId: string | null;
+  activeChildIds: string[];
   addChildProfile: (profile: Omit<ChildProfile, 'id' | 'createdAt'>) => void;
   updateChildProfile: (id: string, updates: Partial<Omit<ChildProfile, 'id' | 'createdAt'>>) => void;
   removeChildProfile: (id: string) => void;
-  setActiveChild: (id: string | null) => void;
-  getActiveChildAgeGroup: () => AgeGroup | null;
+  toggleActiveChild: (id: string) => void;
+  setActiveChildren: (ids: string[]) => void;
+  getActiveChildAgeGroups: () => AgeGroup[];
 
   // Registrations
   registrations: Registration[];
@@ -208,20 +209,28 @@ export const useStore = create<AppState>()(
             });
           }
 
-          // Check if any new clinic matches active child's age group
-          const activeAg = state.getActiveChildAgeGroup();
-          const activeChild = state.childProfiles.find((c) => c.id === state.activeChildId);
-          if (activeAg && activeChild) {
+          // Check if any new clinic matches active children's age groups
+          const activeAgs = state.getActiveChildAgeGroups();
+          const activeKids = state.childProfiles.filter((c) => state.activeChildIds.includes(c.id));
+          if (activeAgs.length > 0 && activeKids.length > 0) {
             const matching = newClinics.filter(
-              (c) => c.ageGroups.includes(activeAg) || c.ageGroups.includes('all')
+              (c) => activeAgs.some((ag) => c.ageGroups.includes(ag) || c.ageGroups.includes('all'))
             );
             for (const mc of matching.slice(0, 3)) {
-              state.addNotification({
-                title: `Match for ${activeChild.name}!`,
-                body: `${mc.name} in ${mc.location.city} is perfect for ${activeChild.name}'s age group`,
-                clinicId: mc.id,
-                type: 'child_match',
-              });
+              const matchedNames = activeKids
+                .filter((child) => {
+                  const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+                  return mc.ageGroups.includes(ag) || mc.ageGroups.includes('all');
+                })
+                .map((c) => c.name);
+              if (matchedNames.length > 0) {
+                state.addNotification({
+                  title: `Match for ${matchedNames.join(' & ')}!`,
+                  body: `${mc.name} in ${mc.location.city} fits ${matchedNames.join(' & ')}`,
+                  clinicId: mc.id,
+                  type: 'child_match',
+                });
+              }
             }
           }
         }
@@ -445,7 +454,7 @@ export const useStore = create<AppState>()(
 
       // Child Profiles
       childProfiles: [],
-      activeChildId: null,
+      activeChildIds: [],
       addChildProfile: (profile) =>
         set((state) => {
           const newProfile: ChildProfile = {
@@ -457,7 +466,7 @@ export const useStore = create<AppState>()(
           return {
             childProfiles: profiles,
             // Auto-set as active if it's the first child
-            activeChildId: state.childProfiles.length === 0 ? newProfile.id : state.activeChildId,
+            activeChildIds: state.childProfiles.length === 0 ? [newProfile.id] : state.activeChildIds,
           };
         }),
       updateChildProfile: (id, updates) =>
@@ -469,19 +478,36 @@ export const useStore = create<AppState>()(
       removeChildProfile: (id) =>
         set((state) => ({
           childProfiles: state.childProfiles.filter((c) => c.id !== id),
-          activeChildId: state.activeChildId === id ? null : state.activeChildId,
+          activeChildIds: state.activeChildIds.filter((cid) => cid !== id),
         })),
-      setActiveChild: (id) => {
-        set({ activeChildId: id });
-        // Re-apply filters when active child changes
+      toggleActiveChild: (id) => {
+        set((state) => {
+          const isActive = state.activeChildIds.includes(id);
+          return {
+            activeChildIds: isActive
+              ? state.activeChildIds.filter((cid) => cid !== id)
+              : [...state.activeChildIds, id],
+          };
+        });
         setTimeout(() => get().applyFilters(), 0);
       },
-      getActiveChildAgeGroup: () => {
+      setActiveChildren: (ids) => {
+        set({ activeChildIds: ids });
+        setTimeout(() => get().applyFilters(), 0);
+      },
+      getActiveChildAgeGroups: () => {
         const state = get();
-        if (!state.activeChildId) return null;
-        const child = state.childProfiles.find((c) => c.id === state.activeChildId);
-        if (!child) return null;
-        return getAgeGroupFromDOB(child.dateOfBirth);
+        if (state.activeChildIds.length === 0) return [];
+        const ageGroups: AgeGroup[] = [];
+        for (const id of state.activeChildIds) {
+          const child = state.childProfiles.find((c) => c.id === id);
+          if (child) {
+            // Use currentDivision override if set, otherwise compute from DOB
+            const ag = child.currentDivision || getAgeGroupFromDOB(child.dateOfBirth);
+            if (!ageGroups.includes(ag)) ageGroups.push(ag);
+          }
+        }
+        return ageGroups;
       },
 
       // Registrations
@@ -622,7 +648,7 @@ export const useStore = create<AppState>()(
         liveBarnConfig: state.liveBarnConfig,
         teamThemeId: state.teamThemeId,
         childProfiles: state.childProfiles,
-        activeChildId: state.activeChildId,
+        activeChildIds: state.activeChildIds,
         iceHockeyProConfig: state.iceHockeyProConfig,
         emailScanConfig: state.emailScanConfig,
       }),

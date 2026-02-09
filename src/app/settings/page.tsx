@@ -58,10 +58,11 @@ export default function SettingsPage() {
     daySmartConfig,
     liveBarnConfig,
     childProfiles,
-    activeChildId,
+    activeChildIds,
     addChildProfile,
+    updateChildProfile,
     removeChildProfile,
-    setActiveChild,
+    toggleActiveChild,
   } = useStore();
   const { refresh } = useClinicSearch();
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -75,7 +76,37 @@ export default function SettingsPage() {
   const [childName, setChildName] = useState('');
   const [childDob, setChildDob] = useState('');
   const [childPosition, setChildPosition] = useState<'player' | 'goalie'>('player');
+  const [childDivision, setChildDivision] = useState<string>('');
   const [showAddChild, setShowAddChild] = useState(false);
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
+
+  const AGE_GROUP_OPTIONS = [
+    { value: '', label: 'Auto (from DOB)' },
+    { value: 'mites', label: 'Mites (8U)' },
+    { value: 'squirts', label: 'Squirts (10U)' },
+    { value: 'peewee', label: 'Peewee (12U)' },
+    { value: 'bantam', label: 'Bantam (14U)' },
+    { value: 'midget', label: 'Midget (18U)' },
+    { value: 'junior', label: 'Junior (20U)' },
+  ];
+
+  const startEditChild = (child: typeof childProfiles[0]) => {
+    setEditingChildId(child.id);
+    setChildName(child.name);
+    setChildDob(child.dateOfBirth);
+    setChildPosition(child.position);
+    setChildDivision(child.currentDivision || '');
+    setShowAddChild(true);
+  };
+
+  const resetForm = () => {
+    setChildName('');
+    setChildDob('');
+    setChildPosition('player');
+    setChildDivision('');
+    setEditingChildId(null);
+    setShowAddChild(false);
+  };
 
   const geocodeHome = useCallback(async (input: string) => {
     if (!input.trim()) return;
@@ -160,13 +191,25 @@ export default function SettingsPage() {
     setTimeout(() => setSavedMessage(''), 2000);
   };
 
-  const handleAddChild = () => {
+  const handleSaveChild = () => {
     if (!childName.trim() || !childDob) return;
-    addChildProfile({ name: childName.trim(), dateOfBirth: childDob, position: childPosition });
-    setChildName('');
-    setChildDob('');
-    setChildPosition('player');
-    setShowAddChild(false);
+    const divisionValue = childDivision || undefined;
+    if (editingChildId) {
+      updateChildProfile(editingChildId, {
+        name: childName.trim(),
+        dateOfBirth: childDob,
+        position: childPosition,
+        currentDivision: divisionValue as typeof childProfiles[0]['currentDivision'],
+      });
+    } else {
+      addChildProfile({
+        name: childName.trim(),
+        dateOfBirth: childDob,
+        position: childPosition,
+        currentDivision: divisionValue as typeof childProfiles[0]['currentDivision'],
+      });
+    }
+    resetForm();
   };
 
   const apiKeyConfigs = [
@@ -319,7 +362,10 @@ export default function SettingsPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowAddChild(!showAddChild)}
+              onClick={() => {
+                if (showAddChild) resetForm();
+                else setShowAddChild(true);
+              }}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-violet-500/20 active:scale-90 transition-transform"
             >
               {showAddChild ? <X size={16} className="text-violet-300" /> : <UserPlus size={16} className="text-violet-300" />}
@@ -374,20 +420,44 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   </div>
+                  {/* Current Division override */}
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">
+                      Current Division {childDivision && childDob && childDivision !== getAgeGroupFromDOB(childDob) && (
+                        <span className="text-amber-400 ml-1">(playing up)</span>
+                      )}
+                    </label>
+                    <select
+                      value={childDivision}
+                      onChange={(e) => setChildDivision(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 [color-scheme:dark]"
+                    >
+                      {AGE_GROUP_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value} className="bg-slate-900">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[9px] text-slate-500 mt-1">
+                      Override if your child plays in a different division than their age (e.g. playing up)
+                    </p>
+                  </div>
                   {childDob && childName && (
                     <div className="flex items-center gap-2 text-[10px] text-violet-300">
                       <Baby size={12} />
                       <span>
-                        Age {getChildAge(childDob)} — {getAgeGroupLabel(getAgeGroupFromDOB(childDob))} division · {childPosition === 'goalie' ? '🥅 Goalie' : '🏒 Player'}
+                        Age {getChildAge(childDob)} — {getAgeGroupLabel(childDivision ? childDivision as Parameters<typeof getAgeGroupLabel>[0] : getAgeGroupFromDOB(childDob))} division
+                        {childDivision && childDivision !== getAgeGroupFromDOB(childDob) && ' (playing up)'}
+                        {' · '}{childPosition === 'goalie' ? '🥅 Goalie' : '🏒 Player'}
                       </span>
                     </div>
                   )}
                   <button
-                    onClick={handleAddChild}
+                    onClick={handleSaveChild}
                     disabled={!childName.trim() || !childDob}
                     className="w-full py-2.5 bg-violet-500/30 hover:bg-violet-500/40 text-violet-200 text-sm font-medium rounded-xl transition-colors disabled:opacity-40"
                   >
-                    Add Player
+                    {editingChildId ? 'Save Changes' : 'Add Player'}
                   </button>
                 </div>
               </motion.div>
@@ -399,8 +469,10 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {childProfiles.map((child) => {
                 const age = getChildAge(child.dateOfBirth);
-                const ageGroup = getAgeGroupFromDOB(child.dateOfBirth);
-                const isActive = child.id === activeChildId;
+                const naturalGroup = getAgeGroupFromDOB(child.dateOfBirth);
+                const effectiveGroup = child.currentDivision || naturalGroup;
+                const isActive = activeChildIds.includes(child.id);
+                const playingUp = child.currentDivision && child.currentDivision !== naturalGroup;
                 const childRegs = registrations.filter(
                   (r) => r.childId === child.id && r.status !== 'cancelled' && r.endDate >= new Date().toISOString().split('T')[0]
                 );
@@ -415,15 +487,20 @@ export default function SettingsPage() {
                         ? 'bg-violet-500/15 border-violet-500/30'
                         : 'bg-black/20 border-white/5 hover:border-violet-500/20'
                     )}
-                    onClick={() => setActiveChild(isActive ? null : child.id)}
+                    onClick={() => toggleActiveChild(child.id)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={cn(
-                          'w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold',
+                          'w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold relative',
                           isActive ? 'bg-violet-500/30 text-violet-200' : 'bg-white/10 text-slate-300'
                         )}>
                           {child.name.charAt(0).toUpperCase()}
+                          {isActive && (
+                            <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-violet-500 flex items-center justify-center">
+                              <Check size={8} className="text-white" />
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -434,12 +511,15 @@ export default function SettingsPage() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
                             <span className="flex items-center gap-1">
                               <Cake size={10} /> Age {age}
                             </span>
                             <span className="text-slate-600">|</span>
-                            <span className="text-violet-400 font-medium">{getAgeGroupLabel(ageGroup)}</span>
+                            <span className="text-violet-400 font-medium">
+                              {getAgeGroupLabel(effectiveGroup)}
+                              {playingUp && <span className="text-amber-400 ml-1">(up)</span>}
+                            </span>
                             <span className="text-slate-600">|</span>
                             <span>{child.position === 'goalie' ? '🥅 Goalie' : '🏒 Player'}</span>
                             {childRegs.length > 0 && (
@@ -451,17 +531,29 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm(`Remove ${child.name}?`)) {
-                            removeChildProfile(child.id);
-                          }
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/20 transition-colors"
-                      >
-                        <Trash2 size={13} className="text-slate-500 hover:text-red-400" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditChild(child);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-violet-500/20 transition-colors"
+                          title="Edit"
+                        >
+                          <span className="text-[11px]">✏️</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Remove ${child.name}?`)) {
+                              removeChildProfile(child.id);
+                            }
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/20 transition-colors"
+                        >
+                          <Trash2 size={13} className="text-slate-500 hover:text-red-400" />
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -471,7 +563,7 @@ export default function SettingsPage() {
 
           {childProfiles.length > 0 && (
             <p className="text-[10px] text-slate-500 mt-2">
-              Tap a player to set as active. Clinics matching their age group will be highlighted.
+              Tap to select/deselect. Select both players to see clinics for everyone. Tap ✏️ to edit.
             </p>
           )}
         </div>

@@ -108,6 +108,7 @@ export interface ChildProfile {
   name: string;
   dateOfBirth: string; // ISO date (YYYY-MM-DD)
   position: PlayerPosition;
+  currentDivision?: AgeGroup; // Override: e.g. 9yo playing up in Squirts (10U)
   createdAt: string;
 }
 
