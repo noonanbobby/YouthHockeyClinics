@@ -180,13 +180,16 @@ export default function MapView() {
   // ─── Render ───────────────────────────────────────────
   return (
     <div className="relative h-[calc(100vh-180px)]">
-      {/* The react-leaflet map — handles all touch, pinch, zoom natively */}
+      {/* The react-leaflet map — handles all touch, pinch, zoom natively.
+          No overlay/backdrop EVER covers the map — that would block pinch/zoom.
+          Instead, tapping the map background fires onMapClick to dismiss the sheet. */}
       <LeafletMap
         markers={markerData}
         center={mapCenter}
         zoom={mapZoom}
         selectedKey={showCard ? selectedVenueKey : null}
         onMarkerClick={handleMarkerClick}
+        onMapClick={dismissCard}
       />
 
       {/* Loading overlay */}
@@ -223,12 +226,8 @@ export default function MapView() {
         )}
       </div>
 
-      {/* Dismiss backdrop — only rendered when card is open */}
-      {showCard && (
-        <div className="absolute inset-0 z-[18]" onClick={dismissCard} />
-      )}
-
-      {/* Venue bottom sheet */}
+      {/* Venue bottom sheet — NO full-screen backdrop. Dismissing is handled by
+          tapping the map background (via onMapClick) or the X button. */}
       <AnimatePresence>
         {showCard && selectedVenue && (
           <motion.div
