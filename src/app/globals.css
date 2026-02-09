@@ -260,6 +260,27 @@ html:not(.dark) [data-theme-page] .divide-y > * + * {
   border-color: var(--theme-card-border);
 }
 
+/* Additional backgrounds for CTA bars and overlays */
+html:not(.dark) [data-theme-page] .bg-black\/40 {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+html:not(.dark) [data-theme-page] .bg-white\/\[0\.02\] {
+  background-color: color-mix(in srgb, var(--theme-text) 2%, var(--theme-bg)) !important;
+}
+
+/* Ring / focus for blue interactive elements */
+html:not(.dark) [data-theme-page] .bg-blue-500 {
+  background-color: var(--theme-primary) !important;
+}
+html:not(.dark) [data-theme-page] .hover\:bg-blue-600:hover {
+  background-color: var(--theme-secondary) !important;
+}
+
+/* Border-2 for image borders */
+html:not(.dark) [data-theme-page] .border-slate-900 {
+  border-color: var(--theme-card-border) !important;
+}
+
 /* ─── Utility: Line Clamping ───────────────────── */
 .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

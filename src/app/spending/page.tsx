@@ -307,10 +307,10 @@ export default function SpendingPage() {
           >
             <div className="flex items-center gap-2 mb-1">
               <Clock className="w-4 h-4 text-orange-400" />
-              <span className="text-[10px] text-slate-400 uppercase">Per Hour</span>
+              <span className="text-[10px] uppercase" style={{ color: 'var(--theme-text-secondary)' }}>Per Hour</span>
             </div>
             <p className="text-2xl font-bold text-orange-400">{formatCurrency(costPerHour)}</p>
-            <p className="text-[10px] text-slate-500">Est. ice time</p>
+            <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>Est. ice time</p>
           </motion.div>
         </div>
 
@@ -427,8 +427,8 @@ export default function SpendingPage() {
           >
             {venueData.length === 0 ? (
               <div className="text-center py-16">
-                <MapPin className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">No venue spending data yet</p>
+                <MapPin className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--theme-text-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>No venue spending data yet</p>
               </div>
             ) : (
               venueData.map((venue, idx) => (
@@ -510,8 +510,8 @@ export default function SpendingPage() {
           >
             {sourceData.length === 0 ? (
               <div className="text-center py-16">
-                <Tag className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">No spending data by source yet</p>
+                <Tag className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--theme-text-muted)' }} />
+                <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>No spending data by source yet</p>
               </div>
             ) : (
               sourceData.map((src, idx) => (

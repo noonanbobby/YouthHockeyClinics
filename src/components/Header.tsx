@@ -126,8 +126,8 @@ export default function Header() {
                   activeChildren.slice(0, 3).map((child) => (
                     <div
                       key={child.id}
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white border border-slate-900"
-                      style={{ backgroundColor: 'var(--theme-primary)' }}
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white border"
+                      style={{ backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-header-bg)' }}
                     >
                       {child.name.charAt(0)}
                     </div>

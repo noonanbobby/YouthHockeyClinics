@@ -60,7 +60,7 @@ export default function BottomNav() {
               key={item.label}
               onClick={() => handleNav(item)}
               className="relative flex flex-col items-center justify-center w-16 h-full gap-0.5 transition-colors"
-              style={{ color: active ? 'var(--theme-primary)' : '#64748b' }}
+              style={{ color: active ? 'var(--theme-primary)' : 'var(--theme-text-muted)' }}
             >
               {active && (
                 <motion.div

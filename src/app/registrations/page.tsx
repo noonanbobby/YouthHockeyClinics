@@ -166,7 +166,8 @@ export default function RegistrationsPage() {
       {/* Floating Add Button */}
       <button
         onClick={() => setShowAddModal(true)}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 rounded-full shadow-lg flex items-center justify-center transition-colors z-50"
+        className="fixed bottom-8 right-8 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-colors z-50 text-white"
+        style={{ backgroundColor: 'var(--theme-primary)' }}
       >
         <Plus className="w-6 h-6" />
       </button>

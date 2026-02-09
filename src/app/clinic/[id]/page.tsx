@@ -106,7 +106,7 @@ export default function ClinicDetailPage() {
 
   if (!clinic) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--theme-bg)' }}>
         <HockeyLoadingScreen message="Loading clinic details..." />
       </div>
     );
@@ -181,7 +181,7 @@ export default function ClinicDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 pb-28">
+    <div className="min-h-screen pb-28" data-theme-page style={{ backgroundColor: 'var(--theme-bg)' }}>
       {/* Hero Image */}
       <div className="relative h-64">
         {clinic.imageUrl ? (
@@ -192,7 +192,7 @@ export default function ClinicDetailPage() {
             <span className="text-6xl">🏒</span>
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, var(--theme-bg), color-mix(in srgb, var(--theme-bg) 40%, transparent), transparent)' }} />
 
         {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 safe-area-top">
@@ -257,8 +257,8 @@ export default function ClinicDetailPage() {
       <div className="px-4 -mt-2 relative z-10">
         {/* Title section */}
         <div className="mb-4">
-          <h1 className="text-2xl font-bold text-white mb-1">{clinic.name}</h1>
-          <div className="flex items-center gap-3 text-sm text-slate-400 flex-wrap">
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--theme-text)' }}>{clinic.name}</h1>
+          <div className="flex items-center gap-3 text-sm flex-wrap" style={{ color: 'var(--theme-text-secondary)' }}>
             <span>
               {getCountryFlag(clinic.location.countryCode)} {clinic.location.city},{' '}
               {clinic.location.country}
@@ -277,7 +277,7 @@ export default function ClinicDetailPage() {
 
         {/* Quick info cards */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+          <div className="rounded-xl p-3 border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card-bg))', borderColor: 'var(--theme-card-border)' }}>
             <Calendar size={16} style={{ color: 'var(--theme-primary)' }} className="mb-1.5" />
             <p className="text-xs text-slate-400">Dates</p>
             <p className="text-sm font-semibold text-white">
@@ -287,12 +287,12 @@ export default function ClinicDetailPage() {
               {timeUntil(clinic.dates.start)}
             </p>
           </div>
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+          <div className="rounded-xl p-3 border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card-bg))', borderColor: 'var(--theme-card-border)' }}>
             <Clock size={16} style={{ color: 'var(--theme-primary)' }} className="mb-1.5" />
             <p className="text-xs text-slate-400">Duration</p>
             <p className="text-sm font-semibold text-white">{clinic.duration}</p>
           </div>
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+          <div className="rounded-xl p-3 border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card-bg))', borderColor: 'var(--theme-card-border)' }}>
             <DollarSign size={16} style={{ color: 'var(--theme-primary)' }} className="mb-1.5" />
             <p className="text-xs text-slate-400">Price</p>
             <p className="text-sm font-semibold text-white">
@@ -306,7 +306,7 @@ export default function ClinicDetailPage() {
               </p>
             )}
           </div>
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+          <div className="rounded-xl p-3 border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card-bg))', borderColor: 'var(--theme-card-border)' }}>
             <Users size={16} style={{ color: 'var(--theme-primary)' }} className="mb-1.5" />
             <p className="text-xs text-slate-400">Availability</p>
             <p className="text-sm font-semibold text-white">
@@ -320,7 +320,7 @@ export default function ClinicDetailPage() {
 
         {/* Rating section */}
         {clinic.rating > 0 && (
-          <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
+          <div className="rounded-xl p-4 border mb-6" style={{ backgroundColor: 'var(--theme-card-bg)', borderColor: 'var(--theme-card-border)' }}>
             <div className="flex items-center gap-4">
               <div className="text-center">
                 <p className="text-3xl font-bold text-white">{clinic.rating}</p>
@@ -352,7 +352,7 @@ export default function ClinicDetailPage() {
                     : 'Good option'}
                 </p>
                 {/* Rating bar visualization */}
-                <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--theme-surface)' }}>
                   <div
                     className="h-full rounded-full bg-amber-400"
                     style={{ width: `${(clinic.rating / 5) * 100}%` }}
@@ -364,7 +364,7 @@ export default function ClinicDetailPage() {
         )}
 
         {/* Tab bar */}
-        <div className="flex bg-white/5 rounded-xl p-1 mb-4">
+        <div className="flex rounded-xl p-1 mb-4" style={{ backgroundColor: 'var(--theme-surface)' }}>
           {(['overview', 'schedule', 'coaches'] as const).map((tab) => (
             <button
               key={tab}
@@ -399,7 +399,7 @@ export default function ClinicDetailPage() {
           >
             {/* Description */}
             <div>
-              <h3 className="text-sm font-semibold text-white mb-2">About</h3>
+              <h3 className="text-sm font-semibold mb-2">About</h3>
               <p className="text-sm text-slate-300 leading-relaxed">
                 {clinic.longDescription || clinic.description}
               </p>
@@ -407,8 +407,8 @@ export default function ClinicDetailPage() {
 
             {/* Location */}
             <div>
-              <h3 className="text-sm font-semibold text-white mb-2">Location</h3>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+              <h3 className="text-sm font-semibold mb-2">Location</h3>
+              <div className="rounded-xl p-3 border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card-bg))', borderColor: 'var(--theme-card-border)' }}>
                 <div className="flex items-start gap-3">
                   <MapPin size={16} style={{ color: 'var(--theme-primary)' }} className="mt-0.5 shrink-0" />
                   <div>
@@ -431,7 +431,7 @@ export default function ClinicDetailPage() {
 
             {/* Age groups & skill levels */}
             <div>
-              <h3 className="text-sm font-semibold text-white mb-2">Who It&apos;s For</h3>
+              <h3 className="text-sm font-semibold mb-2">Who It&apos;s For</h3>
               <div className="space-y-2">
                 <div>
                   <p className="text-xs text-slate-400 mb-1.5">Age Groups</p>
@@ -487,7 +487,7 @@ export default function ClinicDetailPage() {
             {/* Includes */}
             {clinic.includes.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-white mb-2">What&apos;s Included</h3>
+                <h3 className="text-sm font-semibold mb-2">What&apos;s Included</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {clinic.includes.map((item, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -502,7 +502,7 @@ export default function ClinicDetailPage() {
             {/* Amenities */}
             {clinic.amenities.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-white mb-2">Amenities</h3>
+                <h3 className="text-sm font-semibold mb-2">Amenities</h3>
                 <div className="flex flex-wrap gap-2">
                   {clinic.amenities.map((a, i) => (
                     <span
@@ -519,7 +519,7 @@ export default function ClinicDetailPage() {
             {/* Contact */}
             {(clinic.contactEmail || clinic.contactPhone) && (
               <div>
-                <h3 className="text-sm font-semibold text-white mb-2">Contact</h3>
+                <h3 className="text-sm font-semibold mb-2">Contact</h3>
                 <div className="space-y-2">
                   {clinic.contactEmail && (
                     <a
@@ -695,7 +695,8 @@ export default function ClinicDetailPage() {
       </div>
 
       {/* Sticky CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-slate-950/95 backdrop-blur-xl border-t border-white/5 safe-area-bottom">
+      <div className="fixed bottom-0 left-0 right-0 z-40 p-4 backdrop-blur-xl border-t safe-area-bottom"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--theme-bg) 95%, transparent)', borderColor: 'var(--theme-card-border)' }}>
         <div className="flex gap-3">
           {/* Track Registration / Already Registered */}
           <button
