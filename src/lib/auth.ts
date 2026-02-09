@@ -4,6 +4,15 @@ import Google from 'next-auth/providers/google';
 import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 
+// NextAuth v5 uses AUTH_SECRET / AUTH_URL instead of NEXTAUTH_SECRET / NEXTAUTH_URL.
+// Map the v4 names to v5 so users don't have to rename their Vercel env vars.
+if (!process.env.AUTH_SECRET && process.env.NEXTAUTH_SECRET) {
+  process.env.AUTH_SECRET = process.env.NEXTAUTH_SECRET;
+}
+if (!process.env.AUTH_URL && process.env.NEXTAUTH_URL) {
+  process.env.AUTH_URL = process.env.NEXTAUTH_URL;
+}
+
 // Admin emails (comma-separated in env var)
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
