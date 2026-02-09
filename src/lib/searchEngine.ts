@@ -519,6 +519,10 @@ export const KNOWN_SOURCES: { name: string; url: string; region: string }[] = [
   { name: 'Active.com Hockey', url: 'https://www.active.com/hockey/camps', region: 'US' },
   { name: 'SportsEngine Hockey', url: 'https://www.sportsengine.com/hockey', region: 'US' },
 
+  // ── SOUTH FLORIDA / LOCAL RINKS ────────────────────────────
+  { name: 'IceHockeyPro Youth Camps', url: 'https://icehockeypro.com/product-category/youth-camps/', region: 'US' },
+  { name: 'IceHockeyPro All Camps', url: 'https://icehockeypro.com/product-category/camps/', region: 'INT' },
+
   // ── DIRECTORIES / AGGREGATORS ──────────────────────────────
   { name: 'MySummerCamps Hockey', url: 'https://www.mysummercamps.com/camps/Sports_Camps/Hockey_Camps/', region: 'US' },
   { name: 'CampPage Hockey', url: 'https://www.camppage.com/hockey-camps', region: 'US' },
