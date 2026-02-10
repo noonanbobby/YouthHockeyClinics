@@ -149,14 +149,18 @@ function groupRegistrations(registrations: Registration[]): RegistrationGroup[] 
     const name = reg.clinicName.toLowerCase().trim();
     const venue = reg.venue.toLowerCase().trim();
 
-    // If the name is generic (like "Camp"), use clinicId to prevent merging
-    // different orders that happen to share the same generic name + date + venue.
-    // For real names, group by name + date + venue so siblings merge.
+    // Group key strategy:
+    // - Real names: name + startDate + venue → naturally merges siblings in the same camp
+    // - Generic names ("Camp"): startDate + notes/dates info + source → merges siblings
+    //   who bought the same camp (same date range, same source) while keeping
+    //   different camps separate (different dates = different key).
+    //   We use the notes field because it often contains the actual camp date range
+    //   from the scraper (e.g. "Order #12345 — December 20 - 23, 2025").
     let key: string;
     if (isGenericName(name)) {
-      // Use clinicId as grouping key — each unique order/clinic stays separate
-      // But still allow merging by same clinicId for multi-child scenarios
-      key = `${reg.clinicId}::${reg.startDate}`;
+      // Extract date info from notes to distinguish different camps
+      const noteDates = reg.notes?.match(/(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+/i)?.[0] || '';
+      key = `generic::${reg.startDate}::${noteDates}::${reg.source || ''}`;
     } else {
       key = `${name}::${reg.startDate}::${venue}`;
     }
@@ -167,7 +171,13 @@ function groupRegistrations(registrations: Registration[]): RegistrationGroup[] 
       const group = map.get(key)!;
       group.totalPrice += typeof reg.price === 'number' ? reg.price : 0;
       if (reg.playerName) {
-        group.children.push({ name: reg.playerName, price: reg.price, regId: reg.id });
+        // Don't add duplicate children (same name already in group)
+        const alreadyHasChild = group.children.some(
+          c => c.name.toLowerCase() === reg.playerName!.toLowerCase()
+        );
+        if (!alreadyHasChild) {
+          group.children.push({ name: reg.playerName, price: reg.price, regId: reg.id });
+        }
       }
       group.registrations.push(reg);
       if (!group.notes && reg.notes) group.notes = reg.notes;

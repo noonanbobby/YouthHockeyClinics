@@ -25,6 +25,7 @@ interface ScrapedOrder {
   billingAddress: string;
   status: string;
   orderDate: string;
+  debug?: Record<string, unknown>;
 }
 
 interface ScrapedCamp {
@@ -37,6 +38,59 @@ interface ScrapedCamp {
   description: string;
   imageUrl: string;
 }
+
+// ── Name quality helpers ──────────────────────────────────────────
+
+const GENERIC_WORDS = new Set([
+  'camp', 'camps', 'event', 'events', 'class', 'classes', 'product', 'item',
+  'session', 'sessions', 'program', 'programs', 'registration', 'ticket',
+  'n/a', 'na', 'tbd', 'yes', 'no', 'none', 'other', 'default',
+  'true', 'false', '1', '0', 'qty', 'quantity',
+]);
+
+/** Check if a string is meaningful (not generic/empty) */
+function isMeaningful(s: string): boolean {
+  const clean = s.replace(/\s*×\s*\d+$/, '').trim();
+  if (clean.length <= 3) return false;
+  if (GENERIC_WORDS.has(clean.toLowerCase())) return false;
+  // Reject if it's just numbers/punctuation
+  if (/^[\d\s.,/$€£]+$/.test(clean)) return false;
+  return true;
+}
+
+/** Score a candidate camp name — higher is better */
+function scoreCampName(value: string, key: string): number {
+  const clean = value.replace(/\s*×\s*\d+$/, '').trim();
+  if (!isMeaningful(clean)) return 0;
+
+  let score = clean.length; // Longer names score higher (real camp names are descriptive)
+
+  // Boost for keys that suggest this IS the camp name
+  const kl = key.toLowerCase();
+  if (kl.includes('camp') && !kl.includes('date') && !kl.includes('location')) score += 50;
+  if (kl === 'name' || kl === 'camp name' || kl === 'event name' || kl === 'title') score += 60;
+  if (kl === 'program' || kl === 'class') score += 40;
+
+  // Boost for hockey-related words in the VALUE
+  const vl = clean.toLowerCase();
+  const hockeyWords = ['hockey', 'skating', 'skills', 'clinic', 'tournament', 'league', 'goalie', 'power', 'elite', 'development', 'training', 'weekend', 'spring', 'summer', 'winter'];
+  for (const word of hockeyWords) {
+    if (vl.includes(word)) score += 20;
+  }
+
+  // Penalize values that look like locations (CITY, State format)
+  if (/^[A-Z\s]+,\s*[A-Za-z\s]+/.test(clean)) score -= 40;
+
+  // Penalize values that look like dates
+  if (/(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(clean)) score -= 40;
+
+  // Penalize values that look like prices
+  if (/^\$?\d+\.?\d*$/.test(clean)) score -= 100;
+
+  return Math.max(score, 0);
+}
+
+// ── Main route handler ────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action') || 'sync';
@@ -239,92 +293,154 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
         const orderHtml = await orderRes.text();
         const $order = cheerio.load(orderHtml);
 
-        // Extract order details
+        // Extract order ID
         const orderId = link.match(/order\/(\d+)/)?.[1] ||
                         link.match(/view-order\/(\d+)/)?.[1] ||
                         $order('.woocommerce-order-data__heading, .order-number').first().text().replace(/[^\d]/g, '') ||
                         `unknown-${orders.length}`;
 
-        // ── Extract product info from the order detail table ──
-        // Strategy: gather ALL possible name/location/date candidates, then pick the best
-        const GENERIC_WORDS = new Set([
-          'camp', 'camps', 'event', 'events', 'class', 'classes', 'product', 'item',
-          'session', 'sessions', 'program', 'programs', 'registration', 'ticket',
-          'n/a', 'na', 'tbd', 'yes', 'no', 'none', 'other', 'default',
-        ]);
-        const isMeaningful = (s: string) => {
-          const clean = s.replace(/\s*×\s*\d+$/, '').trim();
-          return clean.length > 3 && !GENERIC_WORDS.has(clean.toLowerCase());
-        };
-
+        // ────────────────────────────────────────────────────────────
+        // PRODUCT CELL EXTRACTION — gather ALL possible data sources
+        // ────────────────────────────────────────────────────────────
         const $productCell = $order('td.product-name, .woocommerce-table--order-details .product-name').first();
 
-        // 1. Product link text (WooCommerce product title)
+        // Source 1: Product link text (WooCommerce product title)
         const productLinkText = $productCell.find('a').first().text().trim();
 
-        // 2. Product link URL slug — e.g. /product/super-skills-weekend/ → "Super Skills Weekend"
+        // Source 2: Product link URL slug → e.g. /product/super-skills-weekend/ → "Super Skills Weekend"
         const productHref = $productCell.find('a').first().attr('href') || '';
         const slugMatch = productHref.match(/\/product\/([^/?#]+)/);
         const slugName = slugMatch
           ? decodeURIComponent(slugMatch[1]).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
           : '';
 
-        // 3. WooCommerce variation metadata (dl.variation, .wc-item-meta)
+        // Source 3: ALL variation key/value pairs from EVERY format WooCommerce uses
         const variations: Record<string, string> = {};
+
+        // Format A: <dl class="variation"> with dt/dd pairs
         $productCell.find('dl.variation dt, dl.wc-item-meta dt').each((_, el) => {
           const key = $order(el).text().replace(/[:\s]+$/, '').trim().toLowerCase();
           const val = $order(el).next('dd').text().trim();
           if (key && val) variations[key] = val;
         });
-        $productCell.find('.wc-item-meta li').each((_, el) => {
+
+        // Format B: <ul class="wc-item-meta"> with li items
+        $productCell.find('.wc-item-meta li, ul.wc-item-meta li').each((_, el) => {
           const label = $order(el).find('strong, .wc-item-meta-label').text().replace(/[:\s]+$/, '').trim().toLowerCase();
-          const val = $order(el).contents().not('strong, .wc-item-meta-label').text().trim();
+          // Get text after the label element
+          const fullText = $order(el).text().trim();
+          const labelText = $order(el).find('strong, .wc-item-meta-label').text().trim();
+          const val = fullText.replace(labelText, '').replace(/^[:\s]+/, '').trim();
           if (label && val) variations[label] = val;
         });
 
-        // 4. Full cell text for pipe-delimited parsing (e.g. "CAMP NAME | LOCATION | DATES × 1")
-        const fullCellText = $productCell.text().trim();
-        const parsed = parseCampDescription(fullCellText);
+        // Format C: <table class="wc-item-meta"> with tr/td pairs
+        $productCell.find('table.wc-item-meta tr').each((_, el) => {
+          const key = $order(el).find('td:first-child, th').text().replace(/[:\s]+$/, '').trim().toLowerCase();
+          const val = $order(el).find('td:last-child').text().trim();
+          if (key && val && key !== val) variations[key] = val;
+        });
 
-        // 5. All product cells (some orders have multiple line items)
+        // Source 4: Full cell text (for pipe-delimited or newline-delimited content)
+        const fullCellText = $productCell.text().trim();
+
+        // Source 5: All text from ALL product cells (some orders have multiple items)
         const allProductTexts: string[] = [];
         $order('td.product-name, .woocommerce-table--order-details .product-name').each((_, el) => {
           allProductTexts.push($order(el).text().trim());
         });
 
-        // ── Build camp name: use BEST meaningful source ──
-        // Priority: variation name → pipe-parsed name → product link text → URL slug → fallback
-        const variationName = variations['camp'] || variations['camp name'] || variations['event'] ||
-                              variations['program'] || variations['class'] || variations['title'] || '';
-        let scrapedName = '';
-        if (isMeaningful(variationName)) {
-          scrapedName = variationName;
-        }
-        if (!scrapedName && parsed.name && isMeaningful(parsed.name)) {
-          scrapedName = parsed.name;
-        }
-        if (!scrapedName && isMeaningful(productLinkText)) {
-          scrapedName = productLinkText;
-        }
-        if (!scrapedName && isMeaningful(slugName)) {
-          scrapedName = slugName;
-        }
-        // Last resort: use whatever we have, even if generic
-        if (!scrapedName) {
-          scrapedName = variationName || parsed.name || productLinkText || slugName || `IceHockeyPro Order #${orderId}`;
-        }
-        // Clean up quantity suffix
-        scrapedName = scrapedName.replace(/\s*×\s*\d+$/, '').trim();
+        // ────────────────────────────────────────────────────────────
+        // CAMP NAME: Score ALL candidates and pick the best
+        // ────────────────────────────────────────────────────────────
+        const candidates: { name: string; score: number; source: string }[] = [];
 
-        // ── Location: variation → parsed → empty ──
+        // Candidate set 1: ALL variation values (scored by key relevance + value quality)
+        for (const [key, val] of Object.entries(variations)) {
+          const clean = val.replace(/\s*×\s*\d+$/, '').trim();
+          if (clean) {
+            candidates.push({
+              name: clean,
+              score: scoreCampName(clean, key),
+              source: `variation[${key}]`,
+            });
+          }
+        }
+
+        // Candidate set 2: Pipe-parsed name from full cell text
+        const pipeParsed = parseCampDescription(fullCellText);
+        if (pipeParsed.name && isMeaningful(pipeParsed.name)) {
+          candidates.push({
+            name: pipeParsed.name.replace(/\s*×\s*\d+$/, '').trim(),
+            score: scoreCampName(pipeParsed.name, 'parsed'),
+            source: 'pipe-parsed',
+          });
+        }
+
+        // Candidate set 3: Newline-parsed segments from full cell text
+        const lines = fullCellText.split(/\n/).map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          // Skip lines that start with common labels
+          const labelStripped = line.replace(/^(?:camp|camp name|event|location|date|dates|camp location|camp dates|camp date|total|subtotal|price|qty|quantity)\s*:\s*/i, '');
+          if (labelStripped !== line && isMeaningful(labelStripped)) {
+            // This line had a label prefix — the remaining text might be the camp name
+            candidates.push({
+              name: labelStripped.replace(/\s*×\s*\d+$/, '').trim(),
+              score: scoreCampName(labelStripped, 'label-stripped'),
+              source: `line-label: ${line.substring(0, 30)}`,
+            });
+          }
+
+          // Also try pipe segments within this line
+          const segments = line.split('|').map(s => s.trim());
+          for (const seg of segments) {
+            const cleaned = seg.replace(/\s*×\s*\d+$/, '').trim();
+            if (isMeaningful(cleaned)) {
+              candidates.push({
+                name: cleaned,
+                score: scoreCampName(cleaned, 'segment'),
+                source: `line-segment: ${cleaned.substring(0, 30)}`,
+              });
+            }
+          }
+        }
+
+        // Candidate set 4: Product link text
+        if (isMeaningful(productLinkText)) {
+          candidates.push({
+            name: productLinkText,
+            score: scoreCampName(productLinkText, 'product-link') + 5,
+            source: 'product-link',
+          });
+        }
+
+        // Candidate set 5: URL slug
+        if (isMeaningful(slugName)) {
+          candidates.push({
+            name: slugName,
+            score: scoreCampName(slugName, 'url-slug'),
+            source: 'url-slug',
+          });
+        }
+
+        // Pick the BEST candidate by score
+        candidates.sort((a, b) => b.score - a.score);
+        const bestCandidate = candidates.find(c => c.score > 0);
+        const scrapedName = bestCandidate
+          ? bestCandidate.name
+          : `IceHockeyPro Order #${orderId}`;
+
+        // ── Location: check all relevant variation keys ──
         const scrapedLocation = variations['camp location'] || variations['location'] ||
                                 variations['venue'] || variations['rink'] ||
-                                parsed.location || '';
+                                variations['camplocation1'] || variations['camp location 1'] ||
+                                pipeParsed.location || '';
 
-        // ── Dates: variation → parsed → empty ──
+        // ── Dates: check all relevant variation keys ──
         const scrapedDates = variations['camp dates'] || variations['dates'] ||
                              variations['date'] || variations['camp date'] ||
-                             parsed.dates || '';
+                             variations['campdates1'] || variations['camp dates 1'] ||
+                             pipeParsed.dates || '';
 
         // Get total price
         const totalText = $order('.woocommerce-Price-amount, .order-total .amount, .woocommerce-table--order-details tfoot tr:last-child .amount').last().text().trim();
@@ -353,6 +469,16 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
           billingAddress,
           status,
           orderDate,
+          // Include debug info so we can diagnose extraction issues
+          debug: {
+            productLinkText,
+            slugName,
+            variations,
+            candidateCount: candidates.length,
+            topCandidates: candidates.slice(0, 5).map(c => ({ name: c.name, score: c.score, source: c.source })),
+            fullCellTextPreview: fullCellText.substring(0, 300),
+            lineCount: lines.length,
+          },
         });
       } catch (err) {
         errors.push(`Failed to scrape order from ${link}: ${err}`);
