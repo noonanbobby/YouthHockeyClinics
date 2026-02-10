@@ -343,7 +343,14 @@ export default function IntegrationsPage() {
           `${familyMembers.length} family member(s) discovered. ` +
           `${upcomingCount} upcoming + ${pastCount} past = ${importedCount} total registrations synced.`
         );
+      } else if (syncData.needsReauth && familyMembers.length === 0) {
+        // Auth credential was rejected — don't mark as connected
+        setConnectionStatus(
+          `Could not authenticate with ${facilityName}. ` +
+          `Please check your email and password and try again.`
+        );
       } else {
+        // Sync had no events but auth is valid
         setDaySmartConfig({
           email: dashEmail,
           password: dashPassword,
@@ -362,7 +369,10 @@ export default function IntegrationsPage() {
           type: 'new_clinic',
         });
 
-        setConnectionStatus(`Connected to ${facilityName}! ${familyMembers.length} family member(s) found. ${syncData.error ? `Note: ${syncData.error}` : 'No upcoming events found.'}`);
+        setConnectionStatus(
+          `Connected to ${facilityName}! ${familyMembers.length} family member(s) found. ` +
+          `${syncData.error ? `Note: ${syncData.error}` : 'No upcoming events found.'}`
+        );
       }
     } catch (error) {
       setConnectionStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}. Check your internet connection.`);

@@ -282,8 +282,11 @@ async function tryPHPLoginJSON(
       // Check for token in response body
       const token = extractToken(data);
 
-      // Success if we got a token or cookies or a customer_id
-      if (token || cookies || data.customer_id) {
+      // Success requires a real token or customer_id in the response body.
+      // Bare cookies alone are NOT sufficient — DaySmart returns session cookies
+      // (e.g. PHPSESSID) even for failed logins, so cookies without a token/customer_id
+      // do not indicate authenticated access.
+      if (token || data.customer_id) {
         return {
           strategy: `php-json (${payloadKeys})`,
           token: token || cookies,
@@ -340,7 +343,8 @@ async function tryPHPLoginForm(
 
     const token = extractToken(data);
 
-    if (token || cookies || data.customer_id) {
+    // Same as php-json: require a real token or customer_id, not just cookies
+    if (token || data.customer_id) {
       return {
         strategy: 'php-form',
         token: token || cookies,
@@ -529,7 +533,8 @@ async function handleLogin(email: string, password: string, facilityId: string) 
       customerIds = [String(responseData.customer_id)];
     }
 
-    // Fetch linked customers using our auth
+    // Fetch linked customers using our auth — this also validates the credential
+    let authVerified = false;
     if (authCredential) {
       try {
         const custUrl = `${API_BASE}/customers?cache[save]=false&company=${facilityId}`;
@@ -540,6 +545,7 @@ async function handleLogin(email: string, password: string, facilityId: string) 
         console.log(`[DaySmart] Customers API → ${custRes.status}`);
 
         if (custRes.ok) {
+          authVerified = true;
           const custData = await custRes.json();
           if (custData?.data && Array.isArray(custData.data)) {
             for (const customer of custData.data) {
@@ -562,6 +568,7 @@ async function handleLogin(email: string, password: string, facilityId: string) 
             });
             console.log(`[DaySmart] Customers API (cookie fallback) → ${custRes2.status}`);
             if (custRes2.ok) {
+              authVerified = true;
               const custData = await custRes2.json();
               if (custData?.data && Array.isArray(custData.data)) {
                 for (const customer of custData.data) {
@@ -578,6 +585,19 @@ async function handleLogin(email: string, password: string, facilityId: string) 
       } catch (err) {
         console.error('[DaySmart] Failed to fetch customers:', err);
       }
+    }
+
+    // If we couldn't verify the auth credential with a real API call,
+    // the login was a phantom success (e.g. bare cookies from a failed login).
+    // Report this as a login failure so the user knows their credentials didn't work.
+    if (!authVerified && customerIds.length === 0) {
+      console.error(`[DaySmart] Auth strategy "${authResult.strategy}" returned credentials but they failed verification`);
+      return NextResponse.json({
+        success: false,
+        error: 'Login appeared to succeed but the credentials were rejected by DaySmart. Please check your email and password, then try again.',
+        facilityId,
+        authStrategy: authResult.strategy,
+      }, { status: 401 });
     }
 
     // Fallback: extract customer info from login response
