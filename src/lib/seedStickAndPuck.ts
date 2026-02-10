@@ -675,7 +675,7 @@ export const SEED_RINKS: Rink[] = [
   {
     id: 'iceplex',
     name: 'Baptist Health IcePlex',
-    slug: 'baptisticeplex',
+    slug: 'warmemorial',
     platform: 'daysmart',
     location: { address: '3299 Sportsplex Dr', city: 'Fort Lauderdale', state: 'FL', lat: 26.1275, lng: -80.1727 },
     phone: '(954) 341-9956',

@@ -37,7 +37,7 @@ interface FacilityMeta {
 }
 
 const FACILITY_META: Record<string, FacilityMeta> = {
-  baptisticeplex: {
+  warmemorial: {
     rinkId: 'iceplex',
     rinkName: 'Baptist Health IcePlex',
     location: {
