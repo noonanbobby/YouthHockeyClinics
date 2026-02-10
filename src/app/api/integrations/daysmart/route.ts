@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
 
 /**
  * Validate a facility slug — check if it exists on DaySmart
+ *
+ * Uses the JSON:API events endpoint (same one the schedule page uses)
+ * because the legacy getOptions PHP endpoint is unreliable.
  */
 async function handleValidate(facilityId: string) {
   if (!facilityId) {
@@ -100,24 +103,65 @@ async function handleValidate(facilityId: string) {
   }
 
   try {
-    // Try to fetch facility options — this is a public endpoint
-    const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
-    const res = await fetch(optionsUrl, {
+    // Use the JSON:API events endpoint with a tiny page size to validate.
+    // This is the same public endpoint that powers the schedule/stick-and-puck page.
+    const url = new URL(`${API_BASE}/events`);
+    url.searchParams.set('company', facilityId);
+    url.searchParams.set('page[size]', '1');
+    url.searchParams.set('sort', '-start');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(url.toString(), {
       headers: {
-        'Accept': 'application/json',
+        'Accept': 'application/vnd.api+json',
         'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/`,
       },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
+      // Fall back to the legacy getOptions endpoint in case JSON:API is temporarily down
+      const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
+      const optRes = await fetch(optionsUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/`,
+        },
+      });
+
+      if (!optRes.ok) {
+        return NextResponse.json({
+          valid: false,
+          error: `Facility "${facilityId}" not found on DaySmart. Check the URL.`,
+        });
+      }
+
+      const optData = await optRes.json().catch(() => null);
       return NextResponse.json({
-        valid: false,
-        error: `Facility "${facilityId}" not found on DaySmart. Check the URL.`,
+        valid: true,
+        facilityId,
+        facilityName: optData?.company?.name || optData?.name || facilityId,
       });
     }
 
-    const data = await res.json().catch(() => null);
-    const facilityName = data?.company?.name || data?.name || facilityId;
+    // JSON:API responded OK — facility exists
+    // Try to extract facility name from the getOptions endpoint
+    let facilityName = facilityId;
+    try {
+      const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
+      const optRes = await fetch(optionsUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (optRes.ok) {
+        const optData = await optRes.json().catch(() => null);
+        facilityName = optData?.company?.name || optData?.name || facilityId;
+      }
+    } catch {
+      // Name lookup failed — use slug as fallback
+    }
 
     return NextResponse.json({
       valid: true,
