@@ -130,7 +130,7 @@ export interface Registration {
 }
 
 // ── Stick & Puck ──────────────────────────────────────────────
-export type SessionType = 'stick-and-puck' | 'open-hockey' | 'public-skate' | 'drop-in' | 'freestyle';
+export type SessionType = 'stick-and-puck' | 'open-hockey' | 'public-skate' | 'drop-in';
 
 export interface StickAndPuckSession {
   id: string;

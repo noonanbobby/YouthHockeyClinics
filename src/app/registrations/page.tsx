@@ -277,6 +277,16 @@ export default function RegistrationsPage() {
             for (const reg of oldIhpRegs) removeRegistration(reg.id);
 
             const allOrders = [...(syncData.matchedOrders || []), ...(syncData.unmatchedOrders || [])];
+            // Log extracted names to console for debugging
+            console.log('[IHP Sync] Orders received:', allOrders.map(o => ({
+              id: o.orderId,
+              campName: o.campName,
+              location: o.location,
+              dates: o.dates,
+              price: o.price,
+              debug: o.debug,
+            })));
+
             for (const order of allOrders) {
               const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
               const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
@@ -296,6 +306,17 @@ export default function RegistrationsPage() {
               totalImported++;
             }
             setIceHockeyProConfig({ lastSync: new Date().toISOString() });
+
+            // Also run debug endpoint to capture raw HTML
+            try {
+              const debugRes = await fetch('/api/integrations/icehockeypro/debug', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionCookie: loginData.sessionCookie }),
+              });
+              const debugData = await debugRes.json();
+              console.log('[IHP Debug] Raw order page data:', debugData);
+            } catch { /* debug is optional */ }
           }
         }
       }

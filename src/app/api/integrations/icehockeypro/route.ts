@@ -442,10 +442,16 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
                              variations['campdates1'] || variations['camp dates 1'] ||
                              pipeParsed.dates || '';
 
-        // Get total price
-        const totalText = $order('.woocommerce-Price-amount, .order-total .amount, .woocommerce-table--order-details tfoot tr:last-child .amount').last().text().trim();
-        const price = parseFloat(totalText.replace(/[^0-9.]/g, '')) || 0;
-        const currency = totalText.includes('$') ? 'USD' : totalText.includes('€') ? 'EUR' : 'USD';
+        // Get per-item price (from the product row), NOT order total
+        // WooCommerce order tables: td.product-name | td.product-total
+        const itemPriceText = $productCell.parent().find('td.product-total .woocommerce-Price-amount, td.product-total .amount').first().text().trim();
+        // Fallback: check for a price amount INSIDE the product cell (some themes)
+        const cellPriceText = $productCell.find('.woocommerce-Price-amount, .amount').first().text().trim();
+        // Last fallback: order total
+        const orderTotalText = $order('.woocommerce-table--order-details tfoot tr:last-child .woocommerce-Price-amount, .order-total .amount').last().text().trim();
+        const priceText = itemPriceText || cellPriceText || orderTotalText;
+        const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+        const currency = priceText.includes('$') ? 'USD' : priceText.includes('€') ? 'EUR' : 'USD';
 
         // Billing info
         const billingName = $order('.woocommerce-column--billing-address address, .woocommerce-customer-details address').first().text().trim().split('\n')[0]?.trim() || '';
