@@ -3,7 +3,19 @@
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
-import { format, parseISO, startOfMonth, subMonths, isAfter } from 'date-fns';
+import { format, startOfMonth, subMonths, isAfter, isValid } from 'date-fns';
+
+function safeParse(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return isValid(d) ? d : null;
+}
+
+function safeFormat(dateStr: string | undefined | null, fmt: string, fallback = 'TBD'): string {
+  const d = safeParse(dateStr);
+  if (!d) return fallback;
+  try { return format(d, fmt); } catch { return fallback; }
+}
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -48,11 +60,11 @@ export default function SpendingPage() {
     const now = new Date();
     const thisMonthStart = startOfMonth(now);
     const thisMonth = activeRegistrations
-      .filter((r) => isAfter(parseISO(r.registeredAt), thisMonthStart))
+      .filter((r) => safeParse(r.registeredAt) && isAfter(safeParse(r.registeredAt)!, thisMonthStart))
       .reduce((sum, r) => sum + r.price, 0);
     const sixMonthsAgo = startOfMonth(subMonths(now, 6));
     const recentTotal = activeRegistrations
-      .filter((r) => isAfter(parseISO(r.registeredAt), sixMonthsAgo))
+      .filter((r) => safeParse(r.registeredAt) && isAfter(safeParse(r.registeredAt)!, sixMonthsAgo))
       .reduce((sum, r) => sum + r.price, 0);
     const avgMonthly = recentTotal / 6;
     return { total, count, average, thisMonth, avgMonthly };
@@ -68,7 +80,7 @@ export default function SpendingPage() {
       const monthKey = format(monthStart, 'yyyy-MM');
       const monthLabel = format(monthStart, 'MMM');
       const monthRegs = activeRegistrations.filter(
-        (r) => format(parseISO(r.registeredAt), 'yyyy-MM') === monthKey
+        (r) => safeFormat(r.registeredAt, 'yyyy-MM', '') === monthKey
       );
       months.push({
         month: monthKey,
@@ -478,7 +490,7 @@ export default function SpendingPage() {
                         <div>
                           <p className="text-xs font-medium" style={{ color: 'var(--theme-text-secondary)' }}>{reg.clinicName}</p>
                           <p className="text-[10px]" style={{ color: 'var(--theme-text-muted)' }}>
-                            {format(parseISO(reg.startDate), 'MMM d, yyyy')}
+                            {safeFormat(reg.startDate, 'MMM d, yyyy')}
                             {reg.source !== 'manual' && (
                               <span className="ml-2" style={{ color: 'var(--theme-text-muted)' }}>via {reg.source}</span>
                             )}
@@ -582,7 +594,7 @@ export default function SpendingPage() {
                     <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--theme-text-secondary)' }}>
                       <span>{reg.venue || reg.city}</span>
                       <span>·</span>
-                      <span>{format(parseISO(reg.startDate), 'MMM d')}</span>
+                      <span>{safeFormat(reg.startDate, 'MMM d')}</span>
                       {reg.source !== 'manual' && (
                         <>
                           <span>·</span>

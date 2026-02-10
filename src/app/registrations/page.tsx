@@ -26,16 +26,39 @@ import {
   isSameDay,
   addMonths,
   subMonths,
-  parseISO,
   startOfWeek,
   endOfWeek,
   isPast,
+  isValid,
 } from 'date-fns';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import type { Registration } from '@/types';
 
 type ViewMode = 'list' | 'calendar';
+
+/** Safely parse a date string — returns a valid Date or null */
+function safeParse(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null;
+  // Try ISO first (2026-03-15 or 2026-03-15T00:00:00.000Z)
+  let d = new Date(dateStr);
+  if (isValid(d)) return d;
+  // Try common formats
+  d = new Date(dateStr.replace(/-/g, '/'));
+  if (isValid(d)) return d;
+  return null;
+}
+
+/** Safely format a date string — returns formatted text or fallback */
+function safeFormat(dateStr: string | undefined | null, fmt: string, fallback = 'TBD'): string {
+  const d = safeParse(dateStr);
+  if (!d) return fallback;
+  try {
+    return format(d, fmt);
+  } catch {
+    return fallback;
+  }
+}
 
 export default function RegistrationsPage() {
   const router = useRouter();
@@ -55,10 +78,13 @@ export default function RegistrationsPage() {
     registrations.forEach((reg) => {
       if (reg.status === 'cancelled') {
         cancelled.push(reg);
-      } else if (isPast(parseISO(reg.endDate))) {
-        past.push(reg);
       } else {
-        upcoming.push(reg);
+        const end = safeParse(reg.endDate);
+        if (end && isPast(end)) {
+          past.push(reg);
+        } else {
+          upcoming.push(reg);
+        }
       }
     });
 
@@ -68,8 +94,9 @@ export default function RegistrationsPage() {
   // Get registrations for selected day
   const getRegistrationsForDay = (day: Date) => {
     return registrations.filter((reg) => {
-      const start = parseISO(reg.startDate);
-      const end = parseISO(reg.endDate);
+      const start = safeParse(reg.startDate);
+      const end = safeParse(reg.endDate);
+      if (!start || !end) return false;
       return day >= start && day <= end;
     });
   };
@@ -366,14 +393,14 @@ function RegistrationCard({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 shrink-0" />
                 <span>
-                  {format(parseISO(registration.startDate), 'MMM d')} -{' '}
-                  {format(parseISO(registration.endDate), 'MMM d, yyyy')}
+                  {safeFormat(registration.startDate, 'MMM d')} -{' '}
+                  {safeFormat(registration.endDate, 'MMM d, yyyy')}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 shrink-0" />
                 <span>
-                  {registration.currency} {registration.price.toFixed(2)}
+                  {registration.currency} {(typeof registration.price === 'number' ? registration.price : 0).toFixed(2)}
                 </span>
               </div>
               {registration.playerName && (
