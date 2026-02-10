@@ -29,6 +29,7 @@ import {
   Cake,
   Shield,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -60,6 +61,9 @@ export default function SettingsPage() {
     updateChildProfile,
     removeChildProfile,
     toggleActiveChild,
+    setDaySmartConfig,
+    setIceHockeyProConfig,
+    removeRegistration,
   } = useStore();
   const { refresh } = useClinicSearch();
   const [homeInput, setHomeInput] = useState(homeLocation ? `${homeLocation.city}, ${homeLocation.state}` : '');
@@ -843,6 +847,109 @@ export default function SettingsPage() {
                 </span>
               </li>
             </ol>
+          </div>
+
+          {/* Reset & Troubleshooting */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Reset & Troubleshooting</p>
+                <p className="text-xs text-slate-500">Fix display issues or start fresh</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {/* Clear cache - soft */}
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined' && 'caches' in window) {
+                    caches.keys().then((names) => {
+                      for (const name of names) caches.delete(name);
+                    });
+                  }
+                  if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then((regs) => {
+                      for (const reg of regs) reg.unregister();
+                    });
+                  }
+                  window.location.reload();
+                }}
+                className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={14} className="text-slate-500" />
+                  <div className="text-left">
+                    <p className="text-xs font-medium text-slate-900">Clear Cache & Reload</p>
+                    <p className="text-[10px] text-slate-400">Fixes stale UI. Keeps your data.</p>
+                  </div>
+                </div>
+                <ChevronRight size={14} className="text-slate-400" />
+              </button>
+
+              {/* Reset integrations */}
+              <button
+                onClick={() => {
+                  if (confirm('Disconnect all integrations and clear imported registrations?')) {
+                    setDaySmartConfig({
+                      email: '', password: '', facilityId: '', facilityName: '',
+                      connected: false, lastSync: null, familyMembers: [], customerIds: [],
+                    });
+                    setIceHockeyProConfig({
+                      email: '', password: '', connected: false, lastSync: null,
+                      playerName: '', linkedChildIds: [],
+                    });
+                    const synced = registrations.filter((r) => r.source === 'dash' || r.source === 'icehockeypro');
+                    for (const reg of synced) removeRegistration(reg.id);
+                    window.location.reload();
+                  }
+                }}
+                className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Plug size={14} className="text-orange-500" />
+                  <div className="text-left">
+                    <p className="text-xs font-medium text-slate-900">Reset All Integrations</p>
+                    <p className="text-[10px] text-slate-400">Disconnects DaySmart & IceHockeyPro, clears imported data.</p>
+                  </div>
+                </div>
+                <ChevronRight size={14} className="text-slate-400" />
+              </button>
+
+              {/* Full factory reset */}
+              <button
+                onClick={() => {
+                  if (confirm('This will erase ALL your data — favorites, registrations, children, settings, everything. Are you sure?')) {
+                    if (confirm('Really? This cannot be undone.')) {
+                      localStorage.removeItem('hockey-clinics-storage');
+                      if (typeof window !== 'undefined' && 'caches' in window) {
+                        caches.keys().then((names) => {
+                          for (const name of names) caches.delete(name);
+                        });
+                      }
+                      if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then((regs) => {
+                          for (const reg of regs) reg.unregister();
+                        });
+                      }
+                      window.location.reload();
+                    }
+                  }
+                }}
+                className="w-full flex items-center justify-between p-3 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Trash2 size={14} className="text-red-500" />
+                  <div className="text-left">
+                    <p className="text-xs font-medium text-red-700">Factory Reset</p>
+                    <p className="text-[10px] text-red-400">Erases everything. Start completely fresh.</p>
+                  </div>
+                </div>
+                <ChevronRight size={14} className="text-red-400" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

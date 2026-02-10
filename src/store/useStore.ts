@@ -674,7 +674,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 5,
+      version: 6,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -720,6 +720,22 @@ export const useStore = create<AppState>()(
             if (!dsc.familyMembers) dsc.familyMembers = [];
             if (!dsc.customerIds) dsc.customerIds = [];
             if (!dsc.facilityName) dsc.facilityName = '';
+          }
+        }
+        if (version < 6) {
+          // Clear stale stub facilityIds that don't exist on DaySmart
+          if (state.daySmartConfig) {
+            const dsc = state.daySmartConfig as Record<string, unknown>;
+            const fid = dsc.facilityId as string;
+            // Old stub IDs like "baptist-iceplex-fl" are not valid DaySmart slugs
+            if (fid && fid.includes('-') && fid.length > 20) {
+              dsc.facilityId = '';
+              dsc.facilityName = '';
+              dsc.connected = false;
+              dsc.lastSync = null;
+              dsc.familyMembers = [];
+              dsc.customerIds = [];
+            }
           }
         }
         return state;
