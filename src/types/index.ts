@@ -130,14 +130,16 @@ export interface Registration {
   isDemo?: boolean;
 }
 
-// DaySmart/Dash integration
+// DaySmart/Dash integration — works with ANY DaySmart-powered facility
 export interface DaySmartConfig {
   email: string;
   password: string;
-  facilityId: string; // Baptist Ice Plex
-  facilityName: string;
+  facilityId: string; // Slug from URL, e.g. "warmemorial", "iceden"
+  facilityName: string; // Human-readable name discovered from API
   connected: boolean;
   lastSync: string | null;
+  familyMembers: Array<{ id: string; name: string }>; // Auto-discovered from API
+  customerIds: string[]; // All linked customer IDs
 }
 
 export interface DaySmartActivity {

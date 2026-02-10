@@ -588,9 +588,11 @@ export const useStore = create<AppState>()(
         email: '',
         password: '',
         facilityId: '',
-        facilityName: 'Baptist Health IcePlex',
+        facilityName: '',
         connected: false,
         lastSync: null,
+        familyMembers: [],
+        customerIds: [],
       },
       setDaySmartConfig: (config) =>
         set((state) => ({

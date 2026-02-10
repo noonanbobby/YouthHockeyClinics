@@ -189,6 +189,11 @@ export default function IntegrationsPage() {
   const [showIhpPassword, setShowIhpPassword] = useState(false);
   const [dashEmail, setDashEmail] = useState(daySmartConfig.email);
   const [dashPassword, setDashPassword] = useState(daySmartConfig.password);
+  const [dashFacilityUrl, setDashFacilityUrl] = useState(
+    daySmartConfig.facilityId
+      ? `https://apps.daysmartrecreation.com/dash/x/#/online/${daySmartConfig.facilityId}/`
+      : ''
+  );
   const [ihpEmail, setIhpEmail] = useState(iceHockeyProConfig.email);
   const [ihpPassword, setIhpPassword] = useState(iceHockeyProConfig.password);
   const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(
@@ -196,6 +201,17 @@ export default function IntegrationsPage() {
   );
   const [connectionStatus, setConnectionStatus] = useState('');
   const [syncing, setSyncing] = useState(false);
+
+  /** Extract facility slug from a DaySmart URL or raw slug */
+  const extractFacilityId = (input: string): string | null => {
+    const trimmed = input.trim();
+    // Full URL: https://apps.daysmartrecreation.com/dash/x/#/online/SLUG/...
+    const urlMatch = trimmed.match(/daysmartrecreation\.com\/dash\/x\/#\/online\/([^/]+)/i);
+    if (urlMatch) return urlMatch[1];
+    // Just the slug (no spaces, no slashes)
+    if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+    return null;
+  };
 
   // Get linked children names for display
   const getLinkedChildNames = () => {
@@ -216,56 +232,74 @@ export default function IntegrationsPage() {
 
   // --- Dash by DaySmart ---
   const handleDashConnect = async () => {
+    const facilityId = extractFacilityId(dashFacilityUrl);
+    if (!facilityId) {
+      setConnectionStatus('Please enter your rink\'s DaySmart URL or facility ID (e.g. "warmemorial").');
+      return;
+    }
     if (!dashEmail || !dashPassword) {
-      setConnectionStatus('Please enter your email and password');
+      setConnectionStatus('Please enter your Dash email and password.');
       return;
     }
     setDaySmartSyncing(true);
-    setConnectionStatus('Connecting to Dash by DaySmart...');
+    setConnectionStatus('Validating facility...');
 
     try {
-      // Step 1: Login
-      const loginRes = await fetch('/api/integrations/daysmart?action=login', {
+      // Step 1: Validate the facility exists
+      const validateRes = await fetch('/api/integrations/daysmart?action=validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: dashEmail, password: dashPassword }),
+        body: JSON.stringify({ facilityId }),
       });
-      const loginData = await loginRes.json();
-
-      if (!loginRes.ok || !loginData.success) {
-        setConnectionStatus(loginData.error || 'Failed to connect to DaySmart. Check your credentials.');
+      const validateData = await validateRes.json();
+      if (!validateData.valid) {
+        setConnectionStatus(validateData.error || `Facility "${facilityId}" not found. Check the URL.`);
         setDaySmartSyncing(false);
         return;
       }
 
-      // Step 2: Sync events
-      setConnectionStatus('Connected! Fetching your registrations...');
+      // Step 2: Login
+      setConnectionStatus(`Logging in to ${validateData.facilityName || facilityId}...`);
+      const loginRes = await fetch('/api/integrations/daysmart?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: dashEmail, password: dashPassword, facilityId }),
+      });
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok || !loginData.success) {
+        setConnectionStatus(loginData.error || 'Failed to connect. Check your credentials.');
+        setDaySmartSyncing(false);
+        return;
+      }
+
+      const facilityName = loginData.facilityName || validateData.facilityName || facilityId;
+      const familyMembers = loginData.familyMembers || [];
+      const customerIds = loginData.customerIds || [];
+
+      // Step 3: Sync events
+      setConnectionStatus(`Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`);
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionCookie: loginData.sessionCookie,
-          customerIds: loginData.customerIds,
-        }),
+        body: JSON.stringify({ facilityId, sessionCookie: loginData.sessionCookie, customerIds }),
       });
       const syncData = await syncRes.json();
 
       // Import events as registrations
       if (syncData.success && syncData.activities) {
-        // Clear old DaySmart registrations
         const oldDashRegs = registrations.filter((r) => r.source === 'dash');
         for (const reg of oldDashRegs) {
           removeRegistration(reg.id);
         }
 
-        // Add new registrations from synced activities
         let importedCount = 0;
         for (const activity of syncData.upcoming || []) {
           addRegistration({
             clinicId: `dash-${activity.id}`,
             clinicName: activity.name,
-            venue: activity.location,
-            city: 'Coral Springs',
+            venue: activity.location || facilityName,
+            city: '',
             startDate: activity.startDate,
             endDate: activity.endDate,
             price: activity.price,
@@ -281,42 +315,46 @@ export default function IntegrationsPage() {
         setDaySmartConfig({
           email: dashEmail,
           password: dashPassword,
-          facilityId: 'warmemorial',
-          facilityName: loginData.facility || 'Baptist Health IcePlex',
+          facilityId,
+          facilityName,
           connected: true,
           lastSync: new Date().toISOString(),
+          familyMembers,
+          customerIds,
         });
 
         addNotification({
           title: 'Dash Connected',
-          body: `Connected to ${loginData.facility || 'Baptist Health IcePlex'}. Imported ${importedCount} upcoming registrations.`,
+          body: `Connected to ${facilityName}. Found ${familyMembers.length} family member(s), imported ${importedCount} registrations.`,
           clinicId: '',
           type: 'new_clinic',
         });
 
         setConnectionStatus(
-          `Connected to ${loginData.facility || 'Baptist Health IcePlex'}! ` +
-          `Imported ${importedCount} upcoming registrations and ${(syncData.past || []).length} past events.`
+          `Connected to ${facilityName}! ` +
+          `${familyMembers.length} family member(s) discovered. ` +
+          `${importedCount} upcoming and ${(syncData.past || []).length} past registrations synced.`
         );
       } else {
-        // Connected but no events found (or API response different than expected)
         setDaySmartConfig({
           email: dashEmail,
           password: dashPassword,
-          facilityId: 'warmemorial',
-          facilityName: loginData.facility || 'Baptist Health IcePlex',
+          facilityId,
+          facilityName,
           connected: true,
           lastSync: new Date().toISOString(),
+          familyMembers,
+          customerIds,
         });
 
         addNotification({
           title: 'Dash Connected',
-          body: `Connected to ${loginData.facility || 'Baptist Health IcePlex'}.`,
+          body: `Connected to ${facilityName}. ${familyMembers.length} family member(s) found.`,
           clinicId: '',
           type: 'new_clinic',
         });
 
-        setConnectionStatus(`Connected to ${loginData.facility || 'Baptist Health IcePlex'}! ${syncData.error ? `Note: ${syncData.error}` : 'No upcoming events found.'}`);
+        setConnectionStatus(`Connected to ${facilityName}! ${familyMembers.length} family member(s) found. ${syncData.error ? `Note: ${syncData.error}` : 'No upcoming events found.'}`);
       }
     } catch (error) {
       setConnectionStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}. Check your internet connection.`);
@@ -329,11 +367,14 @@ export default function IntegrationsPage() {
     setConnectionStatus('Syncing with Dash...');
 
     try {
-      // Re-login to get fresh session
       const loginRes = await fetch('/api/integrations/daysmart?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: daySmartConfig.email, password: daySmartConfig.password }),
+        body: JSON.stringify({
+          email: daySmartConfig.email,
+          password: daySmartConfig.password,
+          facilityId: daySmartConfig.facilityId,
+        }),
       });
       const loginData = await loginRes.json();
 
@@ -348,14 +389,14 @@ export default function IntegrationsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          facilityId: daySmartConfig.facilityId,
           sessionCookie: loginData.sessionCookie,
-          customerIds: loginData.customerIds,
+          customerIds: loginData.customerIds || daySmartConfig.customerIds,
         }),
       });
       const syncData = await syncRes.json();
 
       if (syncData.success && syncData.activities) {
-        // Clear old and re-import
         const oldDashRegs = registrations.filter((r) => r.source === 'dash');
         for (const reg of oldDashRegs) {
           removeRegistration(reg.id);
@@ -366,8 +407,8 @@ export default function IntegrationsPage() {
           addRegistration({
             clinicId: `dash-${activity.id}`,
             clinicName: activity.name,
-            venue: activity.location,
-            city: 'Coral Springs',
+            venue: activity.location || daySmartConfig.facilityName,
+            city: '',
             startDate: activity.startDate,
             endDate: activity.endDate,
             price: activity.price,
@@ -380,7 +421,16 @@ export default function IntegrationsPage() {
           importedCount++;
         }
 
-        setDaySmartConfig({ lastSync: new Date().toISOString() });
+        // Update family members if newly discovered
+        if (loginData.familyMembers) {
+          setDaySmartConfig({
+            lastSync: new Date().toISOString(),
+            familyMembers: loginData.familyMembers,
+            customerIds: loginData.customerIds,
+          });
+        } else {
+          setDaySmartConfig({ lastSync: new Date().toISOString() });
+        }
         setConnectionStatus(`Sync complete! ${importedCount} upcoming registrations imported.`);
       } else {
         setDaySmartConfig({ lastSync: new Date().toISOString() });
@@ -393,10 +443,18 @@ export default function IntegrationsPage() {
   };
 
   const handleDashDisconnect = () => {
-    setDaySmartConfig({ email: '', password: '', facilityId: '', connected: false, lastSync: null });
+    const oldDashRegs = registrations.filter((r) => r.source === 'dash');
+    for (const reg of oldDashRegs) {
+      removeRegistration(reg.id);
+    }
+    setDaySmartConfig({
+      email: '', password: '', facilityId: '', facilityName: '',
+      connected: false, lastSync: null, familyMembers: [], customerIds: [],
+    });
     setDashEmail('');
     setDashPassword('');
-    setConnectionStatus('Disconnected from Dash.');
+    setDashFacilityUrl('');
+    setConnectionStatus('Disconnected from Dash. Registrations cleared.');
   };
 
   // --- IceHockeyPro ---
@@ -855,7 +913,7 @@ export default function IntegrationsPage() {
             title="Dash by DaySmart"
             subtitle="Not connected"
             connected={daySmartConfig.connected}
-            connectedText={`Connected — ${daySmartConfig.facilityName}`}
+            connectedText={`Connected — ${daySmartConfig.facilityName || daySmartConfig.facilityId || 'Your Rink'}`}
             color="orange"
             expanded={expandedSection === 'dash'}
             onToggle={() => setExpandedSection(expandedSection === 'dash' ? null : 'dash')}
@@ -865,18 +923,35 @@ export default function IntegrationsPage() {
                 <Zap size={14} className="text-orange-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-orange-700">
                   Connect your Dash by DaySmart account to automatically sync clinics,
-                  camps, and registrations from Baptist Health IcePlex.
+                  camps, and registrations from your rink. Works with any DaySmart-powered facility.
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials stored locally. Used only to communicate directly with DaySmart.
+                Credentials stored locally on your device. Used only to communicate directly with DaySmart&apos;s API.
               </p>
             </div>
             {!daySmartConfig.connected ? (
               <>
+                {/* Facility URL */}
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
+                    Your Rink&apos;s DaySmart URL
+                  </label>
+                  <input
+                    type="text"
+                    value={dashFacilityUrl}
+                    onChange={(e) => setDashFacilityUrl(e.target.value)}
+                    placeholder="e.g. https://apps.daysmartrecreation.com/dash/x/#/online/warmemorial/"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Paste the URL from your rink&apos;s Dash login page, or just the facility ID (e.g. &quot;warmemorial&quot;)
+                  </p>
+                </div>
+
                 <CredentialForm
                   email={dashEmail}
                   setEmail={setDashEmail}
@@ -903,9 +978,20 @@ export default function IntegrationsPage() {
                     <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
                   <p className="text-[10px] text-slate-500">Account: {daySmartConfig.email}</p>
-                  <p className="text-[10px] text-slate-500">Facility: {daySmartConfig.facilityName}</p>
+                  <p className="text-[10px] text-slate-500">Facility: {daySmartConfig.facilityName || daySmartConfig.facilityId}</p>
+                  {(daySmartConfig.familyMembers || []).length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-medium text-slate-600 mb-1">Family Members:</p>
+                      {daySmartConfig.familyMembers.map((member) => (
+                        <p key={member.id} className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <UserCheck size={9} className="text-emerald-500" />
+                          {member.name} <span className="text-slate-400">(#{member.id})</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   {daySmartConfig.lastSync && (
-                    <p className="text-[10px] text-slate-500">Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
