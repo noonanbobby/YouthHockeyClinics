@@ -809,11 +809,33 @@ export const useStore = create<AppState>()(
         iceHockeyProConfig: state.iceHockeyProConfig,
         emailScanConfig: state.emailScanConfig,
       }),
-      // Re-apply filters after store rehydrates from localStorage
-      // This ensures goalie/registration filters run with the user's saved child profiles
+      // Runs on EVERY rehydration from localStorage — not version-gated.
+      // Guarantees demo data cleanup regardless of migration race conditions.
       onRehydrateStorage: () => (state) => {
-        if (state && state.clinics.length > 0) {
-          setTimeout(() => state.applyFilters(), 0);
+        if (state) {
+          // Purge demo registrations that survived version migrations
+          const isDemoRegistration = (r: Registration) => {
+            const cid = r.clinicId || '';
+            const venue = (r.venue || '').toLowerCase();
+            const cn = (r.clinicName || '').toLowerCase();
+            if (cid.startsWith('seed-')) return true;
+            if (venue.includes('baptist health iceplex') || venue.includes('panthers iceden')) return true;
+            if (cn.includes('spring break hockey camp')) return true;
+            if (cn.includes('power skating clinic')) return true;
+            if (cn.includes('learn to skate')) return true;
+            if (cn.includes('elite summer hockey')) return true;
+            if (cn.includes('max ivanov spring skills')) return true;
+            return false;
+          };
+          const toRemove = state.registrations.filter(isDemoRegistration);
+          if (toRemove.length > 0) {
+            for (const r of toRemove) {
+              state.removeRegistration(r.id);
+            }
+          }
+          if (state.clinics.length > 0) {
+            setTimeout(() => state.applyFilters(), 0);
+          }
         }
       },
     }
