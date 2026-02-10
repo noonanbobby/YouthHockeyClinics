@@ -164,11 +164,41 @@ async function handleLogin(email: string, password: string, facilityId: string) 
       );
     }
 
-    // Extract session cookies from response
-    const setCookieHeaders = res.headers.getSetCookie?.() || [];
-    const cookies = setCookieHeaders.map((c) => c.split(';')[0]).join('; ');
+    // Extract session cookies from response — try multiple methods
+    let cookies = '';
+    try {
+      // Method 1: getSetCookie() (standard, returns array)
+      const setCookieHeaders = res.headers.getSetCookie?.() || [];
+      if (setCookieHeaders.length > 0) {
+        cookies = setCookieHeaders.map((c) => c.split(';')[0]).join('; ');
+      }
+    } catch {
+      // getSetCookie not available in this runtime
+    }
+    if (!cookies) {
+      // Method 2: get('set-cookie') — returns all cookies joined by ', '
+      const raw = res.headers.get('set-cookie') || '';
+      if (raw) {
+        // Split on ', ' but be careful of expires dates containing ','
+        // Safest: split on known cookie boundaries (name=value pairs after '; ')
+        cookies = raw
+          .split(/,\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/)
+          .map((c) => c.split(';')[0].trim())
+          .filter(Boolean)
+          .join('; ');
+      }
+    }
 
     const data = await res.json().catch(() => ({}));
+
+    // Check for session token in response body (some DaySmart configs return token instead of cookie)
+    const authToken = data?.token || data?.session_token || data?.access_token || '';
+    if (!cookies && authToken) {
+      cookies = `dash_session=${authToken}`;
+    }
+
+    console.log('[DaySmart] Login response keys:', Object.keys(data || {}));
+    console.log('[DaySmart] Cookies captured:', cookies ? `${cookies.length} chars` : 'NONE');
 
     // Discover all linked customers (family members) from the API
     const familyMembers: Array<{ id: string; name: string }> = [];
@@ -179,7 +209,7 @@ async function handleLogin(email: string, password: string, facilityId: string) 
       customerIds = [String(data.customer_id)];
     }
 
-    // Fetch the account's linked customers
+    // Fetch the account's linked customers (need cookies or token)
     if (cookies) {
       try {
         const custRes = await fetch(
@@ -212,7 +242,18 @@ async function handleLogin(email: string, password: string, facilityId: string) 
     // If we still have no customers, try the primary ID from login response
     if (customerIds.length === 0 && data?.customer_id) {
       customerIds = [String(data.customer_id)];
-      familyMembers.push({ id: String(data.customer_id), name: data?.name || email });
+      familyMembers.push({ id: String(data.customer_id), name: data?.name || data?.first_name || email });
+    }
+
+    // If we have NO cookies AND no customers, the login didn't really work
+    if (!cookies && customerIds.length === 0) {
+      console.error('[DaySmart] Login returned 200 but no session data. Response keys:', Object.keys(data || {}));
+      return NextResponse.json({
+        success: false,
+        error: 'Login succeeded but no session was established. DaySmart may require browser-based login for this facility.',
+        facilityId,
+        debugInfo: { responseKeys: Object.keys(data || {}), hasCookies: false },
+      }, { status: 401 });
     }
 
     // Get the facility name
