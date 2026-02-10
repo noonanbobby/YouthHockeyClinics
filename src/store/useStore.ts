@@ -674,7 +674,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 7,
+      version: 8,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -755,6 +755,32 @@ export const useStore = create<AppState>()(
                 const src = r.source as string;
                 if (src === 'manual') return false;
               }
+              return true;
+            });
+          }
+        }
+        if (version < 8) {
+          // Nuclear cleanup: remove ALL demo registrations unconditionally.
+          // Previous v7 migration was too restrictive (only removed source==='manual').
+          // This time we match by venue OR clinicName — no source check.
+          const regs = state.registrations as Array<Record<string, unknown>> | undefined;
+          if (regs && regs.length > 0) {
+            state.registrations = regs.filter((r) => {
+              const cid = (r.clinicId as string) || '';
+              const venue = ((r.venue as string) || '').toLowerCase();
+              const clinicName = ((r.clinicName as string) || '').toLowerCase();
+              // Remove seed clinic registrations
+              if (cid.startsWith('seed-')) return false;
+              // Remove any with isDemo flag
+              if (r.isDemo) return false;
+              // Remove ALL registrations from demo venues — no source check
+              if (venue.includes('baptist health iceplex') || venue.includes('panthers iceden')) return false;
+              // Remove known demo clinic names
+              if (clinicName.includes('spring break hockey camp')) return false;
+              if (clinicName.includes('power skating clinic')) return false;
+              if (clinicName.includes('learn to skate')) return false;
+              if (clinicName.includes('elite summer hockey')) return false;
+              if (clinicName.includes('max ivanov spring skills')) return false;
               return true;
             });
           }
