@@ -286,7 +286,7 @@ export default function IntegrationsPage() {
       });
       const syncData = await syncRes.json();
 
-      // Import events as registrations
+      // Import ALL events as registrations (upcoming + past)
       if (syncData.success && syncData.activities) {
         const oldDashRegs = registrations.filter((r) => r.source === 'dash');
         for (const reg of oldDashRegs) {
@@ -294,7 +294,8 @@ export default function IntegrationsPage() {
         }
 
         let importedCount = 0;
-        for (const activity of syncData.upcoming || []) {
+        const allActivities = syncData.activities || [];
+        for (const activity of allActivities) {
           addRegistration({
             clinicId: `dash-${activity.id}`,
             clinicName: activity.name,
@@ -306,7 +307,7 @@ export default function IntegrationsPage() {
             currency: 'USD',
             status: 'confirmed',
             source: 'dash',
-            notes: `${activity.category} — ${activity.startTime} to ${activity.endTime}`,
+            notes: `${activity.category}${activity.startTime ? ` — ${activity.startTime} to ${activity.endTime}` : ''}`,
             playerName: activity.customerName,
           });
           importedCount++;
@@ -330,10 +331,12 @@ export default function IntegrationsPage() {
           type: 'new_clinic',
         });
 
+        const upcomingCount = (syncData.upcoming || []).length;
+        const pastCount = (syncData.past || []).length;
         setConnectionStatus(
           `Connected to ${facilityName}! ` +
           `${familyMembers.length} family member(s) discovered. ` +
-          `${importedCount} upcoming and ${(syncData.past || []).length} past registrations synced.`
+          `${upcomingCount} upcoming + ${pastCount} past = ${importedCount} total registrations synced.`
         );
       } else {
         setDaySmartConfig({
@@ -403,7 +406,8 @@ export default function IntegrationsPage() {
         }
 
         let importedCount = 0;
-        for (const activity of syncData.upcoming || []) {
+        const allActivities = syncData.activities || [];
+        for (const activity of allActivities) {
           addRegistration({
             clinicId: `dash-${activity.id}`,
             clinicName: activity.name,
@@ -415,7 +419,7 @@ export default function IntegrationsPage() {
             currency: 'USD',
             status: 'confirmed',
             source: 'dash',
-            notes: `${activity.category} — ${activity.startTime} to ${activity.endTime}`,
+            notes: `${activity.category}${activity.startTime ? ` — ${activity.startTime} to ${activity.endTime}` : ''}`,
             playerName: activity.customerName,
           });
           importedCount++;
@@ -431,7 +435,9 @@ export default function IntegrationsPage() {
         } else {
           setDaySmartConfig({ lastSync: new Date().toISOString() });
         }
-        setConnectionStatus(`Sync complete! ${importedCount} upcoming registrations imported.`);
+        const upcomingCount = (syncData.upcoming || []).length;
+        const pastCount = (syncData.past || []).length;
+        setConnectionStatus(`Sync complete! ${importedCount} registrations imported (${upcomingCount} upcoming, ${pastCount} past).`);
       } else {
         setDaySmartConfig({ lastSync: new Date().toISOString() });
         setConnectionStatus(`Sync complete. ${syncData.error || 'No new events found.'}`);
@@ -612,36 +618,42 @@ export default function IntegrationsPage() {
       const syncData = await syncRes.json();
 
       if (syncData.success) {
-        // Clear old and re-import
+        // Clear old and re-import ALL orders (matched + unmatched) — same as connect
         const oldIhpRegs = registrations.filter((r) => r.source === 'icehockeypro');
         for (const reg of oldIhpRegs) {
           removeRegistration(reg.id);
         }
 
         let importedCount = 0;
-        for (const order of syncData.matchedOrders || []) {
+        const allOrders = [...(syncData.matchedOrders || []), ...(syncData.unmatchedOrders || [])];
+        for (const order of allOrders) {
           const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
           const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
 
           addRegistration({
             clinicId: `ihp-${order.orderId}`,
             clinicName: order.campName,
-            venue: order.location || 'IceHockeyPro Camp',
+            venue: order.location || 'IceHockeyPro',
             city: extractCity(order.location),
             startDate,
             endDate,
             price: order.price,
             currency: order.currency || 'USD',
-            status: order.status === 'completed' ? 'confirmed' : 'pending',
+            status: 'confirmed',
             source: 'icehockeypro',
-            notes: `Order #${order.orderId} — ${order.dates || 'Dates TBD'}`,
-            playerName: order.matchedChildName,
+            notes: `Order #${order.orderId}${order.dates ? ` — ${order.dates}` : ''}`,
+            playerName: order.matchedChildName || order.billingName || undefined,
           });
           importedCount++;
         }
 
         setIceHockeyProConfig({ lastSync: new Date().toISOString() });
-        setConnectionStatus(`Sync complete! ${importedCount} camps from ${syncData.totalOrders} orders.`);
+        const matchedCount = (syncData.matchedOrders || []).length;
+        const unmatchedCount = (syncData.unmatchedOrders || []).length;
+        setConnectionStatus(
+          `Sync complete! ${importedCount} camps from ${syncData.totalOrders} orders ` +
+          `(${matchedCount} matched, ${unmatchedCount} unmatched).`
+        );
       } else {
         setIceHockeyProConfig({ lastSync: new Date().toISOString() });
         setConnectionStatus(`Sync complete. ${syncData.error || 'No new orders found.'}`);

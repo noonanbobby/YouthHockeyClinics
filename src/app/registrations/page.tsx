@@ -109,12 +109,35 @@ function statusStyle(s: DisplayStatus): string {
   }
 }
 
+// Generic names that should NOT be used for grouping — treat each as its own card
+const GENERIC_CLINIC_NAMES = new Set([
+  'camp', 'camps', 'event', 'class', 'program', 'session', 'registration',
+  'product', 'item', 'ticket', 'unknown camp', 'icehockeypro',
+]);
+
+function isGenericName(name: string): boolean {
+  return GENERIC_CLINIC_NAMES.has(name.toLowerCase().trim());
+}
+
 function groupRegistrations(registrations: Registration[]): RegistrationGroup[] {
   const map = new Map<string, RegistrationGroup>();
 
   for (const reg of registrations) {
-    // Group key: normalize name + start date + venue
-    const key = `${reg.clinicName.toLowerCase().trim()}::${reg.startDate}::${reg.venue.toLowerCase().trim()}`;
+    const name = reg.clinicName.toLowerCase().trim();
+    const venue = reg.venue.toLowerCase().trim();
+
+    // If the name is generic (like "Camp"), use clinicId to prevent merging
+    // different orders that happen to share the same generic name + date + venue.
+    // For real names, group by name + date + venue so siblings merge.
+    let key: string;
+    if (isGenericName(name)) {
+      // Use clinicId as grouping key — each unique order/clinic stays separate
+      // But still allow merging by same clinicId for multi-child scenarios
+      key = `${reg.clinicId}::${reg.startDate}`;
+    } else {
+      key = `${name}::${reg.startDate}::${venue}`;
+    }
+
     const ds = getDisplayStatus(reg);
 
     if (map.has(key)) {

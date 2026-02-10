@@ -246,42 +246,85 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
                         `unknown-${orders.length}`;
 
         // ── Extract product info from the order detail table ──
+        // Strategy: gather ALL possible name/location/date candidates, then pick the best
+        const GENERIC_WORDS = new Set([
+          'camp', 'camps', 'event', 'events', 'class', 'classes', 'product', 'item',
+          'session', 'sessions', 'program', 'programs', 'registration', 'ticket',
+          'n/a', 'na', 'tbd', 'yes', 'no', 'none', 'other', 'default',
+        ]);
+        const isMeaningful = (s: string) => {
+          const clean = s.replace(/\s*×\s*\d+$/, '').trim();
+          return clean.length > 3 && !GENERIC_WORDS.has(clean.toLowerCase());
+        };
+
         const $productCell = $order('td.product-name, .woocommerce-table--order-details .product-name').first();
 
-        // 1. The <a> tag text is usually the real WooCommerce product title
+        // 1. Product link text (WooCommerce product title)
         const productLinkText = $productCell.find('a').first().text().trim();
 
-        // 2. WooCommerce variation data lives in <dl class="variation"> or .wc-item-meta
+        // 2. Product link URL slug — e.g. /product/super-skills-weekend/ → "Super Skills Weekend"
+        const productHref = $productCell.find('a').first().attr('href') || '';
+        const slugMatch = productHref.match(/\/product\/([^/?#]+)/);
+        const slugName = slugMatch
+          ? decodeURIComponent(slugMatch[1]).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+          : '';
+
+        // 3. WooCommerce variation metadata (dl.variation, .wc-item-meta)
         const variations: Record<string, string> = {};
         $productCell.find('dl.variation dt, dl.wc-item-meta dt').each((_, el) => {
           const key = $order(el).text().replace(/[:\s]+$/, '').trim().toLowerCase();
           const val = $order(el).next('dd').text().trim();
           if (key && val) variations[key] = val;
         });
-        // Also handle <ul class="wc-item-meta"><li> format
         $productCell.find('.wc-item-meta li').each((_, el) => {
           const label = $order(el).find('strong, .wc-item-meta-label').text().replace(/[:\s]+$/, '').trim().toLowerCase();
           const val = $order(el).contents().not('strong, .wc-item-meta-label').text().trim();
           if (label && val) variations[label] = val;
         });
 
-        // 3. Build camp name from best available data
-        let scrapedName = variations['camp'] || variations['camp name'] || variations['event'] ||
-                          variations['program'] || variations['class'] || '';
-        if (!scrapedName && productLinkText.length > 5 &&
-            !['camp', 'product', 'item'].includes(productLinkText.toLowerCase())) {
-          scrapedName = productLinkText;
-        }
-        // Fall back to full-text pipe-delimited parsing
+        // 4. Full cell text for pipe-delimited parsing (e.g. "CAMP NAME | LOCATION | DATES × 1")
         const fullCellText = $productCell.text().trim();
         const parsed = parseCampDescription(fullCellText);
-        if (!scrapedName) scrapedName = parsed.name || productLinkText || 'Unknown Camp';
 
-        // 4. Location + dates from variations OR parsed description
+        // 5. All product cells (some orders have multiple line items)
+        const allProductTexts: string[] = [];
+        $order('td.product-name, .woocommerce-table--order-details .product-name').each((_, el) => {
+          allProductTexts.push($order(el).text().trim());
+        });
+
+        // ── Build camp name: use BEST meaningful source ──
+        // Priority: variation name → pipe-parsed name → product link text → URL slug → fallback
+        const variationName = variations['camp'] || variations['camp name'] || variations['event'] ||
+                              variations['program'] || variations['class'] || variations['title'] || '';
+        let scrapedName = '';
+        if (isMeaningful(variationName)) {
+          scrapedName = variationName;
+        }
+        if (!scrapedName && parsed.name && isMeaningful(parsed.name)) {
+          scrapedName = parsed.name;
+        }
+        if (!scrapedName && isMeaningful(productLinkText)) {
+          scrapedName = productLinkText;
+        }
+        if (!scrapedName && isMeaningful(slugName)) {
+          scrapedName = slugName;
+        }
+        // Last resort: use whatever we have, even if generic
+        if (!scrapedName) {
+          scrapedName = variationName || parsed.name || productLinkText || slugName || `IceHockeyPro Order #${orderId}`;
+        }
+        // Clean up quantity suffix
+        scrapedName = scrapedName.replace(/\s*×\s*\d+$/, '').trim();
+
+        // ── Location: variation → parsed → empty ──
         const scrapedLocation = variations['camp location'] || variations['location'] ||
-                                variations['venue'] || parsed.location || '';
+                                variations['venue'] || variations['rink'] ||
+                                parsed.location || '';
+
+        // ── Dates: variation → parsed → empty ──
         const scrapedDates = variations['camp dates'] || variations['dates'] ||
-                             variations['date'] || parsed.dates || '';
+                             variations['date'] || variations['camp date'] ||
+                             parsed.dates || '';
 
         // Get total price
         const totalText = $order('.woocommerce-Price-amount, .order-total .amount, .woocommerce-table--order-details tfoot tr:last-child .amount').last().text().trim();
