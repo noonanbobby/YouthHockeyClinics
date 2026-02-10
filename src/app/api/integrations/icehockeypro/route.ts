@@ -245,33 +245,65 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
                         $order('.woocommerce-order-data__heading, .order-number').first().text().replace(/[^\d]/g, '') ||
                         `unknown-${orders.length}`;
 
-        // Description line: "SUPER SKILLS WEEKEND with MAX IVANOV | MIAMI, Florida - USA | February 28 - March 1, 2026 × 1"
-        const description = $order('td.product-name, .woocommerce-table--order-details .product-name').first().text().trim();
+        // ── Extract product info from the order detail table ──
+        const $productCell = $order('td.product-name, .woocommerce-table--order-details .product-name').first();
 
-        // Parse camp info from description
-        const parsed = parseCampDescription(description);
+        // 1. The <a> tag text is usually the real WooCommerce product title
+        const productLinkText = $productCell.find('a').first().text().trim();
+
+        // 2. WooCommerce variation data lives in <dl class="variation"> or .wc-item-meta
+        const variations: Record<string, string> = {};
+        $productCell.find('dl.variation dt, dl.wc-item-meta dt').each((_, el) => {
+          const key = $order(el).text().replace(/[:\s]+$/, '').trim().toLowerCase();
+          const val = $order(el).next('dd').text().trim();
+          if (key && val) variations[key] = val;
+        });
+        // Also handle <ul class="wc-item-meta"><li> format
+        $productCell.find('.wc-item-meta li').each((_, el) => {
+          const label = $order(el).find('strong, .wc-item-meta-label').text().replace(/[:\s]+$/, '').trim().toLowerCase();
+          const val = $order(el).contents().not('strong, .wc-item-meta-label').text().trim();
+          if (label && val) variations[label] = val;
+        });
+
+        // 3. Build camp name from best available data
+        let scrapedName = variations['camp'] || variations['camp name'] || variations['event'] ||
+                          variations['program'] || variations['class'] || '';
+        if (!scrapedName && productLinkText.length > 5 &&
+            !['camp', 'product', 'item'].includes(productLinkText.toLowerCase())) {
+          scrapedName = productLinkText;
+        }
+        // Fall back to full-text pipe-delimited parsing
+        const fullCellText = $productCell.text().trim();
+        const parsed = parseCampDescription(fullCellText);
+        if (!scrapedName) scrapedName = parsed.name || productLinkText || 'Unknown Camp';
+
+        // 4. Location + dates from variations OR parsed description
+        const scrapedLocation = variations['camp location'] || variations['location'] ||
+                                variations['venue'] || parsed.location || '';
+        const scrapedDates = variations['camp dates'] || variations['dates'] ||
+                             variations['date'] || parsed.dates || '';
 
         // Get total price
         const totalText = $order('.woocommerce-Price-amount, .order-total .amount, .woocommerce-table--order-details tfoot tr:last-child .amount').last().text().trim();
         const price = parseFloat(totalText.replace(/[^0-9.]/g, '')) || 0;
         const currency = totalText.includes('$') ? 'USD' : totalText.includes('€') ? 'EUR' : 'USD';
 
-        // Get billing name from address section
+        // Billing info
         const billingName = $order('.woocommerce-column--billing-address address, .woocommerce-customer-details address').first().text().trim().split('\n')[0]?.trim() || '';
         const billingAddress = $order('.woocommerce-column--billing-address address, .woocommerce-customer-details address').first().text().trim();
 
-        // Get order status
+        // Order status
         const status = $order('.woocommerce-order-data mark, .order-status').first().text().trim() || 'completed';
 
-        // Get order date
+        // Order date
         const orderDate = $order('.woocommerce-order-data__meta time, .order-date time').first().attr('datetime') ||
                           $order('.woocommerce-order-data__meta, .order-date').first().text().match(/\w+ \d+, \d{4}/)?.[0] || '';
 
         orders.push({
           orderId,
-          campName: parsed.name || description.split('|')[0]?.trim() || 'Unknown Camp',
-          location: parsed.location || '',
-          dates: parsed.dates || '',
+          campName: scrapedName,
+          location: scrapedLocation,
+          dates: scrapedDates,
           price,
           currency,
           billingName,
@@ -284,10 +316,26 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
       }
     }
 
-    // Match orders to linked children by billing name
+    // Match orders to linked children
+    // Strategy: check billing name, product variations, and last-name overlap
     const matchedOrders = orders.map((order) => {
       const billingLower = order.billingName.toLowerCase();
-      const matchedChild = linkedChildNames.find((name: string) => billingLower.includes(name.toLowerCase()));
+      // Direct name match (billing includes child name)
+      let matchedChild = linkedChildNames.find((name: string) =>
+        billingLower.includes(name.toLowerCase())
+      );
+      // Last-name match: if billing has "Noonan" and child is "Sawyer Noonan"
+      if (!matchedChild) {
+        const billingParts = billingLower.split(/\s+/);
+        const billingLast = billingParts[billingParts.length - 1];
+        if (billingLast && billingLast.length > 2) {
+          const lastNameMatches = linkedChildNames.filter((name: string) =>
+            name.toLowerCase().split(/\s+/).pop() === billingLast
+          );
+          // If exactly one child shares the last name, assign them
+          if (lastNameMatches.length === 1) matchedChild = lastNameMatches[0];
+        }
+      }
       return {
         ...order,
         matchedChildName: matchedChild || null,

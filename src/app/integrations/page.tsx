@@ -509,26 +509,26 @@ export default function IntegrationsPage() {
       if (syncData.success) {
         setConnectionStatus(`Found ${syncData.totalOrders} orders. Matching billing details to your players...`);
 
-        // Import matched orders as registrations
+        // Import ALL orders as registrations (matched + unmatched)
         let importedCount = 0;
-        for (const order of syncData.matchedOrders || []) {
-          // Parse dates if available
+        const allOrders = [...(syncData.matchedOrders || []), ...(syncData.unmatchedOrders || [])];
+        for (const order of allOrders) {
           const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
           const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
 
           addRegistration({
             clinicId: `ihp-${order.orderId}`,
             clinicName: order.campName,
-            venue: order.location || 'IceHockeyPro Camp',
+            venue: order.location || 'IceHockeyPro',
             city: extractCity(order.location),
             startDate,
             endDate,
             price: order.price,
             currency: order.currency || 'USD',
-            status: order.status === 'completed' ? 'confirmed' : 'pending',
+            status: 'confirmed',
             source: 'icehockeypro',
-            notes: `Order #${order.orderId} — ${order.dates || 'Dates TBD'}`,
-            playerName: order.matchedChildName,
+            notes: `Order #${order.orderId}${order.dates ? ` — ${order.dates}` : ''}`,
+            playerName: order.matchedChildName || order.billingName || undefined,
           });
           importedCount++;
         }

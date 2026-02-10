@@ -124,10 +124,66 @@ export interface Registration {
   status: 'confirmed' | 'pending' | 'waitlisted' | 'cancelled';
   source: 'manual' | 'dash' | 'icehockeypro';
   notes: string;
-  // Player info
   playerName?: string;
   childId?: string;
   isDemo?: boolean;
+}
+
+// ── Stick & Puck ──────────────────────────────────────────────
+export type SessionType = 'stick-and-puck' | 'open-hockey' | 'public-skate' | 'drop-in' | 'freestyle';
+
+export interface StickAndPuckSession {
+  id: string;
+  rinkId: string;
+  rinkName: string;
+  sessionType: SessionType;
+  name: string;
+  location: {
+    venue: string;
+    address: string;
+    city: string;
+    state: string;
+    lat: number;
+    lng: number;
+  };
+  date: string;          // ISO date
+  dayOfWeek: number;     // 0=Sun … 6=Sat
+  startTime: string;     // "06:00"
+  endTime: string;       // "07:30"
+  recurring?: {
+    pattern: 'weekly';
+    days: number[];
+    exceptions?: string[];
+  };
+  price: number;
+  currency: string;
+  ageRestriction?: string;
+  maxSkaters?: number;
+  goaliesFree?: boolean;
+  equipmentRequired?: string[];
+  notes?: string;
+  source: 'seed' | 'daysmart' | 'scraped' | 'user-submitted';
+  sourceUrl?: string;
+  registrationUrl?: string;
+  lastVerified: string;
+}
+
+export interface Rink {
+  id: string;
+  name: string;
+  slug?: string;
+  platform?: 'daysmart' | 'independent' | 'other';
+  location: {
+    address: string;
+    city: string;
+    state: string;
+    lat: number;
+    lng: number;
+  };
+  phone?: string;
+  website?: string;
+  scheduleUrl?: string;
+  sessions: StickAndPuckSession[];
 }
 
 // DaySmart/Dash integration — works with ANY DaySmart-powered facility

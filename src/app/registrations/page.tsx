@@ -10,12 +10,20 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   MapPin,
   DollarSign,
   Clock,
   User,
   FileText,
+  Filter,
+  ArrowUpDown,
+  CheckCircle2,
+
+  XCircle,
+  Hourglass,
+  Users,
 } from 'lucide-react';
 import {
   format,
@@ -29,6 +37,7 @@ import {
   startOfWeek,
   endOfWeek,
   isPast,
+  isFuture,
   isValid,
 } from 'date-fns';
 import { useStore } from '@/store/useStore';
@@ -36,30 +45,109 @@ import { cn } from '@/lib/utils';
 import type { Registration } from '@/types';
 
 type ViewMode = 'list' | 'calendar';
+type DisplayStatus = 'upcoming' | 'in-progress' | 'completed' | 'cancelled';
+type SortBy = 'date' | 'price' | 'name';
 
-/** Safely parse a date string — returns a valid Date or null */
+// ── Grouped registration (merges children for same clinic) ────
+interface RegistrationGroup {
+  key: string;
+  clinicName: string;
+  venue: string;
+  city: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  currency: string;
+  source: string;
+  displayStatus: DisplayStatus;
+  children: Array<{ name: string; price: number; regId: string }>;
+  notes: string;
+  registrations: Registration[];
+}
+
+// ── Helpers ───────────────────────────────────────────────────
 function safeParse(dateStr: string | undefined | null): Date | null {
   if (!dateStr) return null;
-  // Try ISO first (2026-03-15 or 2026-03-15T00:00:00.000Z)
   let d = new Date(dateStr);
   if (isValid(d)) return d;
-  // Try common formats
   d = new Date(dateStr.replace(/-/g, '/'));
   if (isValid(d)) return d;
   return null;
 }
 
-/** Safely format a date string — returns formatted text or fallback */
 function safeFormat(dateStr: string | undefined | null, fmt: string, fallback = 'TBD'): string {
   const d = safeParse(dateStr);
   if (!d) return fallback;
-  try {
-    return format(d, fmt);
-  } catch {
-    return fallback;
+  try { return format(d, fmt); } catch { return fallback; }
+}
+
+function getDisplayStatus(reg: Registration): DisplayStatus {
+  if (reg.status === 'cancelled') return 'cancelled';
+  const start = safeParse(reg.startDate);
+  const end = safeParse(reg.endDate);
+  if (end && isPast(end)) return 'completed';
+  if (start && isFuture(start)) return 'upcoming';
+  if (start && end && isPast(start) && !isPast(end)) return 'in-progress';
+  return 'upcoming';
+}
+
+function statusLabel(s: DisplayStatus): string {
+  switch (s) {
+    case 'upcoming': return 'Upcoming';
+    case 'in-progress': return 'In Progress';
+    case 'completed': return 'Completed';
+    case 'cancelled': return 'Cancelled';
   }
 }
 
+function statusStyle(s: DisplayStatus): string {
+  switch (s) {
+    case 'upcoming': return 'bg-sky-50 text-sky-700 border-sky-200';
+    case 'in-progress': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'completed': return 'bg-slate-100 text-slate-600 border-slate-200';
+    case 'cancelled': return 'bg-red-50 text-red-600 border-red-200';
+  }
+}
+
+function groupRegistrations(registrations: Registration[]): RegistrationGroup[] {
+  const map = new Map<string, RegistrationGroup>();
+
+  for (const reg of registrations) {
+    // Group key: normalize name + start date + venue
+    const key = `${reg.clinicName.toLowerCase().trim()}::${reg.startDate}::${reg.venue.toLowerCase().trim()}`;
+    const ds = getDisplayStatus(reg);
+
+    if (map.has(key)) {
+      const group = map.get(key)!;
+      group.totalPrice += typeof reg.price === 'number' ? reg.price : 0;
+      if (reg.playerName) {
+        group.children.push({ name: reg.playerName, price: reg.price, regId: reg.id });
+      }
+      group.registrations.push(reg);
+      if (!group.notes && reg.notes) group.notes = reg.notes;
+    } else {
+      map.set(key, {
+        key,
+        clinicName: reg.clinicName,
+        venue: reg.venue,
+        city: reg.city,
+        startDate: reg.startDate,
+        endDate: reg.endDate,
+        totalPrice: typeof reg.price === 'number' ? reg.price : 0,
+        currency: reg.currency || 'USD',
+        source: reg.source,
+        displayStatus: ds,
+        children: reg.playerName ? [{ name: reg.playerName, price: reg.price, regId: reg.id }] : [],
+        notes: reg.notes || '',
+        registrations: [reg],
+      });
+    }
+  }
+
+  return [...map.values()];
+}
+
+// ── Main Page ─────────────────────────────────────────────────
 export default function RegistrationsPage() {
   const router = useRouter();
   const { registrations, addRegistration, updateRegistration } = useStore();
@@ -69,53 +157,89 @@ export default function RegistrationsPage() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
-  // Group registrations by status
-  const groupedRegistrations = useMemo(() => {
-    const upcoming: Registration[] = [];
-    const past: Registration[] = [];
-    const cancelled: Registration[] = [];
+  // Filters
+  const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [filterChild, setFilterChild] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
-    registrations.forEach((reg) => {
-      if (reg.status === 'cancelled') {
-        cancelled.push(reg);
-      } else {
-        const end = safeParse(reg.endDate);
-        if (end && isPast(end)) {
-          past.push(reg);
-        } else {
-          upcoming.push(reg);
-        }
-      }
+  // Unique children from registrations
+  const childNames = useMemo(() => {
+    const names = new Set<string>();
+    registrations.forEach(r => {
+      if (r.playerName) r.playerName.split(/[,&/]/).forEach(n => names.add(n.trim()));
     });
-
-    return { upcoming, past, cancelled };
+    return [...names].sort();
   }, [registrations]);
 
-  // Get registrations for selected day
-  const getRegistrationsForDay = (day: Date) => {
-    return registrations.filter((reg) => {
+  // Sources
+  const sources = useMemo(() => {
+    const s = new Set<string>();
+    registrations.forEach(r => s.add(r.source));
+    return [...s].sort();
+  }, [registrations]);
+
+  // Filter → Group → Sort
+  const { upcoming, completed, cancelled } = useMemo(() => {
+    // 1. Filter
+    let filtered = registrations;
+    if (filterChild !== 'all') {
+      filtered = filtered.filter(r => r.playerName?.toLowerCase().includes(filterChild.toLowerCase()));
+    }
+    if (filterSource !== 'all') {
+      filtered = filtered.filter(r => r.source === filterSource);
+    }
+
+    // 2. Group
+    const groups = groupRegistrations(filtered);
+
+    // 3. Sort
+    groups.sort((a, b) => {
+      if (sortBy === 'date') {
+        const da = safeParse(a.startDate)?.getTime() || 0;
+        const db = safeParse(b.startDate)?.getTime() || 0;
+        return da - db;
+      }
+      if (sortBy === 'price') return b.totalPrice - a.totalPrice;
+      return a.clinicName.localeCompare(b.clinicName);
+    });
+
+    // 4. Bucket
+    const upcoming: RegistrationGroup[] = [];
+    const completed: RegistrationGroup[] = [];
+    const cancelled: RegistrationGroup[] = [];
+
+    for (const g of groups) {
+      if (g.displayStatus === 'cancelled') cancelled.push(g);
+      else if (g.displayStatus === 'completed') completed.push(g);
+      else upcoming.push(g);
+    }
+
+    // Upcoming: soonest first. Completed: most recent first.
+    if (sortBy === 'date') completed.reverse();
+
+    return { upcoming, completed, cancelled };
+  }, [registrations, filterChild, filterSource, sortBy]);
+
+  const totalGroups = upcoming.length + completed.length + cancelled.length;
+
+  // Calendar helpers
+  const getRegistrationsForDay = (day: Date) =>
+    registrations.filter(reg => {
       const start = safeParse(reg.startDate);
       const end = safeParse(reg.endDate);
       if (!start || !end) return false;
       return day >= start && day <= end;
     });
-  };
 
-  // Calendar days calculation
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
-    const calendarStart = startOfWeek(monthStart);
-    const calendarEnd = endOfWeek(monthEnd);
-
-    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    return eachDayOfInterval({ start: startOfWeek(monthStart), end: endOfWeek(monthEnd) });
   }, [currentMonth]);
 
-  const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f0f4f8' }}>
+    <div className="min-h-screen pb-24" style={{ backgroundColor: '#f0f4f8' }}>
       {/* Header */}
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-sm"
@@ -123,65 +247,142 @@ export default function RegistrationsPage() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </button>
-              <h1 className="text-xl font-bold text-slate-900">My Registrations</h1>
+              <h1 className="text-xl font-bold text-slate-900">My Clinics</h1>
               <span className="px-2.5 py-0.5 text-sm font-medium rounded-full"
-                style={{
-                  backgroundColor: 'color-mix(in srgb, var(--theme-primary) 12%, white)',
-                  color: 'var(--theme-primary)',
-                }}>
-                {registrations.length}
+                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 12%, white)', color: 'var(--theme-primary)' }}>
+                {totalGroups}
               </span>
             </div>
 
-            {/* View Toggle */}
-            <div className="flex items-center gap-2 rounded-lg p-1" style={{ backgroundColor: '#f1f5f9' }}>
+            <div className="flex items-center gap-2">
+              {/* Filter toggle */}
               <button
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-md transition-all text-sm font-medium',
-                  viewMode === 'list'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                )}
+                onClick={() => setShowFilters(!showFilters)}
+                className={cn('p-2 rounded-lg transition-colors', showFilters ? 'bg-slate-200' : 'hover:bg-slate-100')}
               >
-                <List className="w-4 h-4" />
-                <span className="hidden sm:inline">List</span>
+                <Filter className="w-5 h-5 text-slate-600" />
               </button>
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-md transition-all text-sm font-medium',
-                  viewMode === 'calendar'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                )}
-              >
-                <CalendarDays className="w-4 h-4" />
-                <span className="hidden sm:inline">Calendar</span>
-              </button>
+
+              {/* View Toggle */}
+              <div className="flex items-center rounded-lg p-1" style={{ backgroundColor: '#f1f5f9' }}>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn('p-2 rounded-md transition-all', viewMode === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={cn('p-2 rounded-md transition-all', viewMode === 'calendar' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')}
+                >
+                  <CalendarDays className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Filters bar */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap items-center gap-3 pb-3 text-sm">
+                  {/* Sort */}
+                  <div className="flex items-center gap-1.5">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value as SortBy)}
+                      className="bg-slate-100 border-0 rounded-md px-2 py-1 text-slate-700 text-xs font-medium">
+                      <option value="date">Date</option>
+                      <option value="price">Price</option>
+                      <option value="name">Name</option>
+                    </select>
+                  </div>
+
+                  {/* Child filter */}
+                  {childNames.length > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <select value={filterChild} onChange={e => setFilterChild(e.target.value)}
+                        className="bg-slate-100 border-0 rounded-md px-2 py-1 text-slate-700 text-xs font-medium">
+                        <option value="all">All Players</option>
+                        {childNames.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Source filter */}
+                  {sources.length > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <Filter className="w-3.5 h-3.5 text-slate-400" />
+                      <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
+                        className="bg-slate-100 border-0 rounded-md px-2 py-1 text-slate-700 text-xs font-medium">
+                        <option value="all">All Sources</option>
+                        {sources.map(s => <option key={s} value={s}>{s === 'icehockeypro' ? 'IceHockeyPro' : s === 'dash' ? 'DaySmart' : 'Manual'}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <AnimatePresence mode="wait">
           {viewMode === 'list' ? (
-            <ListView
-              key="list"
-              groupedRegistrations={groupedRegistrations}
-              expandedCard={expandedCard}
-              setExpandedCard={setExpandedCard}
-              updateRegistration={updateRegistration}
-            />
+            <motion.div key="list" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+              {totalGroups === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+                    <CalendarDays className="w-10 h-10 text-slate-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">No Registrations Yet</h3>
+                  <p className="text-slate-500 mb-6 max-w-md">
+                    Connect your IceHockeyPro or DaySmart account in Integrations, or add registrations manually.
+                  </p>
+                </div>
+              )}
+
+              {upcoming.length > 0 && (
+                <Section title="Upcoming" count={upcoming.length} icon={Hourglass} color="sky">
+                  {upcoming.map(g => (
+                    <GroupCard key={g.key} group={g} isExpanded={expandedCard === g.key}
+                      onToggle={() => setExpandedCard(expandedCard === g.key ? null : g.key)}
+                      onUpdate={updateRegistration} />
+                  ))}
+                </Section>
+              )}
+
+              {completed.length > 0 && (
+                <Section title="Completed" count={completed.length} icon={CheckCircle2} color="slate">
+                  {completed.map(g => (
+                    <GroupCard key={g.key} group={g} isExpanded={expandedCard === g.key}
+                      onToggle={() => setExpandedCard(expandedCard === g.key ? null : g.key)}
+                      onUpdate={updateRegistration} />
+                  ))}
+                </Section>
+              )}
+
+              {cancelled.length > 0 && (
+                <Section title="Cancelled" count={cancelled.length} icon={XCircle} color="red">
+                  {cancelled.map(g => (
+                    <GroupCard key={g.key} group={g} isExpanded={expandedCard === g.key}
+                      onToggle={() => setExpandedCard(expandedCard === g.key ? null : g.key)}
+                      onUpdate={updateRegistration} />
+                  ))}
+                </Section>
+              )}
+            </motion.div>
           ) : (
             <CalendarView
               key="calendar"
@@ -189,232 +390,106 @@ export default function RegistrationsPage() {
               calendarDays={calendarDays}
               selectedDay={selectedDay}
               setSelectedDay={setSelectedDay}
-              handlePrevMonth={handlePrevMonth}
-              handleNextMonth={handleNextMonth}
+              handlePrevMonth={() => setCurrentMonth(subMonths(currentMonth, 1))}
+              handleNextMonth={() => setCurrentMonth(addMonths(currentMonth, 1))}
               getRegistrationsForDay={getRegistrationsForDay}
             />
           )}
         </AnimatePresence>
       </main>
 
-      {/* Floating Add Button */}
+      {/* FAB */}
       <button
         onClick={() => setShowAddModal(true)}
-        className="fixed bottom-8 right-8 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-colors z-50 text-white"
+        className="fixed bottom-20 right-6 lg:bottom-8 lg:right-8 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 text-white"
         style={{ backgroundColor: 'var(--theme-primary)' }}
       >
         <Plus className="w-6 h-6" />
       </button>
 
-      {/* Add Registration Modal */}
-      <AddRegistrationModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={addRegistration}
-      />
+      <AddRegistrationModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAdd={addRegistration} />
     </div>
   );
 }
 
-// List View Component
-function ListView({
-  groupedRegistrations,
-  expandedCard,
-  setExpandedCard,
-  updateRegistration,
-}: {
-  groupedRegistrations: {
-    upcoming: Registration[];
-    past: Registration[];
-    cancelled: Registration[];
-  };
-  expandedCard: string | null;
-  setExpandedCard: (id: string | null) => void;
-  updateRegistration: (id: string, updates: Partial<Registration>) => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-8"
-    >
-      {/* Empty State */}
-      {groupedRegistrations.upcoming.length === 0 &&
-        groupedRegistrations.past.length === 0 &&
-        groupedRegistrations.cancelled.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
-              <CalendarDays className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No Registrations Yet</h3>
-            <p className="text-slate-500 mb-6 max-w-md">
-              Start tracking your hockey clinic registrations by adding one manually or
-              registering through the dashboard.
-            </p>
-          </div>
-        )}
-
-      {/* Upcoming */}
-      {groupedRegistrations.upcoming.length > 0 && (
-        <Section title="Upcoming" count={groupedRegistrations.upcoming.length}>
-          {groupedRegistrations.upcoming.map((reg) => (
-            <RegistrationCard
-              key={reg.id}
-              registration={reg}
-              isExpanded={expandedCard === reg.id}
-              onToggleExpand={() =>
-                setExpandedCard(expandedCard === reg.id ? null : reg.id)
-              }
-              onUpdate={updateRegistration}
-            />
-          ))}
-        </Section>
-      )}
-
-      {/* Past */}
-      {groupedRegistrations.past.length > 0 && (
-        <Section title="Past" count={groupedRegistrations.past.length}>
-          {groupedRegistrations.past.map((reg) => (
-            <RegistrationCard
-              key={reg.id}
-              registration={reg}
-              isExpanded={expandedCard === reg.id}
-              onToggleExpand={() =>
-                setExpandedCard(expandedCard === reg.id ? null : reg.id)
-              }
-              onUpdate={updateRegistration}
-            />
-          ))}
-        </Section>
-      )}
-
-      {/* Cancelled */}
-      {groupedRegistrations.cancelled.length > 0 && (
-        <Section title="Cancelled" count={groupedRegistrations.cancelled.length}>
-          {groupedRegistrations.cancelled.map((reg) => (
-            <RegistrationCard
-              key={reg.id}
-              registration={reg}
-              isExpanded={expandedCard === reg.id}
-              onToggleExpand={() =>
-                setExpandedCard(expandedCard === reg.id ? null : reg.id)
-              }
-              onUpdate={updateRegistration}
-            />
-          ))}
-        </Section>
-      )}
-    </motion.div>
-  );
-}
-
-// Section Component
-function Section({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: React.ReactNode;
+// ── Section ───────────────────────────────────────────────────
+function Section({ title, count, icon: Icon, color, children }: {
+  title: string; count: number; icon: React.ElementType; color: string; children: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg font-semibold text-slate-700">{title}</h2>
-        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-sm rounded-full">
-          {count}
-        </span>
+      <div className="flex items-center gap-2.5 mb-3">
+        <Icon className={cn('w-4.5 h-4.5', color === 'sky' ? 'text-sky-500' : color === 'red' ? 'text-red-400' : 'text-slate-400')} />
+        <h2 className="text-base font-semibold text-slate-700">{title}</h2>
+        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs font-medium rounded-full">{count}</span>
       </div>
       <div className="space-y-3">{children}</div>
     </div>
   );
 }
 
-// Registration Card Component
-function RegistrationCard({
-  registration,
-  isExpanded,
-  onToggleExpand,
-  onUpdate,
-}: {
-  registration: Registration;
+// ── Group Card (merges children for the same clinic) ──────────
+function GroupCard({ group, isExpanded, onToggle, onUpdate }: {
+  group: RegistrationGroup;
   isExpanded: boolean;
-  onToggleExpand: () => void;
+  onToggle: () => void;
   onUpdate: (id: string, updates: Partial<Registration>) => void;
 }) {
-  const getStatusColor = (status: Registration['status']) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'pending':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'waitlisted':
-        return 'bg-orange-50 text-orange-700 border-orange-200';
-      case 'cancelled':
-        return 'bg-red-50 text-red-700 border-red-200';
-    }
-  };
+  const hasMultipleChildren = group.children.length > 1;
 
   return (
-    <motion.div
-      layout
-      className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm"
-    >
-      <button
-        onClick={onToggleExpand}
-        className="w-full p-4 text-left focus:outline-none focus:ring-2 focus:ring-inset"
-        style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-      >
-        <div className="flex items-start justify-between gap-4">
+    <motion.div layout className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+      <button onClick={onToggle} className="w-full p-4 text-left focus:outline-none">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-3 mb-2">
-              <h3 className="font-semibold text-slate-900 truncate">
-                {registration.clinicName}
-              </h3>
-              <span
-                className={cn(
-                  'px-2 py-0.5 text-xs font-medium rounded border shrink-0',
-                  getStatusColor(registration.status)
-                )}
-              >
-                {registration.status}
+            {/* Title + Status */}
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="font-semibold text-slate-900 truncate text-[15px]">{group.clinicName}</h3>
+              <span className={cn('px-2 py-0.5 text-[11px] font-semibold rounded-full border shrink-0 uppercase tracking-wide', statusStyle(group.displayStatus))}>
+                {statusLabel(group.displayStatus)}
               </span>
             </div>
 
-            <div className="space-y-1.5 text-sm text-slate-500">
+            <div className="space-y-1 text-sm text-slate-500">
+              {/* Venue */}
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 shrink-0" />
-                <span className="truncate">
-                  {registration.venue}, {registration.city}
-                </span>
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">{group.venue}{group.city ? `, ${group.city}` : ''}</span>
               </div>
+
+              {/* Dates */}
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 shrink-0" />
+                <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 <span>
-                  {safeFormat(registration.startDate, 'MMM d')} -{' '}
-                  {safeFormat(registration.endDate, 'MMM d, yyyy')}
+                  {safeFormat(group.startDate, 'MMM d')}
+                  {group.startDate !== group.endDate && <> &ndash; {safeFormat(group.endDate, 'MMM d, yyyy')}</>}
+                  {group.startDate === group.endDate && <>, {safeFormat(group.startDate, 'yyyy')}</>}
                 </span>
               </div>
+
+              {/* Price */}
               <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 shrink-0" />
-                <span>
-                  {registration.currency} {(typeof registration.price === 'number' ? registration.price : 0).toFixed(2)}
+                <DollarSign className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="font-medium text-slate-700">
+                  {group.currency} {group.totalPrice.toFixed(2)}
+                  {hasMultipleChildren && <span className="text-slate-400 font-normal"> ({group.children.length} players)</span>}
                 </span>
               </div>
-              {registration.playerName && (
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 shrink-0" />
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {registration.playerName.split(/[,&\/]/).map((name, i) => (
+
+              {/* Children pills */}
+              {group.children.length > 0 && (
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Users className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.children.map((c, i) => (
                       <span key={i} className="px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{
                           backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, white)',
                           color: 'var(--theme-primary)',
                           border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, white)',
                         }}>
-                        {name.trim()}
+                        {c.name.split(/\s+/)[0]}
+                        {hasMultipleChildren && <span className="text-[10px] opacity-70"> ${c.price}</span>}
                       </span>
                     ))}
                   </div>
@@ -422,51 +497,64 @@ function RegistrationCard({
               )}
             </div>
           </div>
+
+          <ChevronDown className={cn('w-5 h-5 text-slate-300 shrink-0 transition-transform', isExpanded && 'rotate-180')} />
         </div>
       </button>
 
       <AnimatePresence>
         {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="border-t border-slate-200"
-          >
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t border-slate-100">
             <div className="p-4 space-y-3">
-              {registration.notes && (
+              {/* Source badge */}
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span>Source: {group.source === 'icehockeypro' ? 'IceHockeyPro' : group.source === 'dash' ? 'DaySmart' : 'Manual'}</span>
+                {group.registrations[0]?.registeredAt && (
+                  <span>· Added {safeFormat(group.registrations[0].registeredAt, 'MMM d, yyyy')}</span>
+                )}
+              </div>
+
+              {/* Per-child breakdown */}
+              {hasMultipleChildren && (
+                <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
+                  <div className="text-xs font-semibold text-slate-600 mb-1">Per Player</div>
+                  {group.children.map((c, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-slate-600">{c.name}</span>
+                      <span className="font-medium text-slate-700">${c.price.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Notes */}
+              {group.notes && (
                 <div className="bg-slate-50 rounded-lg p-3">
                   <div className="flex items-start gap-2 text-sm">
                     <FileText className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                    <div>
-                      <div className="font-medium text-slate-700 mb-1">Notes</div>
-                      <div className="text-slate-500">{registration.notes}</div>
-                    </div>
+                    <div className="text-slate-500">{group.notes}</div>
                   </div>
                 </div>
               )}
 
+              {/* Actions */}
               <div className="flex gap-2">
-                {registration.status !== 'cancelled' && (
+                {group.displayStatus !== 'cancelled' && (
                   <button
-                    onClick={() =>
-                      onUpdate(registration.id, { status: 'cancelled' })
-                    }
-                    className="flex-1 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors text-sm font-medium"
+                    onClick={() => group.registrations.forEach(r => onUpdate(r.id, { status: 'cancelled' }))}
+                    className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors"
                   >
-                    Mark as Cancelled
+                    Cancel
                   </button>
                 )}
                 <button
                   onClick={() => {
-                    const notes = prompt('Add notes:', registration.notes);
-                    if (notes !== null) {
-                      onUpdate(registration.id, { notes });
-                    }
+                    const notes = prompt('Notes:', group.notes);
+                    if (notes !== null) group.registrations.forEach(r => onUpdate(r.id, { notes }));
                   }}
-                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors text-sm font-medium"
+                  className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {registration.notes ? 'Edit Notes' : 'Add Notes'}
+                  {group.notes ? 'Edit Notes' : 'Add Notes'}
                 </button>
               </div>
             </div>
@@ -477,104 +565,41 @@ function RegistrationCard({
   );
 }
 
-// Calendar View Component
-function CalendarView({
-  currentMonth,
-  calendarDays,
-  selectedDay,
-  setSelectedDay,
-  handlePrevMonth,
-  handleNextMonth,
-  getRegistrationsForDay,
-}: {
-  currentMonth: Date;
-  calendarDays: Date[];
-  selectedDay: Date | null;
-  setSelectedDay: (day: Date | null) => void;
-  handlePrevMonth: () => void;
-  handleNextMonth: () => void;
-  getRegistrationsForDay: (day: Date) => Registration[];
+// ── Calendar View ─────────────────────────────────────────────
+function CalendarView({ currentMonth, calendarDays, selectedDay, setSelectedDay, handlePrevMonth, handleNextMonth, getRegistrationsForDay }: {
+  currentMonth: Date; calendarDays: Date[]; selectedDay: Date | null; setSelectedDay: (d: Date | null) => void;
+  handlePrevMonth: () => void; handleNextMonth: () => void; getRegistrationsForDay: (d: Date) => Registration[];
 }) {
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-6"
-    >
-      {/* Calendar Header */}
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-slate-900">
-            {format(currentMonth, 'MMMM yyyy')}
-          </h2>
+          <h2 className="text-xl font-semibold text-slate-900">{format(currentMonth, 'MMMM yyyy')}</h2>
           <div className="flex gap-2">
-            <button
-              onClick={handlePrevMonth}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 text-slate-600" />
-            </button>
-            <button
-              onClick={handleNextMonth}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <ChevronRight className="w-5 h-5 text-slate-600" />
-            </button>
+            <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-slate-600" /></button>
+            <button onClick={handleNextMonth} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronRight className="w-5 h-5 text-slate-600" /></button>
           </div>
         </div>
 
-        {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-2">
-          {/* Day Headers */}
-          {dayNames.map((day) => (
-            <div
-              key={day}
-              className="text-center text-sm font-medium text-slate-400 pb-2"
-            >
-              {day}
-            </div>
+          {dayNames.map((day, i) => (
+            <div key={i} className="text-center text-sm font-medium text-slate-400 pb-2">{day}</div>
           ))}
-
-          {/* Calendar Days */}
           {calendarDays.map((day, index) => {
-            const dayRegistrations = getRegistrationsForDay(day);
+            const dayRegs = getRegistrationsForDay(day);
             const isCurrentMonth = isSameMonth(day, currentMonth);
-            const isSelected = selectedDay && isSameDay(day, selectedDay);
-            const hasRegistrations = dayRegistrations.length > 0;
-
+            const isSelected = !!(selectedDay && isSameDay(day, selectedDay));
             return (
-              <button
-                key={index}
-                onClick={() =>
-                  setSelectedDay(isSelected ? null : day)
-                }
-                className={cn(
-                  'aspect-square p-2 rounded-lg text-sm transition-all relative',
-                  isCurrentMonth
-                    ? 'text-slate-900 hover:bg-slate-100'
-                    : 'text-slate-400',
-                  isSelected ? 'text-white' : '',
-                  !isSelected && hasRegistrations ? 'font-semibold' : ''
-                )}
-                style={isSelected ? { backgroundColor: 'var(--theme-primary)', color: 'white' } : undefined}
-              >
+              <button key={index} onClick={() => setSelectedDay(isSelected ? null : day)}
+                className={cn('aspect-square p-2 rounded-lg text-sm transition-all relative', isCurrentMonth ? 'text-slate-900 hover:bg-slate-100' : 'text-slate-400', isSelected && 'text-white', !isSelected && dayRegs.length > 0 && 'font-semibold')}
+                style={isSelected ? { backgroundColor: 'var(--theme-primary)', color: 'white' } : undefined}>
                 {format(day, 'd')}
-                {hasRegistrations && (
-                  <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1">
-                    {dayRegistrations.slice(0, 3).map((reg, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          'w-1.5 h-1.5 rounded-full',
-                          reg.status === 'confirmed' && 'bg-emerald-500',
-                          reg.status === 'pending' && 'bg-amber-500',
-                          reg.status === 'waitlisted' && 'bg-orange-500',
-                          reg.status === 'cancelled' && 'bg-red-500'
-                        )}
-                      />
+                {dayRegs.length > 0 && (
+                  <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                    {dayRegs.slice(0, 3).map((_, i) => (
+                      <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--theme-primary)' }} />
                     ))}
                   </div>
                 )}
@@ -584,48 +609,24 @@ function CalendarView({
         </div>
       </div>
 
-      {/* Selected Day Registrations */}
       <AnimatePresence>
         {selectedDay && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
-          >
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-900">
-                {format(selectedDay, 'EEEE, MMMM d, yyyy')}
-              </h3>
-              <button
-                onClick={() => setSelectedDay(null)}
-                className="p-1 hover:bg-slate-100 rounded transition-colors"
-              >
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
+              <h3 className="font-semibold text-slate-900">{format(selectedDay, 'EEEE, MMMM d, yyyy')}</h3>
+              <button onClick={() => setSelectedDay(null)} className="p-1 hover:bg-slate-100 rounded"><X className="w-4 h-4 text-slate-500" /></button>
             </div>
-
             {(() => {
               const dayRegs = getRegistrationsForDay(selectedDay);
-              if (dayRegs.length === 0) {
-                return (
-                  <p className="text-slate-500 text-sm">
-                    No registrations on this day
-                  </p>
-                );
-              }
-
+              if (dayRegs.length === 0) return <p className="text-slate-500 text-sm">No registrations on this day</p>;
               return (
                 <div className="space-y-2">
-                  {dayRegs.map((reg) => (
-                    <div
-                      key={reg.id}
-                      className="bg-slate-50 rounded-lg p-3 text-sm"
-                    >
+                  {dayRegs.map(reg => (
+                    <div key={reg.id} className="bg-slate-50 rounded-lg p-3 text-sm">
                       <div className="font-medium text-slate-900 mb-1">{reg.clinicName}</div>
-                      <div className="text-slate-500">
-                        {reg.venue}, {reg.city}
-                      </div>
+                      <div className="text-slate-500">{reg.venue}{reg.city ? `, ${reg.city}` : ''}</div>
+                      {reg.playerName && <div className="text-slate-400 mt-1">{reg.playerName}</div>}
                     </div>
                   ))}
                 </div>
@@ -638,32 +639,18 @@ function CalendarView({
   );
 }
 
-// Add Registration Modal Component
-function AddRegistrationModal({
-  isOpen,
-  onClose,
-  onAdd,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onAdd: (registration: Registration) => void;
+// ── Add Registration Modal ────────────────────────────────────
+function AddRegistrationModal({ isOpen, onClose, onAdd }: {
+  isOpen: boolean; onClose: () => void; onAdd: (reg: Registration) => void;
 }) {
   const [formData, setFormData] = useState({
-    clinicName: '',
-    venue: '',
-    city: '',
-    startDate: '',
-    endDate: '',
-    price: '',
-    status: 'confirmed' as Registration['status'],
-    playerName: '',
-    notes: '',
+    clinicName: '', venue: '', city: '', startDate: '', endDate: '', price: '',
+    status: 'confirmed' as Registration['status'], playerName: '', notes: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const registration: Registration = {
+    onAdd({
       id: `manual-${Date.now()}`,
       clinicId: '',
       clinicName: formData.clinicName,
@@ -678,222 +665,72 @@ function AddRegistrationModal({
       source: 'manual',
       notes: formData.notes,
       playerName: formData.playerName || undefined,
-    };
-
-    onAdd(registration);
-    onClose();
-
-    // Reset form
-    setFormData({
-      clinicName: '',
-      venue: '',
-      city: '',
-      startDate: '',
-      endDate: '',
-      price: '',
-      status: 'confirmed',
-      playerName: '',
-      notes: '',
     });
+    onClose();
+    setFormData({ clinicName: '', venue: '', city: '', startDate: '', endDate: '', price: '', status: 'confirmed', playerName: '', notes: '' });
   };
 
   if (!isOpen) return null;
 
+  const inputCls = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400 text-sm';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
-      >
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between rounded-t-xl">
-          <h2 className="text-xl font-semibold text-slate-900">Add Registration</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <h2 className="text-lg font-semibold text-slate-900">Add Registration</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5 text-slate-500" /></button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Clinic Name *
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.clinicName}
-              onChange={(e) =>
-                setFormData({ ...formData, clinicName: e.target.value })
-              }
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400"
-              style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              placeholder="Summer Hockey Camp"
-            />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Clinic Name *</label>
+            <input type="text" required value={formData.clinicName} onChange={e => setFormData({ ...formData, clinicName: e.target.value })}
+              className={inputCls} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="Summer Hockey Camp" />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Venue *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.venue}
-                onChange={(e) =>
-                  setFormData({ ...formData, venue: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-                placeholder="Ice Arena"
-              />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Venue *</label>
+              <input type="text" required value={formData.venue} onChange={e => setFormData({ ...formData, venue: e.target.value })}
+                className={inputCls} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="Ice Arena" />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                City *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.city}
-                onChange={(e) =>
-                  setFormData({ ...formData, city: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-                placeholder="Boston"
-              />
+              <label className="block text-xs font-medium text-slate-600 mb-1">City *</label>
+              <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })}
+                className={inputCls} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="Boston" />
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Start Date *
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.startDate}
-                onChange={(e) =>
-                  setFormData({ ...formData, startDate: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 [color-scheme:light]"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Start Date *</label>
+              <input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                className={cn(inputCls, '[color-scheme:light]')} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                End Date *
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.endDate}
-                onChange={(e) =>
-                  setFormData({ ...formData, endDate: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 [color-scheme:light]"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              />
+              <label className="block text-xs font-medium text-slate-600 mb-1">End Date *</label>
+              <input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                className={cn(inputCls, '[color-scheme:light]')} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} />
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Price (USD) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                value={formData.price}
-                onChange={(e) =>
-                  setFormData({ ...formData, price: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-                placeholder="299.00"
-              />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Price (USD) *</label>
+              <input type="number" step="0.01" required value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })}
+                className={inputCls} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="299.00" />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Status *
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    status: e.target.value as Registration['status'],
-                  })
-                }
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 [color-scheme:light]"
-                style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              >
-                <option value="confirmed">Confirmed</option>
-                <option value="pending">Pending</option>
-                <option value="waitlisted">Waitlisted</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Player Name</label>
+              <input type="text" value={formData.playerName} onChange={e => setFormData({ ...formData, playerName: e.target.value })}
+                className={inputCls} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="Optional" />
             </div>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Player Name
-            </label>
-            <input
-              type="text"
-              value={formData.playerName}
-              onChange={(e) =>
-                setFormData({ ...formData, playerName: e.target.value })
-              }
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none text-slate-900 placeholder:text-slate-400"
-              style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              placeholder="Optional"
-            />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2}
+              className={cn(inputCls, 'resize-none')} style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties} placeholder="Optional notes..." />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-              rows={3}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:border-transparent outline-none resize-none text-slate-900 placeholder:text-slate-400"
-              style={{ '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties}
-              placeholder="Additional information..."
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 text-white rounded-lg transition-colors font-medium hover:opacity-90"
-              style={{ backgroundColor: 'var(--theme-primary)' }}
-            >
-              Add Registration
-            </button>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm">Cancel</button>
+            <button type="submit" className="flex-1 px-4 py-2 text-white rounded-lg font-medium text-sm hover:opacity-90" style={{ backgroundColor: 'var(--theme-primary)' }}>Add</button>
           </div>
         </form>
       </motion.div>
