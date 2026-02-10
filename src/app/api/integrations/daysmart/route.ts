@@ -689,6 +689,227 @@ async function handleValidate(facilityId: string) {
   }
 }
 
+// ── Login Diagnostics (inline, for error responses) ─────────────────────
+
+/** Collect raw diagnostics for every auth strategy — returned inline with login failures */
+async function collectLoginDiagnostics(
+  email: string, password: string, facilityId: string, sessionCookies: string
+): Promise<Array<{
+  strategy: string;
+  status: number | string;
+  responseKeys: string[];
+  responseSample: string;
+  hasToken: boolean;
+  hasCookies: boolean;
+  isPositiveAuth: boolean;
+  extractedCustomerId: string;
+  error?: string;
+}>> {
+  const results: Array<{
+    strategy: string;
+    status: number | string;
+    responseKeys: string[];
+    responseSample: string;
+    hasToken: boolean;
+    hasCookies: boolean;
+    isPositiveAuth: boolean;
+    extractedCustomerId: string;
+    error?: string;
+  }> = [];
+
+  function truncBody(data: Record<string, unknown>, maxLen = 800): string {
+    try {
+      const s = JSON.stringify(data);
+      return s.length > maxLen ? s.slice(0, maxLen) + '...' : s;
+    } catch { return '{}'; }
+  }
+
+  // OAuth2 password grant — both domains
+  for (const base of [API_BASE, DASH_API_BASE]) {
+    const label = base.includes('apps.') ? 'apps-domain' : 'api-domain';
+    try {
+      const url = `${base}/company/auth/token?company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ grant_type: 'password', username: email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await safeJson(res);
+      results.push({
+        strategy: `oauth2 (${label})`,
+        status: res.status,
+        responseKeys: Object.keys(data),
+        responseSample: truncBody(data),
+        hasToken: !!extractToken(data),
+        hasCookies: !!extractCookies(res),
+        isPositiveAuth: isPositiveAuthResponse(data),
+        extractedCustomerId: extractCustomerId(data),
+      });
+    } catch (err) {
+      results.push({
+        strategy: `oauth2 (${label})`,
+        status: 'error',
+        responseKeys: [],
+        responseSample: '',
+        hasToken: false,
+        hasCookies: false,
+        isPositiveAuth: false,
+        extractedCustomerId: '',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PHP JSON login — multiple payloads
+  for (const payload of [
+    { email, password },
+    { username: email, password },
+    { email, password, company: facilityId },
+  ]) {
+    const keys = Object.keys(payload).join('+');
+    try {
+      const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Origin': 'https://apps.daysmartrecreation.com',
+        'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+        'X-Requested-With': 'XMLHttpRequest',
+      };
+      if (sessionCookies) headers['Cookie'] = sessionCookies;
+      const res = await fetch(url, {
+        method: 'POST', headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await safeJson(res);
+      const responseCookies = extractCookies(res);
+      const allCookies = mergeCookies(sessionCookies, responseCookies);
+      results.push({
+        strategy: `php-json (${keys})`,
+        status: res.status,
+        responseKeys: Object.keys(data),
+        responseSample: truncBody(data),
+        hasToken: !!extractToken(data),
+        hasCookies: !!allCookies,
+        isPositiveAuth: isPositiveAuthResponse(data),
+        extractedCustomerId: extractCustomerId(data),
+      });
+    } catch (err) {
+      results.push({
+        strategy: `php-json (${keys})`,
+        status: 'error',
+        responseKeys: [],
+        responseSample: '',
+        hasToken: false,
+        hasCookies: false,
+        isPositiveAuth: false,
+        extractedCustomerId: '',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PHP form-encoded login
+  try {
+    const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+    const body = new URLSearchParams({ email, username: email, password, company: facilityId });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'Origin': 'https://apps.daysmartrecreation.com',
+      'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+    if (sessionCookies) headers['Cookie'] = sessionCookies;
+    const res = await fetch(url, {
+      method: 'POST', headers,
+      body: body.toString(),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await safeJson(res);
+    const responseCookies = extractCookies(res);
+    const allCookies = mergeCookies(sessionCookies, responseCookies);
+    results.push({
+      strategy: 'php-form',
+      status: res.status,
+      responseKeys: Object.keys(data),
+      responseSample: truncBody(data),
+      hasToken: !!extractToken(data),
+      hasCookies: !!allCookies,
+      isPositiveAuth: isPositiveAuthResponse(data),
+      extractedCustomerId: extractCustomerId(data),
+    });
+  } catch (err) {
+    results.push({
+      strategy: 'php-form',
+      status: 'error',
+      responseKeys: [],
+      responseSample: '',
+      hasToken: false,
+      hasCookies: false,
+      isPositiveAuth: false,
+      extractedCustomerId: '',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Member portal
+  try {
+    const MEMBER_BASE = 'https://member.daysmartrecreation.com';
+    const url = `${MEMBER_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Origin': MEMBER_BASE,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await safeJson(res);
+    results.push({
+      strategy: 'member-portal',
+      status: res.status,
+      responseKeys: Object.keys(data),
+      responseSample: truncBody(data),
+      hasToken: !!extractToken(data),
+      hasCookies: !!extractCookies(res),
+      isPositiveAuth: isPositiveAuthResponse(data),
+      extractedCustomerId: extractCustomerId(data),
+    });
+  } catch (err) {
+    results.push({
+      strategy: 'member-portal',
+      status: 'error',
+      responseKeys: [],
+      responseSample: '',
+      hasToken: false,
+      hasCookies: false,
+      isPositiveAuth: false,
+      extractedCustomerId: '',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return results;
+}
+
 // ── Login ────────────────────────────────────────────────────────────────
 
 async function handleLogin(email: string, password: string, facilityId: string) {
@@ -696,51 +917,132 @@ async function handleLogin(email: string, password: string, facilityId: string) 
     return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
   }
 
+  // Collect detailed debug info for every step so failures are diagnosable
+  const debugLog: string[] = [];
+  const debugDetails: Array<{
+    step: string;
+    status: number | string;
+    responseKeys: string[];
+    responseSample: string;
+    hasToken: boolean;
+    hasCookies: boolean;
+    isPositiveAuth: boolean;
+    error?: string;
+  }> = [];
+
+  function truncateJson(data: Record<string, unknown>, maxLen = 500): string {
+    try {
+      const s = JSON.stringify(data);
+      return s.length > maxLen ? s.slice(0, maxLen) + '...' : s;
+    } catch { return '{}'; }
+  }
+
   try {
     // Try authentication strategies in order of preference
     console.log(`[DaySmart] Attempting login for ${email} at ${facilityId}`);
+    debugLog.push(`Login attempt: ${email} @ ${facilityId}`);
 
     // Step 0: Initialize a session (get PHPSESSID) like a browser would
     const sessionCookies = await initSession(facilityId);
+    debugLog.push(`Session init: ${sessionCookies ? sessionCookies.length + ' chars cookies' : 'NO COOKIES'}`);
 
     let authResult: AuthResult | null = null;
 
     // Strategy 1: OAuth2 password grant (modern API)
+    debugLog.push('--- Strategy 1: OAuth2 password grant ---');
     authResult = await tryOAuth2PasswordGrant(email, password, facilityId);
     if (authResult) {
+      debugLog.push(`SUCCESS via ${authResult.strategy}`);
+      debugDetails.push({
+        step: authResult.strategy,
+        status: 200,
+        responseKeys: Object.keys(authResult.responseData),
+        responseSample: truncateJson(authResult.responseData),
+        hasToken: !!authResult.token,
+        hasCookies: !!authResult.cookies,
+        isPositiveAuth: true,
+      });
       console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
+    } else {
+      debugLog.push('FAILED: No token or positive auth from OAuth2');
     }
 
     // Strategy 2: PHP login with JSON body (with session cookies)
     if (!authResult) {
+      debugLog.push('--- Strategy 2: PHP JSON login ---');
       authResult = await tryPHPLoginJSON(email, password, facilityId, sessionCookies);
       if (authResult) {
+        debugLog.push(`SUCCESS via ${authResult.strategy}`);
+        debugDetails.push({
+          step: authResult.strategy,
+          status: 200,
+          responseKeys: Object.keys(authResult.responseData),
+          responseSample: truncateJson(authResult.responseData),
+          hasToken: !!authResult.token,
+          hasCookies: !!authResult.cookies,
+          isPositiveAuth: true,
+        });
         console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
+      } else {
+        debugLog.push('FAILED: No token or positive auth from PHP JSON');
       }
     }
 
     // Strategy 3: PHP login with form-encoded body (with session cookies)
     if (!authResult) {
+      debugLog.push('--- Strategy 3: PHP form-encoded login ---');
       authResult = await tryPHPLoginForm(email, password, facilityId, sessionCookies);
       if (authResult) {
+        debugLog.push(`SUCCESS via ${authResult.strategy}`);
+        debugDetails.push({
+          step: authResult.strategy,
+          status: 200,
+          responseKeys: Object.keys(authResult.responseData),
+          responseSample: truncateJson(authResult.responseData),
+          hasToken: !!authResult.token,
+          hasCookies: !!authResult.cookies,
+          isPositiveAuth: true,
+        });
         console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
+      } else {
+        debugLog.push('FAILED: No token or positive auth from PHP form');
       }
     }
 
     // Strategy 4: Try the member portal domain
     if (!authResult) {
+      debugLog.push('--- Strategy 4: Member portal ---');
       authResult = await tryMemberPortalLogin(email, password, facilityId);
       if (authResult) {
+        debugLog.push(`SUCCESS via ${authResult.strategy}`);
+        debugDetails.push({
+          step: authResult.strategy,
+          status: 200,
+          responseKeys: Object.keys(authResult.responseData),
+          responseSample: truncateJson(authResult.responseData),
+          hasToken: !!authResult.token,
+          hasCookies: !!authResult.cookies,
+          isPositiveAuth: true,
+        });
         console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
+      } else {
+        debugLog.push('FAILED: No token or positive auth from member portal');
       }
     }
 
     if (!authResult) {
       console.error('[DaySmart] All auth strategies failed');
+      debugLog.push('=== ALL STRATEGIES FAILED ===');
+
+      // Run the full debug-login to get raw details for each strategy
+      const debugDiag = await collectLoginDiagnostics(email, password, facilityId, sessionCookies);
+
       return NextResponse.json({
         success: false,
         error: 'Login failed. Check your email and password, or try logging in at apps.daysmartrecreation.com first to confirm your credentials work.',
         facilityId,
+        debugLog,
+        debugDiagnostics: debugDiag,
       }, { status: 401 });
     }
 

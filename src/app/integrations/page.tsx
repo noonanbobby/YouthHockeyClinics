@@ -200,6 +200,8 @@ export default function IntegrationsPage() {
     iceHockeyProConfig.linkedChildIds || []
   );
   const [connectionStatus, setConnectionStatus] = useState('');
+  const [loginDebugInfo, setLoginDebugInfo] = useState<{ debugLog?: string[]; debugDiagnostics?: Array<Record<string, unknown>> } | null>(null);
+  const [showDebugDetails, setShowDebugDetails] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   /** Extract facility slug from a DaySmart URL or raw slug */
@@ -269,9 +271,19 @@ export default function IntegrationsPage() {
 
       if (!loginRes.ok || !loginData.success) {
         setConnectionStatus(loginData.error || 'Failed to connect. Check your credentials.');
+        // Capture debug diagnostics if available
+        if (loginData.debugLog || loginData.debugDiagnostics) {
+          setLoginDebugInfo({
+            debugLog: loginData.debugLog,
+            debugDiagnostics: loginData.debugDiagnostics,
+          });
+          setShowDebugDetails(false);
+        }
         setDaySmartSyncing(false);
         return;
       }
+      // Clear any previous debug info on success
+      setLoginDebugInfo(null);
 
       const facilityName = loginData.facilityName || validateData.facilityName || facilityId;
       const familyMembers = loginData.familyMembers || [];
@@ -760,6 +772,63 @@ export default function IntegrationsPage() {
                 <AlertCircle size={14} className="text-blue-600 shrink-0" />
                 <p className="text-xs text-blue-700">{connectionStatus}</p>
               </div>
+              {/* Debug diagnostics for login failures */}
+              {loginDebugInfo && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowDebugDetails(!showDebugDetails)}
+                    className="text-[10px] font-medium text-blue-600 underline"
+                  >
+                    {showDebugDetails ? 'Hide' : 'Show'} debug details
+                  </button>
+                  {showDebugDetails && (
+                    <div className="mt-2 space-y-2">
+                      {loginDebugInfo.debugLog && (
+                        <div className="bg-white/80 border border-blue-100 rounded-lg p-2">
+                          <p className="text-[10px] font-semibold text-slate-700 mb-1">Login Flow Log:</p>
+                          <pre className="text-[9px] text-slate-600 whitespace-pre-wrap font-mono leading-relaxed max-h-40 overflow-y-auto">
+                            {loginDebugInfo.debugLog.join('\n')}
+                          </pre>
+                        </div>
+                      )}
+                      {loginDebugInfo.debugDiagnostics && (
+                        <div className="bg-white/80 border border-blue-100 rounded-lg p-2">
+                          <p className="text-[10px] font-semibold text-slate-700 mb-1">Strategy Results:</p>
+                          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                            {loginDebugInfo.debugDiagnostics.map((d, i) => (
+                              <div key={i} className="bg-slate-50 rounded p-1.5 text-[9px] font-mono">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                    d.isPositiveAuth ? 'bg-green-500' : d.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                                  }`} />
+                                  <span className="font-semibold text-slate-800">{String(d.strategy)}</span>
+                                  <span className="text-slate-500">HTTP {String(d.status)}</span>
+                                </div>
+                                <div className="text-slate-500 pl-3 space-y-0.5">
+                                  <div>token: {d.hasToken ? 'YES' : 'no'} | cookies: {d.hasCookies ? 'YES' : 'no'} | positive: {d.isPositiveAuth ? 'YES' : 'no'}</div>
+                                  {d.extractedCustomerId ? <div>customerId: {String(d.extractedCustomerId)}</div> : null}
+                                  {d.error ? <div className="text-red-600">error: {String(d.error)}</div> : null}
+                                  {d.responseKeys && (d.responseKeys as string[]).length > 0 ? (
+                                    <div>keys: {(d.responseKeys as string[]).join(', ')}</div>
+                                  ) : null}
+                                  {d.responseSample ? (
+                                    <details className="cursor-pointer">
+                                      <summary className="text-blue-600">response body</summary>
+                                      <pre className="whitespace-pre-wrap break-all mt-0.5 text-slate-600 max-h-24 overflow-y-auto">
+                                        {String(d.responseSample)}
+                                      </pre>
+                                    </details>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
