@@ -20,6 +20,8 @@ import {
   Star,
   Snowflake,
   AlertCircle,
+  Radio,
+  RefreshCw,
 } from 'lucide-react';
 import { format, addDays, isSameDay, isToday, isTomorrow, startOfDay } from 'date-fns';
 
@@ -56,6 +58,7 @@ export default function StickAndPuckPage() {
   const [sessions, setSessions] = useState<SessionWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sources, setSources] = useState<{ daysmart: number; daysmartSessions: number; seed: number } | null>(null);
 
   // Filter state
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
@@ -85,6 +88,7 @@ export default function StickAndPuckPage() {
       if (!res.ok) throw new Error('Failed to load sessions');
       const data = await res.json();
       setSessions(data.sessions || []);
+      if (data.sources) setSources(data.sources);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load sessions');
     } finally {
@@ -165,10 +169,26 @@ export default function StickAndPuckPage() {
               <div className="flex-1">
                 <h1 className="text-lg font-bold text-slate-900">Ice Time</h1>
                 <p className="text-[11px] text-slate-500">
-                  Stick & puck, open hockey, public skate
-                  {effectiveLocation && ' · South Florida rinks'}
+                  {sources && sources.daysmartSessions > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Radio size={9} className="text-green-500" />
+                      <span className="text-green-600 font-medium">Live</span>
+                      {' · '}Stick & puck, open hockey, public skate
+                    </span>
+                  ) : (
+                    <>Stick & puck, open hockey, public skate
+                    {effectiveLocation && ' · South Florida rinks'}</>
+                  )}
                 </p>
               </div>
+              <button
+                onClick={() => { setSessions([]); fetchSessions(); }}
+                disabled={loading}
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                title="Refresh schedule"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              </button>
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={cn(
@@ -397,10 +417,15 @@ function SessionCard({ session }: { session: SessionWithDistance }) {
 
           {/* Session info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
               <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', config.bg, config.color, config.border)}>
                 {config.emoji} {config.label}
               </span>
+              {session.source === 'daysmart' && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 inline-flex items-center gap-0.5">
+                  <Radio size={8} /> Live
+                </span>
+              )}
               {session.goaliesFree && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
                   Goalies Free

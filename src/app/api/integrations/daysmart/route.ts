@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchDaySmartSchedule } from '@/lib/daysmartSchedule';
 
 /**
  * DaySmart / Dash integration API — UNIVERSAL
@@ -76,6 +77,8 @@ export async function POST(request: NextRequest) {
         return handleSync(facilityId, sessionCookie || '', body.customerIds);
       case 'programs':
         return handlePrograms(facilityId, sessionCookie || '', body.customerIds);
+      case 'schedule':
+        return handleSchedule(facilityId);
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
@@ -470,6 +473,28 @@ async function handlePrograms(facilityId: string, sessionCookie: string, custome
     console.error('[DaySmart] Programs error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch programs from DaySmart', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Fetch public schedule for a DaySmart facility (no auth required)
+ */
+async function handleSchedule(facilityId: string) {
+  try {
+    const sessions = await fetchDaySmartSchedule(facilityId);
+    return NextResponse.json({
+      success: true,
+      sessions,
+      totalSessions: sessions.length,
+      facilityId,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[DaySmart] Schedule error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch schedule from DaySmart', details: String(error) },
       { status: 500 }
     );
   }
