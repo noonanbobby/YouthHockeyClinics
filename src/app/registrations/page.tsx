@@ -20,10 +20,12 @@ import {
   Filter,
   ArrowUpDown,
   CheckCircle2,
-
   XCircle,
   Hourglass,
   Users,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import {
   format,
@@ -119,6 +121,27 @@ function isGenericName(name: string): boolean {
   return GENERIC_CLINIC_NAMES.has(name.toLowerCase().trim());
 }
 
+function parseDateString(dateStr: string, which: 'start' | 'end'): string {
+  try {
+    const rangeMatch = dateStr.match(/(\w+ \d+)\s*-\s*(\w+ \d+),?\s*(\d{4})/);
+    if (rangeMatch) {
+      const year = rangeMatch[3];
+      const dateText = which === 'start' ? `${rangeMatch[1]}, ${year}` : `${rangeMatch[2]}, ${year}`;
+      const d = new Date(dateText);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch { /* fall through */ }
+  return new Date().toISOString().split('T')[0];
+}
+
+function extractCity(location: string): string {
+  if (!location) return '';
+  const parts = location.split(',');
+  return parts[0]?.trim() || location;
+}
+
 function groupRegistrations(registrations: Registration[]): RegistrationGroup[] {
   const map = new Map<string, RegistrationGroup>();
 
@@ -173,7 +196,12 @@ function groupRegistrations(registrations: Registration[]): RegistrationGroup[] 
 // ── Main Page ─────────────────────────────────────────────────
 export default function RegistrationsPage() {
   const router = useRouter();
-  const { registrations, addRegistration, updateRegistration } = useStore();
+  const {
+    registrations, addRegistration, updateRegistration, removeRegistration,
+    iceHockeyProConfig, setIceHockeyProConfig,
+    daySmartConfig, setDaySmartConfig, setDaySmartSyncing,
+    childProfiles,
+  } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -185,6 +213,150 @@ export default function RegistrationsPage() {
   const [filterChild, setFilterChild] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
+  // Stale data detection: >24h since any integration last synced
+  const isStale = useMemo(() => {
+    const now = Date.now();
+    const STALE_MS = 24 * 60 * 60 * 1000;
+    const hasAnyIntegration = iceHockeyProConfig.connected || daySmartConfig.connected;
+    if (!hasAnyIntegration) return false;
+    const ihpLast = iceHockeyProConfig.lastSync ? new Date(iceHockeyProConfig.lastSync).getTime() : 0;
+    const dashLast = daySmartConfig.lastSync ? new Date(daySmartConfig.lastSync).getTime() : 0;
+    const latest = Math.max(ihpLast, dashLast);
+    return latest > 0 && (now - latest) > STALE_MS;
+  }, [iceHockeyProConfig, daySmartConfig]);
+
+  const hasAnyIntegration = iceHockeyProConfig.connected || daySmartConfig.connected;
+
+  // ── Sync all connected integrations ──
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    setSyncStatus('Starting sync...');
+    let totalImported = 0;
+
+    try {
+      // Sync IceHockeyPro if connected
+      if (iceHockeyProConfig.connected && iceHockeyProConfig.email && iceHockeyProConfig.password) {
+        setSyncStatus('Logging in to IceHockeyPro...');
+        const loginRes = await fetch('/api/integrations/icehockeypro?action=login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: iceHockeyProConfig.email, password: iceHockeyProConfig.password }),
+        });
+        const loginData = await loginRes.json();
+
+        if (loginRes.ok && loginData.success) {
+          setSyncStatus('Syncing IceHockeyPro orders...');
+          const linkedNames = childProfiles
+            .filter(c => (iceHockeyProConfig.linkedChildIds || []).includes(c.id))
+            .map(c => c.name);
+
+          const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionCookie: loginData.sessionCookie, linkedChildNames: linkedNames }),
+          });
+          const syncData = await syncRes.json();
+
+          if (syncData.success) {
+            const oldIhpRegs = registrations.filter(r => r.source === 'icehockeypro');
+            for (const reg of oldIhpRegs) removeRegistration(reg.id);
+
+            const allOrders = [...(syncData.matchedOrders || []), ...(syncData.unmatchedOrders || [])];
+            for (const order of allOrders) {
+              const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
+              const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
+              addRegistration({
+                clinicId: `ihp-${order.orderId}`,
+                clinicName: order.campName,
+                venue: order.location || 'IceHockeyPro',
+                city: extractCity(order.location),
+                startDate, endDate,
+                price: order.price,
+                currency: order.currency || 'USD',
+                status: 'confirmed',
+                source: 'icehockeypro',
+                notes: `Order #${order.orderId}${order.dates ? ` — ${order.dates}` : ''}`,
+                playerName: order.matchedChildName || order.billingName || undefined,
+              });
+              totalImported++;
+            }
+            setIceHockeyProConfig({ lastSync: new Date().toISOString() });
+          }
+        }
+      }
+
+      // Sync DaySmart if connected
+      if (daySmartConfig.connected && daySmartConfig.email && daySmartConfig.password) {
+        setSyncStatus('Logging in to DaySmart...');
+        const loginRes = await fetch('/api/integrations/daysmart?action=login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: daySmartConfig.email,
+            password: daySmartConfig.password,
+            facilityId: daySmartConfig.facilityId,
+          }),
+        });
+        const loginData = await loginRes.json();
+
+        if (loginRes.ok && loginData.success) {
+          setSyncStatus('Syncing DaySmart registrations...');
+          setDaySmartSyncing(true);
+          const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              facilityId: daySmartConfig.facilityId,
+              sessionCookie: loginData.sessionCookie,
+              customerIds: loginData.customerIds || daySmartConfig.customerIds,
+            }),
+          });
+          const syncData = await syncRes.json();
+
+          if (syncData.success && syncData.activities) {
+            const oldDashRegs = registrations.filter(r => r.source === 'dash');
+            for (const reg of oldDashRegs) removeRegistration(reg.id);
+
+            for (const activity of syncData.activities) {
+              addRegistration({
+                clinicId: `dash-${activity.id}`,
+                clinicName: activity.name,
+                venue: activity.location || daySmartConfig.facilityName,
+                city: '',
+                startDate: activity.startDate,
+                endDate: activity.endDate,
+                price: activity.price,
+                currency: 'USD',
+                status: 'confirmed',
+                source: 'dash',
+                notes: `${activity.category}${activity.startTime ? ` — ${activity.startTime} to ${activity.endTime}` : ''}`,
+                playerName: activity.customerName,
+              });
+              totalImported++;
+            }
+            if (loginData.familyMembers) {
+              setDaySmartConfig({ lastSync: new Date().toISOString(), familyMembers: loginData.familyMembers, customerIds: loginData.customerIds });
+            } else {
+              setDaySmartConfig({ lastSync: new Date().toISOString() });
+            }
+          }
+          setDaySmartSyncing(false);
+        }
+      }
+
+      setSyncStatus(`Sync complete! ${totalImported} registrations refreshed.`);
+    } catch (error) {
+      setSyncStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    setSyncing(false);
+    setTimeout(() => setSyncStatus(null), 5000);
+  };
 
   // Unique children from registrations
   const childNames = useMemo(() => {
@@ -282,6 +454,21 @@ export default function RegistrationsPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Sync button */}
+              {hasAnyIntegration && (
+                <button
+                  onClick={handleSyncAll}
+                  disabled={syncing}
+                  className={cn('p-2 rounded-lg transition-colors', syncing ? 'bg-blue-50' : 'hover:bg-slate-100')}
+                  title="Refresh data from connected integrations"
+                >
+                  {syncing
+                    ? <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    : <RefreshCw className="w-5 h-5 text-slate-600" />
+                  }
+                </button>
+              )}
+
               {/* Filter toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -361,6 +548,44 @@ export default function RegistrationsPage() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Sync status bar */}
+        <AnimatePresence>
+          {syncStatus && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4"
+            >
+              <div className={cn(
+                'px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2',
+                syncing ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+              )}>
+                {syncing && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                {!syncing && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                {syncStatus}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Stale data banner */}
+        {isStale && !syncing && !syncStatus && (
+          <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+            <AlertTriangle className="w-4.5 h-4.5 text-amber-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-800">Data may be stale</p>
+              <p className="text-xs text-amber-600 mt-0.5">Last synced more than 24 hours ago.</p>
+            </div>
+            <button
+              onClick={handleSyncAll}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
+            >
+              Refresh
+            </button>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           {viewMode === 'list' ? (
             <motion.div key="list" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
@@ -371,8 +596,30 @@ export default function RegistrationsPage() {
                   </div>
                   <h3 className="text-xl font-semibold text-slate-900 mb-2">No Registrations Yet</h3>
                   <p className="text-slate-500 mb-6 max-w-md">
-                    Connect your IceHockeyPro or DaySmart account in Integrations, or add registrations manually.
+                    {hasAnyIntegration
+                      ? 'Tap the refresh button to sync your latest registrations, or add one manually.'
+                      : 'Connect your IceHockeyPro or DaySmart account in Integrations, or add registrations manually.'
+                    }
                   </p>
+                  {hasAnyIntegration ? (
+                    <button
+                      onClick={handleSyncAll}
+                      disabled={syncing}
+                      className="px-6 py-2.5 text-white rounded-xl font-medium text-sm hover:opacity-90 flex items-center gap-2"
+                      style={{ backgroundColor: 'var(--theme-primary)' }}
+                    >
+                      <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+                      {syncing ? 'Syncing...' : 'Sync Now'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => router.push('/integrations')}
+                      className="px-6 py-2.5 text-white rounded-xl font-medium text-sm hover:opacity-90"
+                      style={{ backgroundColor: 'var(--theme-primary)' }}
+                    >
+                      Connect Integrations
+                    </button>
+                  )}
                 </div>
               )}
 

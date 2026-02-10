@@ -49,7 +49,7 @@ function formatDistance(km: number): string {
 
 export default function StickAndPuckPage() {
   const router = useRouter();
-  const { homeLocation, userLocation, searchRadiusMiles } = useStore();
+  const { homeLocation, userLocation } = useStore();
   const effectiveLocation = useMemo(() => {
     return userLocation || (homeLocation ? { lat: homeLocation.lat, lng: homeLocation.lng } : null);
   }, [userLocation, homeLocation]);
@@ -73,9 +73,7 @@ export default function StickAndPuckPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        radius: searchRadiusMiles.toString(),
-      });
+      const params = new URLSearchParams();
       if (effectiveLocation) {
         params.set('lat', effectiveLocation.lat.toString());
         params.set('lng', effectiveLocation.lng.toString());
@@ -93,7 +91,7 @@ export default function StickAndPuckPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveLocation, searchRadiusMiles, selectedType]);
+  }, [effectiveLocation, selectedType]);
 
   useEffect(() => {
     fetchSessions();
@@ -169,7 +167,7 @@ export default function StickAndPuckPage() {
                 <h1 className="text-lg font-bold text-slate-900">Ice Time</h1>
                 <p className="text-[11px] text-slate-500">
                   Stick & puck, open hockey, public skate
-                  {effectiveLocation && ` · within ${searchRadiusMiles} mi`}
+                  {effectiveLocation && ' · South Florida rinks'}
                 </p>
               </div>
               <button
@@ -289,7 +287,7 @@ export default function StickAndPuckPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-800">Set your location</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Go to <button onClick={() => router.push('/settings')} className="underline font-medium">Settings</button> to set your home location for distance-based results and radius filtering.
+                  Go to <button onClick={() => router.push('/settings')} className="underline font-medium">Settings</button> to set your home location for distance info.
                 </p>
               </div>
             </div>
@@ -317,10 +315,7 @@ export default function StickAndPuckPage() {
               <Snowflake size={40} className="text-slate-300 mb-3" />
               <p className="text-sm font-semibold text-slate-700">No sessions on {format(selectedDate, 'EEEE, MMM d')}</p>
               <p className="text-xs text-slate-500 mt-1">
-                Try a different day or{' '}
-                <button onClick={() => router.push('/settings')} className="underline" style={{ color: 'var(--theme-primary)' }}>
-                  increase your search radius
-                </button>
+                Try a different day or select a different session type above.
               </p>
             </div>
           )}

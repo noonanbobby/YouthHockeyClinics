@@ -9,22 +9,14 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const lat = parseFloat(searchParams.get('lat') || '0');
   const lng = parseFloat(searchParams.get('lng') || '0');
-  const radiusMiles = parseFloat(searchParams.get('radius') || '10');
   const sessionType = searchParams.get('type') || 'all'; // stick-and-puck, open-hockey, public-skate, drop-in, freestyle, all
   const day = searchParams.get('day'); // 0-6 or null for all
 
-  const radiusKm = radiusMiles * 1.60934;
+  const hasLocation = lat !== 0 && lng !== 0;
 
-  // Start with all seed sessions
+  // Start with ALL seed sessions — no radius filtering for seed data.
+  // All South Florida rinks should always be visible.
   let sessions: StickAndPuckSession[] = [...ALL_SEED_SESSIONS];
-
-  // Filter by radius if location provided
-  if (lat !== 0 && lng !== 0) {
-    sessions = sessions.filter((s) => {
-      const dist = calculateDistance(lat, lng, s.location.lat, s.location.lng);
-      return dist <= radiusKm;
-    });
-  }
 
   // Filter by session type
   if (sessionType !== 'all') {
@@ -43,36 +35,42 @@ export async function GET(request: NextRequest) {
   const today = new Date().toISOString().split('T')[0];
   sessions = sessions.filter(s => s.date >= today);
 
-  // Sort by date, then time
-  sessions.sort((a, b) => {
-    const dateComp = a.date.localeCompare(b.date);
-    if (dateComp !== 0) return dateComp;
-    return a.startTime.localeCompare(b.startTime);
-  });
-
-  // Add distance to each session if location provided
+  // Add distance to each session
   const sessionsWithDistance = sessions.map(s => ({
     ...s,
-    distance: lat !== 0 && lng !== 0
+    distance: hasLocation
       ? calculateDistance(lat, lng, s.location.lat, s.location.lng)
       : null,
   }));
 
-  // Get unique rinks in range
+  // Sort by distance (nearest first) if location provided, otherwise by date/time
+  sessionsWithDistance.sort((a, b) => {
+    // Primary sort: date
+    const dateComp = a.date.localeCompare(b.date);
+    if (dateComp !== 0) return dateComp;
+    // Secondary sort: time
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  // Get unique rinks from filtered sessions
   const rinkIds = new Set(sessions.map(s => s.rinkId));
   const rinks = SEED_RINKS.filter(r => rinkIds.has(r.id)).map(r => ({
     ...r,
     sessions: [], // Don't duplicate sessions in rink objects
-    distance: lat !== 0 && lng !== 0
+    distance: hasLocation
       ? calculateDistance(lat, lng, r.location.lat, r.location.lng)
       : null,
   }));
+
+  // Sort rinks by distance if location provided
+  if (hasLocation) {
+    rinks.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+  }
 
   return NextResponse.json({
     sessions: sessionsWithDistance,
     rinks,
     totalSessions: sessionsWithDistance.length,
     totalRinks: rinks.length,
-    radiusMiles,
   });
 }
