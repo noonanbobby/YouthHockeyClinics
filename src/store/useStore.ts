@@ -1,56 +1,43 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { AgeGroup, Clinic, ChildProfile, FilterState, NotificationItem, ViewMode, Registration, DaySmartConfig, IceHockeyProConfig, EmailScanConfig } from '@/types';
 import { calculateDistance } from '@/lib/geocoder';
 
-/**
- * Custom storage adapter that sanitizes persisted data on read.
- * Filters out demo registrations at the storage layer BEFORE Zustand
- * hydrates the store — no lifecycle conflicts, no race conditions.
- */
-function isDemoRecord(r: Record<string, string | undefined>): boolean {
-  const cid = (r.clinicId || '').toLowerCase();
-  const venue = (r.venue || '').toLowerCase();
-  const cn = (r.clinicName || '').toLowerCase();
-  if (cid.startsWith('seed-')) return true;
-  if (venue.includes('baptist health iceplex') || venue.includes('panthers iceden')) return true;
-  if (cn.includes('spring break hockey camp')) return true;
-  if (cn.includes('power skating clinic')) return true;
-  if (cn.includes('learn to skate')) return true;
-  if (cn.includes('elite summer hockey')) return true;
-  if (cn.includes('max ivanov spring skills')) return true;
-  return false;
-}
-
-const sanitizedStorage = {
-  getItem(name: string): string | null {
-    if (typeof window === 'undefined') return null;
-    const raw = localStorage.getItem(name);
-    if (!raw) return raw;
-    try {
+// Scrub demo registrations directly from localStorage at module load time,
+// BEFORE the Zustand store reads the data. No middleware, no lifecycle hooks,
+// no version gates — just a one-shot edit to the raw JSON in localStorage.
+if (typeof window !== 'undefined') {
+  try {
+    const STORE_KEY = 'hockey-clinics-storage';
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
       const data = JSON.parse(raw);
-      if (data?.state?.registrations && Array.isArray(data.state.registrations)) {
-        const before = data.state.registrations.length;
-        data.state.registrations = data.state.registrations.filter(
-          (r: Record<string, string | undefined>) => !isDemoRecord(r)
-        );
+      const regs = data?.state?.registrations;
+      if (Array.isArray(regs) && regs.length > 0) {
+        const before = regs.length;
+        data.state.registrations = regs.filter((r: Record<string, unknown>) => {
+          const cid = String(r.clinicId || '').toLowerCase();
+          const venue = String(r.venue || '').toLowerCase();
+          const cn = String(r.clinicName || '').toLowerCase();
+          if (cid.startsWith('seed-')) return false;
+          if (r.isDemo) return false;
+          if (venue.includes('baptist health iceplex') || venue.includes('panthers iceden')) return false;
+          if (cn.includes('spring break hockey camp')) return false;
+          if (cn.includes('power skating clinic')) return false;
+          if (cn.includes('learn to skate')) return false;
+          if (cn.includes('elite summer hockey')) return false;
+          if (cn.includes('max ivanov spring skills')) return false;
+          return true;
+        });
         if (data.state.registrations.length < before) {
-          // Write cleaned data back so it's permanent
-          localStorage.setItem(name, JSON.stringify(data));
+          localStorage.setItem(STORE_KEY, JSON.stringify(data));
         }
       }
-      return JSON.stringify(data);
-    } catch {
-      return raw;
     }
-  },
-  setItem(name: string, value: string): void {
-    localStorage.setItem(name, value);
-  },
-  removeItem(name: string): void {
-    localStorage.removeItem(name);
-  },
-};
+  } catch {
+    // localStorage unavailable or corrupt — store will init with defaults
+  }
+}
 
 /** Compute USA Hockey age group from a child's date of birth */
 export function getAgeGroupFromDOB(dob: string): AgeGroup {
@@ -858,7 +845,6 @@ export const useStore = create<AppState>()(
         iceHockeyProConfig: state.iceHockeyProConfig,
         emailScanConfig: state.emailScanConfig,
       }),
-      storage: createJSONStorage(() => sanitizedStorage),
       onRehydrateStorage: () => (state) => {
         if (state && state.clinics.length > 0) {
           setTimeout(() => state.applyFilters(), 0);
