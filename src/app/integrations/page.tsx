@@ -276,13 +276,18 @@ export default function IntegrationsPage() {
       const facilityName = loginData.facilityName || validateData.facilityName || facilityId;
       const familyMembers = loginData.familyMembers || [];
       const customerIds = loginData.customerIds || [];
+      const authCredential = loginData.authToken || loginData.sessionCookie || '';
+
+      if (loginData.authStrategy) {
+        console.log(`[DaySmart] Auth strategy: ${loginData.authStrategy}, tokenType: ${loginData.tokenType}`);
+      }
 
       // Step 3: Sync events
-      setConnectionStatus(`Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`);
+      setConnectionStatus(`Connected via ${loginData.authStrategy || 'default'}! Found ${familyMembers.length} family member(s). Fetching registrations...`);
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facilityId, sessionCookie: loginData.sessionCookie, customerIds }),
+        body: JSON.stringify({ facilityId, sessionCookie: authCredential, customerIds }),
       });
       const syncData = await syncRes.json();
 
@@ -388,12 +393,13 @@ export default function IntegrationsPage() {
       }
 
       setConnectionStatus('Fetching latest registrations...');
+      const authCredential = loginData.authToken || loginData.sessionCookie || '';
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           facilityId: daySmartConfig.facilityId,
-          sessionCookie: loginData.sessionCookie,
+          sessionCookie: authCredential,
           customerIds: loginData.customerIds || daySmartConfig.customerIds,
         }),
       });

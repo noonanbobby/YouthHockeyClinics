@@ -5,18 +5,30 @@ import { fetchDaySmartSchedule } from '@/lib/daysmartSchedule';
  * DaySmart / Dash integration API — UNIVERSAL
  *
  * Works with ANY DaySmart-powered facility worldwide.
- * The client provides the facility slug (e.g. "warmemorial", "iceden", "rinkname").
+ * The client provides the facility slug (e.g. "warmemorial", "iceden").
  *
- * DaySmart JSON:API base: https://apps.daysmartrecreation.com/dash/jsonapi/api/v1/
+ * Authentication strategy (tried in order):
+ *   1. OAuth2 password grant at /company/auth/token  → JWT bearer token
+ *   2. PHP Auth/login with JSON body                 → session cookie + token extraction
+ *   3. PHP Auth/login with form-encoded body          → session cookie
+ *
+ * All subsequent API calls use Authorization: Bearer {token} when available,
+ * falling back to Cookie header for legacy sessions.
  *
  * Flow:
- * 1. POST ?action=login    → { email, password, facilityId } → Authenticate, discover family members
- * 2. POST ?action=sync     → { facilityId, sessionCookie, customerIds } → Fetch events
- * 3. POST ?action=programs → { facilityId, sessionCookie, customerIds } → Fetch available programs
+ *   POST ?action=validate      → Check facility slug exists
+ *   POST ?action=login         → Authenticate + discover family members
+ *   POST ?action=sync          → Fetch registered events
+ *   POST ?action=programs      → Fetch available programs
+ *   POST ?action=schedule      → Fetch public schedule (no auth)
+ *   POST ?action=debug-login   → Try all auth strategies, return raw diagnostics
  */
 
 const DAYSMART_BASE = 'https://apps.daysmartrecreation.com/dash';
 const API_BASE = `${DAYSMART_BASE}/jsonapi/api/v1`;
+
+// Alternate API domain used by the official Dash PHP client library
+const DASH_API_BASE = 'https://api.dashplatform.com/api/v1';
 
 interface DaySmartEvent {
   id: string;
@@ -54,12 +66,306 @@ interface ParsedActivity {
   customerId: string;
 }
 
+/** Result from any authentication strategy */
+interface AuthResult {
+  strategy: string;
+  token: string;         // JWT or cookie string — used for subsequent API calls
+  tokenType: 'bearer' | 'cookie';
+  responseData: Record<string, unknown>;
+  cookies: string;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Build auth headers for DaySmart API calls */
+function buildAuthHeaders(auth: string, facilityId: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.api+json',
+    'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/`,
+  };
+
+  if (!auth) return headers;
+
+  // JWT tokens start with 'eyJ' (base64-encoded JSON header)
+  if (auth.startsWith('eyJ') || auth.startsWith('Bearer ')) {
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth;
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    // Legacy cookie-based auth
+    headers['Cookie'] = auth;
+  }
+
+  return headers;
+}
+
+/** Extract cookies from a fetch Response */
+function extractCookies(res: Response): string {
+  let cookies = '';
+
+  // Method 1: getSetCookie() (standard, returns array)
+  try {
+    const setCookieHeaders = res.headers.getSetCookie?.() || [];
+    if (setCookieHeaders.length > 0) {
+      cookies = setCookieHeaders.map((c) => c.split(';')[0]).join('; ');
+    }
+  } catch {
+    // Not available in this runtime
+  }
+
+  // Method 2: get('set-cookie')
+  if (!cookies) {
+    const raw = res.headers.get('set-cookie') || '';
+    if (raw) {
+      cookies = raw
+        .split(/,\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/)
+        .map((c) => c.split(';')[0].trim())
+        .filter(Boolean)
+        .join('; ');
+    }
+  }
+
+  return cookies;
+}
+
+/** Safe JSON parse from response */
+async function safeJson(res: Response): Promise<Record<string, unknown>> {
+  try {
+    return await res.json() as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/** Extract any token-like value from a response body */
+function extractToken(data: Record<string, unknown>): string {
+  // Try known token field names (DaySmart has used various names)
+  for (const key of [
+    'access_token', 'token', 'session_token', 'jwt',
+    'auth_token', 'api_token', 'bearer_token',
+    'accessToken', 'sessionToken', 'authToken',
+  ]) {
+    if (data[key] && typeof data[key] === 'string') {
+      return data[key] as string;
+    }
+  }
+
+  // Check nested data objects
+  if (data.data && typeof data.data === 'object') {
+    const nested = data.data as Record<string, unknown>;
+    for (const key of ['access_token', 'token', 'session_token', 'jwt']) {
+      if (nested[key] && typeof nested[key] === 'string') {
+        return nested[key] as string;
+      }
+    }
+    // Check nested attributes
+    if (nested.attributes && typeof nested.attributes === 'object') {
+      const attrs = nested.attributes as Record<string, unknown>;
+      for (const key of ['access_token', 'token', 'session_token']) {
+        if (attrs[key] && typeof attrs[key] === 'string') {
+          return attrs[key] as string;
+        }
+      }
+    }
+  }
+
+  return '';
+}
+
+// ── Auth Strategies ──────────────────────────────────────────────────────
+
+/**
+ * Strategy 1: OAuth2 password grant at /company/auth/token
+ * This is the proper DaySmart API auth flow (their official PHP client uses it).
+ */
+async function tryOAuth2PasswordGrant(
+  email: string, password: string, facilityId: string
+): Promise<AuthResult | null> {
+  // Try both known API domains
+  const bases = [API_BASE, DASH_API_BASE];
+
+  for (const base of bases) {
+    try {
+      const url = `${base}/company/auth/token?company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          grant_type: 'password',
+          username: email,
+          password,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const data = await safeJson(res);
+      console.log(`[DaySmart] OAuth2 ${base} → ${res.status}, keys: ${Object.keys(data).join(',')}`);
+
+      if (res.ok && data.access_token) {
+        return {
+          strategy: `oauth2-password (${base})`,
+          token: data.access_token as string,
+          tokenType: 'bearer',
+          responseData: data,
+          cookies: extractCookies(res),
+        };
+      }
+
+      // Also check if auth=true even without access_token
+      if (res.ok && data.auth === true) {
+        const token = extractToken(data);
+        if (token) {
+          return {
+            strategy: `oauth2-password-alt (${base})`,
+            token,
+            tokenType: 'bearer',
+            responseData: data,
+            cookies: extractCookies(res),
+          };
+        }
+      }
+    } catch (err) {
+      console.log(`[DaySmart] OAuth2 ${base} failed:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Strategy 2: PHP Auth/login with JSON body
+ * The legacy login endpoint used by the Dash SPA.
+ */
+async function tryPHPLoginJSON(
+  email: string, password: string, facilityId: string
+): Promise<AuthResult | null> {
+  // Try multiple field name combinations
+  const payloads = [
+    { email, password },
+    { username: email, password },
+    { email, password, company: facilityId },
+    { username: email, password, company: facilityId },
+  ];
+
+  for (const payload of payloads) {
+    try {
+      const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://apps.daysmartrecreation.com',
+          'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const cookies = extractCookies(res);
+      const data = await safeJson(res);
+      const payloadKeys = Object.keys(payload).join('+');
+      console.log(`[DaySmart] PHP-JSON(${payloadKeys}) → ${res.status}, keys: ${Object.keys(data).join(',')}, cookies: ${cookies ? cookies.length + ' chars' : 'NONE'}`);
+
+      if (!res.ok) continue;
+
+      // Check for token in response body
+      const token = extractToken(data);
+
+      // Success if we got a token or cookies or a customer_id
+      if (token || cookies || data.customer_id) {
+        return {
+          strategy: `php-json (${payloadKeys})`,
+          token: token || cookies,
+          tokenType: token ? 'bearer' : 'cookie',
+          responseData: data,
+          cookies,
+        };
+      }
+    } catch (err) {
+      console.log(`[DaySmart] PHP-JSON failed:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Strategy 3: PHP Auth/login with form-encoded body
+ * Some DaySmart PHP endpoints expect application/x-www-form-urlencoded.
+ */
+async function tryPHPLoginForm(
+  email: string, password: string, facilityId: string
+): Promise<AuthResult | null> {
+  try {
+    const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+    const body = new URLSearchParams({
+      email,
+      username: email,
+      password,
+      company: facilityId,
+    });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'Origin': 'https://apps.daysmartrecreation.com',
+        'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+      },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const cookies = extractCookies(res);
+    const data = await safeJson(res);
+    console.log(`[DaySmart] PHP-Form → ${res.status}, keys: ${Object.keys(data).join(',')}, cookies: ${cookies ? cookies.length + ' chars' : 'NONE'}`);
+
+    if (!res.ok) return null;
+
+    const token = extractToken(data);
+
+    if (token || cookies || data.customer_id) {
+      return {
+        strategy: 'php-form',
+        token: token || cookies,
+        tokenType: token ? 'bearer' : 'cookie',
+        responseData: data,
+        cookies,
+      };
+    }
+  } catch (err) {
+    console.log(`[DaySmart] PHP-Form failed:`, err instanceof Error ? err.message : String(err));
+  }
+
+  return null;
+}
+
+// ── Route Handler ────────────────────────────────────────────────────────
+
 export async function POST(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action') || 'sync';
 
   try {
     const body = await request.json();
-    const { email, password, sessionCookie, facilityId } = body;
+    const { email, password, facilityId } = body;
+    // Accept both 'sessionCookie' (legacy) and 'authToken' (new)
+    const auth = body.authToken || body.sessionCookie || '';
 
     if (!facilityId && action !== 'validate') {
       return NextResponse.json(
@@ -74,11 +380,13 @@ export async function POST(request: NextRequest) {
       case 'login':
         return handleLogin(email, password, facilityId);
       case 'sync':
-        return handleSync(facilityId, sessionCookie || '', body.customerIds);
+        return handleSync(facilityId, auth, body.customerIds);
       case 'programs':
-        return handlePrograms(facilityId, sessionCookie || '', body.customerIds);
+        return handlePrograms(facilityId, auth, body.customerIds);
       case 'schedule':
         return handleSchedule(facilityId);
+      case 'debug-login':
+        return handleDebugLogin(email, password, facilityId);
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
@@ -91,20 +399,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Validate a facility slug — check if it exists on DaySmart
- *
- * Uses the JSON:API events endpoint (same one the schedule page uses)
- * because the legacy getOptions PHP endpoint is unreliable.
- */
+// ── Validate ─────────────────────────────────────────────────────────────
+
 async function handleValidate(facilityId: string) {
   if (!facilityId) {
     return NextResponse.json({ error: 'Facility ID required' }, { status: 400 });
   }
 
   try {
-    // Use the JSON:API events endpoint with a tiny page size to validate.
-    // This is the same public endpoint that powers the schedule/stick-and-puck page.
     const url = new URL(`${API_BASE}/events`);
     url.searchParams.set('company', facilityId);
     url.searchParams.set('page[size]', '1');
@@ -123,7 +425,7 @@ async function handleValidate(facilityId: string) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      // Fall back to the legacy getOptions endpoint in case JSON:API is temporarily down
+      // Fall back to the legacy getOptions endpoint
       const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
       const optRes = await fetch(optionsUrl, {
         headers: {
@@ -147,8 +449,7 @@ async function handleValidate(facilityId: string) {
       });
     }
 
-    // JSON:API responded OK — facility exists
-    // Try to extract facility name from the getOptions endpoint
+    // Facility exists — try to get its name
     let facilityName = facilityId;
     try {
       const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
@@ -160,14 +461,10 @@ async function handleValidate(facilityId: string) {
         facilityName = optData?.company?.name || optData?.name || facilityId;
       }
     } catch {
-      // Name lookup failed — use slug as fallback
+      // Name lookup failed
     }
 
-    return NextResponse.json({
-      valid: true,
-      facilityId,
-      facilityName,
-    });
+    return NextResponse.json({ valid: true, facilityId, facilityName });
   } catch {
     return NextResponse.json({
       valid: false,
@@ -176,96 +473,72 @@ async function handleValidate(facilityId: string) {
   }
 }
 
-/**
- * Login to DaySmart and discover family members automatically
- */
+// ── Login ────────────────────────────────────────────────────────────────
+
 async function handleLogin(email: string, password: string, facilityId: string) {
   if (!email || !password) {
     return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
   }
 
   try {
-    // DaySmart uses a PHP login endpoint — facility-specific
-    const loginUrl = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+    // Try authentication strategies in order of preference
+    console.log(`[DaySmart] Attempting login for ${email} at ${facilityId}`);
 
-    const res = await fetch(loginUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Origin': 'https://apps.daysmartrecreation.com',
-        'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
-      },
-      body: JSON.stringify({ email, password }),
-    });
+    let authResult: AuthResult | null = null;
 
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('[DaySmart] Login failed:', res.status, text);
-      return NextResponse.json(
-        { error: 'Login failed. Check your email and password.' },
-        { status: 401 }
-      );
+    // Strategy 1: OAuth2 password grant (modern API)
+    authResult = await tryOAuth2PasswordGrant(email, password, facilityId);
+    if (authResult) {
+      console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
     }
 
-    // Extract session cookies from response — try multiple methods
-    let cookies = '';
-    try {
-      // Method 1: getSetCookie() (standard, returns array)
-      const setCookieHeaders = res.headers.getSetCookie?.() || [];
-      if (setCookieHeaders.length > 0) {
-        cookies = setCookieHeaders.map((c) => c.split(';')[0]).join('; ');
-      }
-    } catch {
-      // getSetCookie not available in this runtime
-    }
-    if (!cookies) {
-      // Method 2: get('set-cookie') — returns all cookies joined by ', '
-      const raw = res.headers.get('set-cookie') || '';
-      if (raw) {
-        // Split on ', ' but be careful of expires dates containing ','
-        // Safest: split on known cookie boundaries (name=value pairs after '; ')
-        cookies = raw
-          .split(/,\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/)
-          .map((c) => c.split(';')[0].trim())
-          .filter(Boolean)
-          .join('; ');
+    // Strategy 2: PHP login with JSON body
+    if (!authResult) {
+      authResult = await tryPHPLoginJSON(email, password, facilityId);
+      if (authResult) {
+        console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
       }
     }
 
-    const data = await res.json().catch(() => ({}));
-
-    // Check for session token in response body (some DaySmart configs return token instead of cookie)
-    const authToken = data?.token || data?.session_token || data?.access_token || '';
-    if (!cookies && authToken) {
-      cookies = `dash_session=${authToken}`;
+    // Strategy 3: PHP login with form-encoded body
+    if (!authResult) {
+      authResult = await tryPHPLoginForm(email, password, facilityId);
+      if (authResult) {
+        console.log(`[DaySmart] Auth succeeded via ${authResult.strategy}`);
+      }
     }
 
-    console.log('[DaySmart] Login response keys:', Object.keys(data || {}));
-    console.log('[DaySmart] Cookies captured:', cookies ? `${cookies.length} chars` : 'NONE');
+    if (!authResult) {
+      console.error('[DaySmart] All auth strategies failed');
+      return NextResponse.json({
+        success: false,
+        error: 'Login failed. Check your email and password, or try logging in at apps.daysmartrecreation.com first to confirm your credentials work.',
+        facilityId,
+      }, { status: 401 });
+    }
 
-    // Discover all linked customers (family members) from the API
+    // We have auth — now discover family members
+    const { token, tokenType, responseData, cookies } = authResult;
+    const authCredential = tokenType === 'bearer' ? token : (cookies || token);
+
     const familyMembers: Array<{ id: string; name: string }> = [];
     let customerIds: string[] = [];
 
-    // The login response may include the primary customer ID
-    if (data?.customer_id) {
-      customerIds = [String(data.customer_id)];
+    // Check login response for customer ID
+    if (responseData.customer_id) {
+      customerIds = [String(responseData.customer_id)];
     }
 
-    // Fetch the account's linked customers (need cookies or token)
-    if (cookies) {
+    // Fetch linked customers using our auth
+    if (authCredential) {
       try {
-        const custRes = await fetch(
-          `${API_BASE}/customers?cache[save]=false&company=${facilityId}`,
-          {
-            headers: {
-              'Accept': 'application/vnd.api+json',
-              'Cookie': cookies,
-              'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/`,
-            },
-          }
-        );
+        const custUrl = `${API_BASE}/customers?cache[save]=false&company=${facilityId}`;
+        const custRes = await fetch(custUrl, {
+          headers: buildAuthHeaders(authCredential, facilityId),
+        });
+
+        console.log(`[DaySmart] Customers API → ${custRes.status}`);
+
         if (custRes.ok) {
           const custData = await custRes.json();
           if (custData?.data && Array.isArray(custData.data)) {
@@ -277,47 +550,69 @@ async function handleLogin(email: string, password: string, facilityId: string) 
             }
             customerIds = custData.data.map((c: { id: string }) => c.id);
           }
+        } else {
+          console.log(`[DaySmart] Customers API failed: ${custRes.status}`);
+          // Try with cookie if we used bearer
+          if (tokenType === 'bearer' && cookies) {
+            const custRes2 = await fetch(custUrl, {
+              headers: {
+                ...buildAuthHeaders(cookies, facilityId),
+                'Cookie': cookies,
+              },
+            });
+            console.log(`[DaySmart] Customers API (cookie fallback) → ${custRes2.status}`);
+            if (custRes2.ok) {
+              const custData = await custRes2.json();
+              if (custData?.data && Array.isArray(custData.data)) {
+                for (const customer of custData.data) {
+                  const fn = customer.attributes?.first_name || '';
+                  const ln = customer.attributes?.last_name || '';
+                  const name = `${fn} ${ln}`.trim();
+                  familyMembers.push({ id: customer.id, name: name || `Customer #${customer.id}` });
+                }
+                customerIds = custData.data.map((c: { id: string }) => c.id);
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('[DaySmart] Failed to fetch customers:', err);
       }
     }
 
-    // If we still have no customers, try the primary ID from login response
-    if (customerIds.length === 0 && data?.customer_id) {
-      customerIds = [String(data.customer_id)];
-      familyMembers.push({ id: String(data.customer_id), name: data?.name || data?.first_name || email });
+    // Fallback: extract customer info from login response
+    if (customerIds.length === 0 && responseData.customer_id) {
+      customerIds = [String(responseData.customer_id)];
+      const name = (responseData.name as string) ||
+                   (responseData.first_name as string) ||
+                   (responseData.display_name as string) ||
+                   email;
+      familyMembers.push({ id: String(responseData.customer_id), name });
     }
 
-    // If we have NO cookies AND no customers, the login didn't really work
-    if (!cookies && customerIds.length === 0) {
-      console.error('[DaySmart] Login returned 200 but no session data. Response keys:', Object.keys(data || {}));
-      return NextResponse.json({
-        success: false,
-        error: 'Login succeeded but no session was established. DaySmart may require browser-based login for this facility.',
-        facilityId,
-        debugInfo: { responseKeys: Object.keys(data || {}), hasCookies: false },
-      }, { status: 401 });
-    }
-
-    // Get the facility name
+    // Get facility name
     let facilityName = facilityId;
     try {
       const optionsUrl = `${DAYSMART_BASE}/index.php?Action=X/getOptions&cid=${facilityId}&company=${facilityId}`;
-      const optRes = await fetch(optionsUrl, {
-        headers: { 'Accept': 'application/json', 'Cookie': cookies },
-      });
+      const headers: Record<string, string> = { 'Accept': 'application/json' };
+      if (cookies) headers['Cookie'] = cookies;
+      const optRes = await fetch(optionsUrl, { headers });
       if (optRes.ok) {
         const optData = await optRes.json().catch(() => null);
         facilityName = optData?.company?.name || optData?.name || facilityId;
       }
     } catch {
-      // Use the slug as fallback
+      // Use slug as fallback
     }
+
+    console.log(`[DaySmart] Login complete: strategy=${authResult.strategy}, tokenType=${tokenType}, families=${familyMembers.length}, customers=${customerIds.length}`);
 
     return NextResponse.json({
       success: true,
-      sessionCookie: cookies,
+      sessionCookie: authCredential,  // backward-compatible field name
+      authToken: tokenType === 'bearer' ? token : '',
+      tokenType,
+      authStrategy: authResult.strategy,
       customerIds,
       familyMembers,
       facilityId,
@@ -332,35 +627,26 @@ async function handleLogin(email: string, password: string, facilityId: string) 
   }
 }
 
-/**
- * Sync — fetch registered events for all family members at any facility
- */
-async function handleSync(facilityId: string, sessionCookie: string, customerIds?: string[]) {
+// ── Sync ─────────────────────────────────────────────────────────────────
+
+async function handleSync(facilityId: string, auth: string, customerIds?: string[]) {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-  // Fetch customer events (registered activities)
   const eventsUrl = new URL(`${API_BASE}/customer-events`);
   eventsUrl.searchParams.set('cache[save]', 'false');
   eventsUrl.searchParams.set('include', 'customer,resource.facility,eventType,registrations,rosterRegistration.finances');
   eventsUrl.searchParams.set('page[size]', '100');
   eventsUrl.searchParams.set('sort', '-start');
   eventsUrl.searchParams.set('fields[customer]', 'id,first_name,last_name');
-  // Filter to specific customer IDs if provided
   if (customerIds && customerIds.length > 0) {
     eventsUrl.searchParams.set('filter[customer_id__in]', customerIds.join(','));
   }
   eventsUrl.searchParams.set('company', facilityId);
 
-  const headers: Record<string, string> = {
-    'Accept': 'application/vnd.api+json',
-    'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/activities`,
-  };
-  if (sessionCookie) {
-    headers['Cookie'] = sessionCookie;
-  }
-
   try {
-    const res = await fetch(eventsUrl.toString(), { headers });
+    const res = await fetch(eventsUrl.toString(), {
+      headers: buildAuthHeaders(auth, facilityId),
+    });
 
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
@@ -376,7 +662,7 @@ async function handleSync(facilityId: string, sessionCookie: string, customerIds
     const events: DaySmartEvent[] = data?.data || [];
     const included = data?.included || [];
 
-    // Build lookup maps from included data
+    // Build lookup maps
     const customerMap = new Map<string, string>();
     const facilityMap = new Map<string, string>();
     const eventTypeMap = new Map<string, string>();
@@ -395,12 +681,10 @@ async function handleSync(facilityId: string, sessionCookie: string, customerIds
       }
     }
 
-    // Default facility name from map or slug
     const defaultFacilityName = facilityMap.size > 0
       ? [...facilityMap.values()][0]
       : facilityId;
 
-    // Parse events into our format
     const activities: ParsedActivity[] = events.map((event) => {
       const attrs = event.attributes || {};
       const custRel = event.relationships?.customer?.data;
@@ -415,11 +699,9 @@ async function handleSync(facilityId: string, sessionCookie: string, customerIds
       const eventTypeRel = event.relationships?.eventType?.data;
       const eventTypeName = eventTypeRel ? eventTypeMap.get(eventTypeRel.id) || '' : '';
 
-      // Parse dates
       const start = attrs.start ? new Date(attrs.start as string) : new Date();
       const end = attrs.end ? new Date(attrs.end as string) : start;
 
-      // Extract price from finances if available
       let price = 0;
       const rosterReg = event.relationships?.['rosterRegistration'] as { data?: unknown } | undefined;
       const financeData = rosterReg?.data as { id: string } | Array<{ id: string }> | undefined;
@@ -450,7 +732,6 @@ async function handleSync(facilityId: string, sessionCookie: string, customerIds
       };
     });
 
-    // Separate into upcoming and past
     const upcoming = activities.filter((a) => a.endDate >= now.split(' ')[0]);
     const past = activities.filter((a) => a.endDate < now.split(' ')[0]);
 
@@ -473,10 +754,9 @@ async function handleSync(facilityId: string, sessionCookie: string, customerIds
   }
 }
 
-/**
- * Fetch available programs and clinics for registration at any facility
- */
-async function handlePrograms(facilityId: string, sessionCookie: string, customerIds?: string[]) {
+// ── Programs ─────────────────────────────────────────────────────────────
+
+async function handlePrograms(facilityId: string, auth: string, customerIds?: string[]) {
   const childIds = customerIds || [];
 
   if (childIds.length === 0) {
@@ -486,14 +766,6 @@ async function handlePrograms(facilityId: string, sessionCookie: string, custome
       totalPrograms: 0,
       error: 'No customer IDs provided. Connect first to discover family members.',
     });
-  }
-
-  const headers: Record<string, string> = {
-    'Accept': 'application/vnd.api+json',
-    'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/programs`,
-  };
-  if (sessionCookie) {
-    headers['Cookie'] = sessionCookie;
   }
 
   try {
@@ -518,7 +790,9 @@ async function handlePrograms(facilityId: string, sessionCookie: string, custome
       const progUrl = `${API_BASE}/programs?cache[save]=false&filter[customer_id]=${childId}&include=activities&company=${facilityId}`;
 
       try {
-        const res = await fetch(progUrl, { headers });
+        const res = await fetch(progUrl, {
+          headers: buildAuthHeaders(auth, facilityId),
+        });
         if (res.ok) {
           const data = await res.json();
           const programs = data?.data || [];
@@ -563,9 +837,8 @@ async function handlePrograms(facilityId: string, sessionCookie: string, custome
   }
 }
 
-/**
- * Fetch public schedule for a DaySmart facility (no auth required)
- */
+// ── Schedule (public, no auth) ───────────────────────────────────────────
+
 async function handleSchedule(facilityId: string) {
   try {
     const sessions = await fetchDaySmartSchedule(facilityId);
@@ -583,4 +856,157 @@ async function handleSchedule(facilityId: string) {
       { status: 500 }
     );
   }
+}
+
+// ── Debug Login ──────────────────────────────────────────────────────────
+
+/**
+ * Try all auth strategies and return raw diagnostic info.
+ * Used for troubleshooting when login doesn't work as expected.
+ */
+async function handleDebugLogin(email: string, password: string, facilityId: string) {
+  if (!email || !password || !facilityId) {
+    return NextResponse.json({ error: 'email, password, and facilityId required' }, { status: 400 });
+  }
+
+  const results: Array<{
+    strategy: string;
+    status: number | string;
+    responseKeys: string[];
+    hasToken: boolean;
+    hasCookies: boolean;
+    tokenType: string;
+    error?: string;
+  }> = [];
+
+  // Strategy 1: OAuth2 password grant
+  for (const base of [API_BASE, DASH_API_BASE]) {
+    try {
+      const url = `${base}/company/auth/token?company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ grant_type: 'password', username: email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await safeJson(res);
+      const token = extractToken(data);
+      const cookies = extractCookies(res);
+      results.push({
+        strategy: `oauth2-password (${base})`,
+        status: res.status,
+        responseKeys: Object.keys(data),
+        hasToken: !!token,
+        hasCookies: !!cookies,
+        tokenType: token ? 'bearer' : cookies ? 'cookie' : 'none',
+      });
+    } catch (err) {
+      results.push({
+        strategy: `oauth2-password (${base})`,
+        status: 'error',
+        responseKeys: [],
+        hasToken: false,
+        hasCookies: false,
+        tokenType: 'none',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Strategy 2: PHP JSON login
+  for (const payload of [
+    { email, password },
+    { username: email, password },
+  ]) {
+    const keys = Object.keys(payload).join('+');
+    try {
+      const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://apps.daysmartrecreation.com',
+          'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await safeJson(res);
+      const token = extractToken(data);
+      const cookies = extractCookies(res);
+      results.push({
+        strategy: `php-json (${keys})`,
+        status: res.status,
+        responseKeys: Object.keys(data),
+        hasToken: !!token,
+        hasCookies: !!cookies,
+        tokenType: token ? 'bearer' : cookies ? 'cookie' : 'none',
+      });
+    } catch (err) {
+      results.push({
+        strategy: `php-json (${keys})`,
+        status: 'error',
+        responseKeys: [],
+        hasToken: false,
+        hasCookies: false,
+        tokenType: 'none',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Strategy 3: PHP form-encoded login
+  try {
+    const url = `${DAYSMART_BASE}/index.php?Action=Auth/login&company=${facilityId}`;
+    const body = new URLSearchParams({ email, username: email, password, company: facilityId });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'Origin': 'https://apps.daysmartrecreation.com',
+        'Referer': `https://apps.daysmartrecreation.com/dash/x/#/online/${facilityId}/login`,
+      },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await safeJson(res);
+    const token = extractToken(data);
+    const cookies = extractCookies(res);
+    results.push({
+      strategy: 'php-form',
+      status: res.status,
+      responseKeys: Object.keys(data),
+      hasToken: !!token,
+      hasCookies: !!cookies,
+      tokenType: token ? 'bearer' : cookies ? 'cookie' : 'none',
+    });
+  } catch (err) {
+    results.push({
+      strategy: 'php-form',
+      status: 'error',
+      responseKeys: [],
+      hasToken: false,
+      hasCookies: false,
+      tokenType: 'none',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return NextResponse.json({
+    facilityId,
+    email,
+    strategies: results,
+    timestamp: new Date().toISOString(),
+  });
 }
