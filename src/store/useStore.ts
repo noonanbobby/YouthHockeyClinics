@@ -187,6 +187,8 @@ interface AppState {
   setApiKey: (key: keyof AppState['apiKeys'], value: string) => void;
   autoRefreshInterval: number; // minutes
   setAutoRefreshInterval: (minutes: number) => void;
+  searchRadiusMiles: number; // Stick & Puck search radius
+  setSearchRadiusMiles: (miles: number) => void;
 
   // Color mode
   colorMode: 'light' | 'dark' | 'system';
@@ -693,6 +695,8 @@ export const useStore = create<AppState>()(
         })),
       autoRefreshInterval: 30,
       setAutoRefreshInterval: (minutes) => set({ autoRefreshInterval: minutes }),
+      searchRadiusMiles: 10,
+      setSearchRadiusMiles: (miles) => set({ searchRadiusMiles: miles }),
 
       // Color mode
       colorMode: 'dark',
@@ -834,6 +838,7 @@ export const useStore = create<AppState>()(
         preferredCurrency: state.preferredCurrency,
         apiKeys: state.apiKeys,
         autoRefreshInterval: state.autoRefreshInterval,
+        searchRadiusMiles: state.searchRadiusMiles,
         filters: state.filters,
         lastUpdated: state.lastUpdated,
         registrations: state.registrations,

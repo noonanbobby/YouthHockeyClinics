@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Compass, Map, CalendarCheck, Heart, Menu } from 'lucide-react';
+import { Compass, Map, CalendarCheck, Snowflake, Menu } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
 
@@ -9,7 +9,7 @@ const navItems = [
   { icon: Compass, label: 'Explore', href: '/', matchExact: true },
   { icon: Map, label: 'Map', href: '/?view=map', matchParam: 'map' },
   { icon: CalendarCheck, label: 'My Clinics', href: '/registrations' },
-  { icon: Heart, label: 'Favorites', href: '/favorites' },
+  { icon: Snowflake, label: 'Ice Time', href: '/stick-and-puck' },
   { icon: Menu, label: 'More', href: '/settings' },
 ];
 
@@ -24,7 +24,7 @@ export default function BottomNav() {
     return pathname === item.href;
   };
 
-  const isMoreActive = ['/settings', '/integrations', '/spending', '/notifications', '/admin'].includes(pathname);
+  const isMoreActive = ['/settings', '/integrations', '/spending', '/notifications', '/favorites', '/admin'].includes(pathname);
 
   const handleNav = (item: (typeof navItems)[0]) => {
     if (item.matchParam === 'map') {

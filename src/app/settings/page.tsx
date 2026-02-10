@@ -55,6 +55,8 @@ export default function SettingsPage() {
     clinics,
     registrations,
     daySmartConfig,
+    searchRadiusMiles,
+    setSearchRadiusMiles,
     childProfiles,
     activeChildIds,
     addChildProfile,
@@ -787,6 +789,43 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Search Radius */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-cyan-50 flex items-center justify-center">
+                <Navigation size={18} className="text-cyan-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Search Radius</p>
+                <p className="text-xs text-slate-500">
+                  Ice Time searches within {searchRadiusMiles} miles
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {[5, 10, 15, 25, 50].map((miles) => (
+                <button
+                  key={miles}
+                  onClick={() => setSearchRadiusMiles(miles)}
+                  className={cn(
+                    'flex-1 py-2 text-xs font-medium rounded-lg transition-colors border',
+                    searchRadiusMiles === miles
+                      ? 'text-white border-transparent'
+                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                  )}
+                  style={searchRadiusMiles === miles ? {
+                    backgroundColor: 'var(--theme-primary)',
+                  } : undefined}
+                >
+                  {miles} mi
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">
+              Controls the search radius for stick & puck, open hockey, and public skate sessions.
+            </p>
           </div>
 
           {/* About */}

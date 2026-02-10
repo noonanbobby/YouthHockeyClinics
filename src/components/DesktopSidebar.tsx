@@ -10,6 +10,7 @@ import {
   Link2,
   Bell,
   Settings,
+  Snowflake,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/', icon: List, label: 'Explore', matchExact: true },
   { href: '/?view=map', icon: Map, label: 'Map', matchParam: 'map' },
   { href: '/registrations', icon: CalendarCheck, label: 'My Clinics' },
+  { href: '/stick-and-puck', icon: Snowflake, label: 'Ice Time' },
   { href: '/favorites', icon: Heart, label: 'Favorites' },
   { href: '/spending', icon: DollarSign, label: 'Spending' },
   { href: '/integrations', icon: Link2, label: 'Integrations' },
