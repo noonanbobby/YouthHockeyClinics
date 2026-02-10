@@ -674,7 +674,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 4,
+      version: 5,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -711,6 +711,15 @@ export const useStore = create<AppState>()(
           if (state.iceHockeyProConfig) {
             (state.iceHockeyProConfig as Record<string, unknown>).connected = false;
             (state.iceHockeyProConfig as Record<string, unknown>).lastSync = null;
+          }
+        }
+        if (version < 5) {
+          // Add new fields to DaySmartConfig for universal facility support
+          if (state.daySmartConfig) {
+            const dsc = state.daySmartConfig as Record<string, unknown>;
+            if (!dsc.familyMembers) dsc.familyMembers = [];
+            if (!dsc.customerIds) dsc.customerIds = [];
+            if (!dsc.facilityName) dsc.facilityName = '';
           }
         }
         return state;
