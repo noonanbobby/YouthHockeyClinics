@@ -139,6 +139,33 @@ function IntegrationCard({
   );
 }
 
+/** Parse a date string like "February 28 - March 1, 2026" into ISO date */
+function parseDateString(dateStr: string, which: 'start' | 'end'): string {
+  try {
+    // Try "February 28 - March 1, 2026" format
+    const rangeMatch = dateStr.match(/(\w+ \d+)\s*-\s*(\w+ \d+),?\s*(\d{4})/);
+    if (rangeMatch) {
+      const year = rangeMatch[3];
+      const dateText = which === 'start' ? `${rangeMatch[1]}, ${year}` : `${rangeMatch[2]}, ${year}`;
+      const d = new Date(dateText);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    // Try single date "February 28, 2026"
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch {
+    // Fall through
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+/** Extract city from a location string like "MIAMI, Florida - USA" */
+function extractCity(location: string): string {
+  if (!location) return '';
+  const parts = location.split(',');
+  return parts[0]?.trim() || location;
+}
+
 export default function IntegrationsPage() {
   const router = useRouter();
   const {
@@ -152,6 +179,7 @@ export default function IntegrationsPage() {
     emailScanConfig,
     setEmailScanConfig,
     removeRegistration,
+    addRegistration,
     registrations,
     addNotification,
   } = useStore();
@@ -194,34 +222,173 @@ export default function IntegrationsPage() {
     }
     setDaySmartSyncing(true);
     setConnectionStatus('Connecting to Dash by DaySmart...');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    setDaySmartConfig({
-      email: dashEmail,
-      password: dashPassword,
-      facilityId: 'baptist-iceplex-fl',
-      facilityName: 'Baptist Health IcePlex',
-      connected: true,
-      lastSync: new Date().toISOString(),
-    });
+    try {
+      // Step 1: Login
+      const loginRes = await fetch('/api/integrations/daysmart?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: dashEmail, password: dashPassword }),
+      });
+      const loginData = await loginRes.json();
 
-    addNotification({
-      title: 'Dash Connected',
-      body: 'Connected to Baptist Health IcePlex. Real-time billing sync coming soon.',
-      clinicId: '',
-      type: 'new_clinic',
-    });
+      if (!loginRes.ok || !loginData.success) {
+        setConnectionStatus(loginData.error || 'Failed to connect to DaySmart. Check your credentials.');
+        setDaySmartSyncing(false);
+        return;
+      }
 
-    setConnectionStatus('Connected to Baptist Health IcePlex! Real-time registration & billing sync will import your actual data — coming in the next update.');
+      // Step 2: Sync events
+      setConnectionStatus('Connected! Fetching your registrations...');
+      const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          customerIds: loginData.customerIds,
+        }),
+      });
+      const syncData = await syncRes.json();
+
+      // Import events as registrations
+      if (syncData.success && syncData.activities) {
+        // Clear old DaySmart registrations
+        const oldDashRegs = registrations.filter((r) => r.source === 'dash');
+        for (const reg of oldDashRegs) {
+          removeRegistration(reg.id);
+        }
+
+        // Add new registrations from synced activities
+        let importedCount = 0;
+        for (const activity of syncData.upcoming || []) {
+          addRegistration({
+            clinicId: `dash-${activity.id}`,
+            clinicName: activity.name,
+            venue: activity.location,
+            city: 'Coral Springs',
+            startDate: activity.startDate,
+            endDate: activity.endDate,
+            price: activity.price,
+            currency: 'USD',
+            status: 'confirmed',
+            source: 'dash',
+            notes: `${activity.category} — ${activity.startTime} to ${activity.endTime}`,
+            playerName: activity.customerName,
+          });
+          importedCount++;
+        }
+
+        setDaySmartConfig({
+          email: dashEmail,
+          password: dashPassword,
+          facilityId: 'warmemorial',
+          facilityName: loginData.facility || 'Baptist Health IcePlex',
+          connected: true,
+          lastSync: new Date().toISOString(),
+        });
+
+        addNotification({
+          title: 'Dash Connected',
+          body: `Connected to ${loginData.facility || 'Baptist Health IcePlex'}. Imported ${importedCount} upcoming registrations.`,
+          clinicId: '',
+          type: 'new_clinic',
+        });
+
+        setConnectionStatus(
+          `Connected to ${loginData.facility || 'Baptist Health IcePlex'}! ` +
+          `Imported ${importedCount} upcoming registrations and ${(syncData.past || []).length} past events.`
+        );
+      } else {
+        // Connected but no events found (or API response different than expected)
+        setDaySmartConfig({
+          email: dashEmail,
+          password: dashPassword,
+          facilityId: 'warmemorial',
+          facilityName: loginData.facility || 'Baptist Health IcePlex',
+          connected: true,
+          lastSync: new Date().toISOString(),
+        });
+
+        addNotification({
+          title: 'Dash Connected',
+          body: `Connected to ${loginData.facility || 'Baptist Health IcePlex'}.`,
+          clinicId: '',
+          type: 'new_clinic',
+        });
+
+        setConnectionStatus(`Connected to ${loginData.facility || 'Baptist Health IcePlex'}! ${syncData.error ? `Note: ${syncData.error}` : 'No upcoming events found.'}`);
+      }
+    } catch (error) {
+      setConnectionStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}. Check your internet connection.`);
+    }
     setDaySmartSyncing(false);
   };
 
   const handleDashSync = async () => {
     setDaySmartSyncing(true);
     setConnectionStatus('Syncing with Dash...');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setDaySmartConfig({ lastSync: new Date().toISOString() });
-    setConnectionStatus('Sync complete!');
+
+    try {
+      // Re-login to get fresh session
+      const loginRes = await fetch('/api/integrations/daysmart?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: daySmartConfig.email, password: daySmartConfig.password }),
+      });
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok || !loginData.success) {
+        setConnectionStatus('Session expired. Please disconnect and reconnect.');
+        setDaySmartSyncing(false);
+        return;
+      }
+
+      setConnectionStatus('Fetching latest registrations...');
+      const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          customerIds: loginData.customerIds,
+        }),
+      });
+      const syncData = await syncRes.json();
+
+      if (syncData.success && syncData.activities) {
+        // Clear old and re-import
+        const oldDashRegs = registrations.filter((r) => r.source === 'dash');
+        for (const reg of oldDashRegs) {
+          removeRegistration(reg.id);
+        }
+
+        let importedCount = 0;
+        for (const activity of syncData.upcoming || []) {
+          addRegistration({
+            clinicId: `dash-${activity.id}`,
+            clinicName: activity.name,
+            venue: activity.location,
+            city: 'Coral Springs',
+            startDate: activity.startDate,
+            endDate: activity.endDate,
+            price: activity.price,
+            currency: 'USD',
+            status: 'confirmed',
+            source: 'dash',
+            notes: `${activity.category} — ${activity.startTime} to ${activity.endTime}`,
+            playerName: activity.customerName,
+          });
+          importedCount++;
+        }
+
+        setDaySmartConfig({ lastSync: new Date().toISOString() });
+        setConnectionStatus(`Sync complete! ${importedCount} upcoming registrations imported.`);
+      } else {
+        setDaySmartConfig({ lastSync: new Date().toISOString() });
+        setConnectionStatus(`Sync complete. ${syncData.error || 'No new events found.'}`);
+      }
+    } catch (error) {
+      setConnectionStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     setDaySmartSyncing(false);
   };
 
@@ -244,62 +411,186 @@ export default function IntegrationsPage() {
     }
 
     const linkedChildren = childProfiles.filter((c) => ihpLinkedChildIds.includes(c.id));
+    const linkedNames = linkedChildren.map((c) => c.name);
     setSyncing(true);
 
-    // Step 1: Login
-    setConnectionStatus('Logging in to IceHockeyPro...');
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      // Step 1: Login
+      setConnectionStatus('Logging in to IceHockeyPro...');
+      const loginRes = await fetch('/api/integrations/icehockeypro?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: ihpEmail, password: ihpPassword }),
+      });
+      const loginData = await loginRes.json();
 
-    // Step 2: Navigate to orders
-    setConnectionStatus('Navigating to My Account → Orders...');
-    await new Promise((resolve) => setTimeout(resolve, 800));
+      if (!loginRes.ok || !loginData.success) {
+        setConnectionStatus(loginData.error || 'Failed to login to IceHockeyPro. Check your credentials.');
+        setSyncing(false);
+        return;
+      }
 
-    // Step 2b: Clear old IHP registrations before adding fresh ones
-    const oldIhpRegs = registrations.filter((r) => r.source === 'icehockeypro');
-    for (const reg of oldIhpRegs) {
-      removeRegistration(reg.id);
+      // Step 2: Scrape orders
+      setConnectionStatus('Scraping order history from /my-account-2/orders/...');
+      const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          linkedChildNames: linkedNames,
+        }),
+      });
+      const syncData = await syncRes.json();
+
+      // Clear old IHP registrations
+      const oldIhpRegs = registrations.filter((r) => r.source === 'icehockeypro');
+      for (const reg of oldIhpRegs) {
+        removeRegistration(reg.id);
+      }
+
+      if (syncData.success) {
+        setConnectionStatus(`Found ${syncData.totalOrders} orders. Matching billing details to your players...`);
+
+        // Import matched orders as registrations
+        let importedCount = 0;
+        for (const order of syncData.matchedOrders || []) {
+          // Parse dates if available
+          const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
+          const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
+
+          addRegistration({
+            clinicId: `ihp-${order.orderId}`,
+            clinicName: order.campName,
+            venue: order.location || 'IceHockeyPro Camp',
+            city: extractCity(order.location),
+            startDate,
+            endDate,
+            price: order.price,
+            currency: order.currency || 'USD',
+            status: order.status === 'completed' ? 'confirmed' : 'pending',
+            source: 'icehockeypro',
+            notes: `Order #${order.orderId} — ${order.dates || 'Dates TBD'}`,
+            playerName: order.matchedChildName,
+          });
+          importedCount++;
+        }
+
+        setIceHockeyProConfig({
+          email: ihpEmail,
+          password: ihpPassword,
+          connected: true,
+          lastSync: new Date().toISOString(),
+          playerName: linkedNames.join(', '),
+          linkedChildIds: ihpLinkedChildIds,
+        });
+
+        addNotification({
+          title: 'IceHockeyPro Connected',
+          body: `Linked ${linkedNames.join(' & ')}. Imported ${importedCount} camps from order history.`,
+          clinicId: '',
+          type: 'new_clinic',
+        });
+
+        const unmatchedNote = (syncData.unmatchedOrders || []).length > 0
+          ? ` ${syncData.unmatchedOrders.length} orders didn't match any linked player.`
+          : '';
+
+        setConnectionStatus(
+          `Connected for ${linkedNames.join(' & ')}! ` +
+          `Imported ${importedCount} camps from ${syncData.totalOrders} orders.${unmatchedNote}`
+        );
+      } else {
+        // Connected but scraping had issues
+        setIceHockeyProConfig({
+          email: ihpEmail,
+          password: ihpPassword,
+          connected: true,
+          lastSync: new Date().toISOString(),
+          playerName: linkedNames.join(', '),
+          linkedChildIds: ihpLinkedChildIds,
+        });
+
+        setConnectionStatus(`Connected but couldn't scrape orders: ${syncData.error || 'Unknown issue'}. Try syncing again later.`);
+      }
+    } catch (error) {
+      setConnectionStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    // Step 3: Scrape order list
-    const totalOrders = linkedChildren.length * 2 + 3; // Simulate finding extra orders for other families
-    setConnectionStatus(`Found ${totalOrders} orders. Clicking "View" on each to check billing details...`);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Step 4: Match billing details to linked children
-    setConnectionStatus('Matching billing details to your players...');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setIceHockeyProConfig({
-      email: ihpEmail,
-      password: ihpPassword,
-      connected: true,
-      lastSync: new Date().toISOString(),
-      playerName: linkedChildren.map((c) => c.name).join(', '),
-      linkedChildIds: ihpLinkedChildIds,
-    });
-
-    addNotification({
-      title: 'IceHockeyPro Connected',
-      body: `Linked ${linkedChildren.map((c) => c.name).join(' & ')}. Real-time order sync coming soon.`,
-      clinicId: '',
-      type: 'new_clinic',
-    });
-
-    setConnectionStatus(
-      `Connected for ${linkedChildren.map((c) => c.name).join(' & ')}! ` +
-      `Real-time order scraping from icehockeypro.com/my-account-2/orders/ coming in the next update.`
-    );
     setSyncing(false);
   };
 
   const handleIhpSync = async () => {
     setSyncing(true);
     setConnectionStatus('Syncing with IceHockeyPro...');
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setConnectionStatus('Checking /my-account-2/orders/ for new orders...');
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setIceHockeyProConfig({ lastSync: new Date().toISOString() });
-    setConnectionStatus('IceHockeyPro sync complete! No new orders found.');
+
+    try {
+      // Re-login to get fresh session
+      setConnectionStatus('Logging in to IceHockeyPro...');
+      const loginRes = await fetch('/api/integrations/icehockeypro?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: iceHockeyProConfig.email, password: iceHockeyProConfig.password }),
+      });
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok || !loginData.success) {
+        setConnectionStatus('Session expired. Please disconnect and reconnect.');
+        setSyncing(false);
+        return;
+      }
+
+      setConnectionStatus('Checking /my-account-2/orders/ for new orders...');
+      const linkedNames = childProfiles
+        .filter((c) => (iceHockeyProConfig.linkedChildIds || []).includes(c.id))
+        .map((c) => c.name);
+
+      const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          linkedChildNames: linkedNames,
+        }),
+      });
+      const syncData = await syncRes.json();
+
+      if (syncData.success) {
+        // Clear old and re-import
+        const oldIhpRegs = registrations.filter((r) => r.source === 'icehockeypro');
+        for (const reg of oldIhpRegs) {
+          removeRegistration(reg.id);
+        }
+
+        let importedCount = 0;
+        for (const order of syncData.matchedOrders || []) {
+          const startDate = order.dates ? parseDateString(order.dates, 'start') : order.orderDate || new Date().toISOString().split('T')[0];
+          const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
+
+          addRegistration({
+            clinicId: `ihp-${order.orderId}`,
+            clinicName: order.campName,
+            venue: order.location || 'IceHockeyPro Camp',
+            city: extractCity(order.location),
+            startDate,
+            endDate,
+            price: order.price,
+            currency: order.currency || 'USD',
+            status: order.status === 'completed' ? 'confirmed' : 'pending',
+            source: 'icehockeypro',
+            notes: `Order #${order.orderId} — ${order.dates || 'Dates TBD'}`,
+            playerName: order.matchedChildName,
+          });
+          importedCount++;
+        }
+
+        setIceHockeyProConfig({ lastSync: new Date().toISOString() });
+        setConnectionStatus(`Sync complete! ${importedCount} camps from ${syncData.totalOrders} orders.`);
+      } else {
+        setIceHockeyProConfig({ lastSync: new Date().toISOString() });
+        setConnectionStatus(`Sync complete. ${syncData.error || 'No new orders found.'}`);
+      }
+    } catch (error) {
+      setConnectionStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     setSyncing(false);
   };
 
