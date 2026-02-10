@@ -674,7 +674,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'hockey-clinics-storage',
-      version: 6,
+      version: 7,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -736,6 +736,27 @@ export const useStore = create<AppState>()(
               dsc.familyMembers = [];
               dsc.customerIds = [];
             }
+          }
+        }
+        if (version < 7) {
+          // Remove ALL old demo/seed registrations — they have clinicId starting with "seed-"
+          // or are leftover fake registrations from before real integrations existed
+          const regs = state.registrations as Array<Record<string, unknown>> | undefined;
+          if (regs && regs.length > 0) {
+            state.registrations = regs.filter((r) => {
+              const cid = (r.clinicId as string) || '';
+              const venue = (r.venue as string) || '';
+              // Remove seed clinic registrations
+              if (cid.startsWith('seed-')) return false;
+              // Remove any with isDemo flag
+              if (r.isDemo) return false;
+              // Remove leftover hardcoded demo registrations (Baptist Health IcePlex / Panthers IceDen)
+              if (venue.includes('Baptist Health IcePlex') || venue.includes('Panthers IceDen')) {
+                const src = r.source as string;
+                if (src === 'manual') return false;
+              }
+              return true;
+            });
           }
         }
         return state;
