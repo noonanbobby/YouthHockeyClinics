@@ -20,17 +20,31 @@ function weeklySession(
   },
 ): StickAndPuckSession[] {
   const sessions: StickAndPuckSession[] = [];
-  const today = new Date();
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const [startHour, startMin] = opts.startTime.split(':').map(Number);
+
   // Generate next 4 weeks of sessions
   for (let weekOffset = 0; weekOffset < 4; weekOffset++) {
     for (const day of opts.days) {
-      const date = new Date(today);
-      const currentDay = today.getDay();
+      const date = new Date(now);
+      const currentDay = now.getDay();
       let daysUntil = day - currentDay;
       if (daysUntil < 0) daysUntil += 7;
-      date.setDate(today.getDate() + daysUntil + weekOffset * 7);
+      date.setDate(now.getDate() + daysUntil + weekOffset * 7);
 
       const dateStr = date.toISOString().split('T')[0];
+
+      // Skip sessions that have already ended today
+      if (dateStr === todayStr) {
+        const sessionStart = new Date(now);
+        sessionStart.setHours(startHour, startMin, 0, 0);
+        if (sessionStart <= now) continue;
+      }
+
+      // Skip dates in the past (can happen on week 0 if daysUntil=0 and already past)
+      if (dateStr < todayStr) continue;
+
       sessions.push({
         id: `${rinkId}-${opts.sessionType}-${dateStr}-${opts.startTime.replace(':', '')}`,
         rinkId,
@@ -117,7 +131,6 @@ const RINKATBEACH_LOCATION = {
 const FULL_EQUIP = ['Full hockey equipment required'];
 
 // ── Baptist Health IcePlex ──────────────────────────────────────────
-// Multiple time blocks per day, reflecting a real rink schedule
 const iceplexSessions = [
   // Stick & Puck — early AM + mid-morning
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {

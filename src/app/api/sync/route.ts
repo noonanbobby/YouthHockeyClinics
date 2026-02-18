@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   encryptSettingsCredentials,
   decryptSettingsCredentials,
@@ -8,13 +8,29 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function getSupabase() {
+// ── Memoized Supabase client ───────────────────────────────────────────
+// createClient is called once per cold start, not on every request.
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient | null {
+  if (_supabase) return _supabase;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
   if (!url || !key) return null;
-  return createClient(url, key);
+
+  _supabase = createClient(url, key, {
+    auth: {
+      // We manage auth ourselves via NextAuth — disable Supabase auth helpers
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  return _supabase;
 }
 
 // ── GET: Load user settings from Supabase ─────────────────────────────
@@ -80,7 +96,10 @@ export async function PUT(request: NextRequest) {
     const { settings } = body;
 
     if (!settings || typeof settings !== 'object') {
-      return NextResponse.json({ error: 'No settings provided' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'No settings provided' },
+        { status: 400 },
+      );
     }
 
     // Encrypt credential fields before writing to Supabase

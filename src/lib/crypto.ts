@@ -13,6 +13,9 @@
  *
  * The GCM authentication tag (16 bytes) is appended automatically by
  * SubtleCrypto and included in the ciphertext buffer.
+ *
+ * NOTE: Uses only Web Crypto API + TextEncoder/TextDecoder — no Node.js
+ * Buffer — so this module is safe in both Node.js and Edge runtimes.
  */
 
 const ENV_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY ?? '';
@@ -25,30 +28,44 @@ export function isEncryptionConfigured(): boolean {
 
 /** Import the hex key as a CryptoKey for AES-GCM */
 async function importKey(): Promise<CryptoKey> {
-  // Guard: should only be called when isEncryptionConfigured() is true
   if (!isEncryptionConfigured()) {
     throw new Error('CREDENTIAL_ENCRYPTION_KEY is not configured');
   }
-  const raw = new Uint8Array(
-    ENV_KEY.match(/.{2}/g)!.map((b) => parseInt(b, 16)),
-  );
+  // Parse hex string to Uint8Array without using Buffer
+  const raw = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    raw[i] = parseInt(ENV_KEY.slice(i * 2, i * 2 + 2), 16);
+  }
   return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
     'encrypt',
     'decrypt',
   ]);
 }
 
+/** Encode ArrayBuffer to base64url string without using Buffer */
 function toBase64url(buf: ArrayBuffer): string {
-  return Buffer.from(buf)
-    .toString('base64')
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
 }
 
+/** Decode base64url string to Uint8Array without using Buffer */
 function fromBase64url(s: string): Uint8Array {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  return new Uint8Array(Buffer.from(b64, 'base64'));
+  // Pad to multiple of 4
+  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**

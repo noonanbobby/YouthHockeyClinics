@@ -29,19 +29,10 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
     syncable[key] = state[key as keyof typeof state];
   }
 
-  // Strip passwords before sending to the sync API.
-  // The API route (src/app/api/sync/route.ts) re-encrypts them server-side
-  // before writing to Supabase, so we must send the plaintext password so
-  // the server can encrypt it.  However, we must NOT send an already-encrypted
-  // "enc:..." value back up — that would double-encrypt it.
-  // The server's encryptSettingsCredentials() handles the enc: sentinel check,
-  // so it is safe to always send the current plaintext value.
-  //
-  // What we DO strip: session cookies from IceHockeyPro — those are transient
-  // and should never be persisted to Supabase.
+  // Strip the IceHockeyPro session cookie — it's ephemeral and should
+  // never be persisted to Supabase (it expires and is per-device).
   if (syncable.iceHockeyProConfig && typeof syncable.iceHockeyProConfig === 'object') {
     const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
-    // Remove session cookie — it's ephemeral and not needed cross-device
     delete ihp.sessionCookie;
     syncable.iceHockeyProConfig = ihp;
   }
@@ -52,63 +43,17 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
 export function useSync() {
   const { data: session, status } = useSession();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSyncedRef = useRef<string | null>(null);
   const hasPulledRef = useRef(false);
+  // Guard: true while we are applying a remote pull to the store.
+  // Prevents the store subscription from immediately pushing the
+  // just-pulled data back to the server (write-back loop).
+  const isPullingRef = useRef(false);
 
-  // Pull remote settings on login
-  const pullSettings = useCallback(async () => {
-    if (hasPulledRef.current) return;
-    hasPulledRef.current = true;
-
-    try {
-      const res = await fetch('/api/sync');
-      if (!res.ok) return;
-
-      const data = await res.json();
-      if (!data.settings) return;
-
-      const store = useStore.getState();
-      const remote = data.settings;
-
-      // Merge strategy: remote wins for simple values, union for arrays
-      if (remote.favoriteIds?.length) {
-        const merged = [...new Set([...store.favoriteIds, ...remote.favoriteIds])];
-        useStore.setState({ favoriteIds: merged });
-      }
-      if (remote.childProfiles?.length && !store.childProfiles.length) {
-        useStore.setState({
-          childProfiles: remote.childProfiles,
-          activeChildIds: remote.activeChildIds || [],
-        });
-      }
-      if (remote.registrations?.length && !store.registrations.length) {
-        useStore.setState({ registrations: remote.registrations });
-      }
-      if (remote.teamThemeId) {
-        useStore.setState({ teamThemeId: remote.teamThemeId });
-      }
-      if (remote.colorMode) {
-        useStore.setState({ colorMode: remote.colorMode });
-      }
-      if (remote.homeLocation && !store.homeLocation) {
-        useStore.setState({ homeLocation: remote.homeLocation });
-      }
-      // Restore integration configs (passwords already decrypted by the API)
-      if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
-        useStore.setState({ daySmartConfig: remote.daySmartConfig });
-      }
-      if (remote.iceHockeyProConfig?.email && !store.iceHockeyProConfig.email) {
-        useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
-      }
-
-      lastSyncedRef.current = data.updatedAt;
-    } catch {
-      // Sync is optional — don't break the app
-    }
-  }, []);
-
-  // Push local settings to remote (debounced)
+  // ── Push local settings to remote (debounced) ──────────────────────
   const pushSettings = useCallback(async () => {
+    // Never push while we are in the middle of applying a pull
+    if (isPullingRef.current) return;
+
     try {
       const state = useStore.getState();
       const settings = getSyncableState(state);
@@ -123,22 +68,90 @@ export function useSync() {
     }
   }, []);
 
-  // Pull on authentication
+  // ── Pull remote settings on login ──────────────────────────────────
+  const pullSettings = useCallback(async () => {
+    if (hasPulledRef.current) return;
+    hasPulledRef.current = true;
+
+    try {
+      const res = await fetch('/api/sync');
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (!data.settings) return;
+
+      const store = useStore.getState();
+      const remote = data.settings;
+
+      // Set the pull guard BEFORE mutating the store so the subscription
+      // does not schedule a push for these changes.
+      isPullingRef.current = true;
+
+      try {
+        // Merge strategy: remote wins for simple scalar values;
+        // union arrays so local + remote favorites are both kept.
+        if (remote.favoriteIds?.length) {
+          const merged = [...new Set([...store.favoriteIds, ...remote.favoriteIds])];
+          useStore.setState({ favoriteIds: merged });
+        }
+        if (remote.childProfiles?.length && !store.childProfiles.length) {
+          useStore.setState({
+            childProfiles: remote.childProfiles,
+            activeChildIds: remote.activeChildIds || [],
+          });
+        }
+        if (remote.registrations?.length && !store.registrations.length) {
+          useStore.setState({ registrations: remote.registrations });
+        }
+        if (remote.teamThemeId) {
+          useStore.setState({ teamThemeId: remote.teamThemeId });
+        }
+        if (remote.colorMode) {
+          useStore.setState({ colorMode: remote.colorMode });
+        }
+        if (remote.homeLocation && !store.homeLocation) {
+          useStore.setState({ homeLocation: remote.homeLocation });
+        }
+        // Restore integration configs (passwords already decrypted by the API)
+        if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
+          useStore.setState({ daySmartConfig: remote.daySmartConfig });
+        }
+        if (remote.iceHockeyProConfig?.email && !store.iceHockeyProConfig.email) {
+          useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
+        }
+      } finally {
+        // Always release the pull guard, even if setState throws
+        // Use a short delay so the Zustand subscriber fires first
+        setTimeout(() => {
+          isPullingRef.current = false;
+        }, 100);
+      }
+    } catch {
+      // Sync is optional — don't break the app
+      hasPulledRef.current = false; // Allow retry on next mount
+    }
+  }, []);
+
+  // ── Pull on authentication ─────────────────────────────────────────
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.email) {
       pullSettings();
     }
-    // Reset pull flag on sign-out so next login pulls fresh
+    // Reset pull flag on sign-out so next login pulls fresh data
     if (status === 'unauthenticated') {
       hasPulledRef.current = false;
+      isPullingRef.current = false;
     }
   }, [status, session?.user?.email, pullSettings]);
 
-  // Subscribe to store changes and push (debounced)
+  // ── Subscribe to store changes and push (debounced) ────────────────
   useEffect(() => {
     if (status !== 'authenticated') return;
 
     const unsub = useStore.subscribe(() => {
+      // Skip push if we are currently applying a remote pull
+      if (isPullingRef.current) return;
+
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(pushSettings, SYNC_DEBOUNCE_MS);
     });

@@ -9,13 +9,27 @@ import type { Clinic } from '@/types';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
+interface SearchResponseData {
+  success: boolean;
+  clinics: Clinic[];
+  meta: {
+    totalClinics: number;
+    totalRawResults: number;
+    sources: { name: string; count: number; status: string; error?: string }[];
+    searchDuration: number;
+    timestamp: string;
+    query: string | null;
+    hasApiKeys: Record<string, boolean>;
+    error?: string;
+  };
+}
+
 // In-memory server-side cache (persists between warm invocations)
-let cachedResults: { data: unknown; timestamp: number; key: string } | null = null;
+let cachedResults: { data: SearchResponseData; timestamp: number; key: string } | null = null;
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 /**
  * Score and sort clinics by relevance (distance + quality).
- * Works with both seed clinics and network-sourced Clinic objects.
  */
 function scoreAndSort(
   clinics: Clinic[],
@@ -123,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     const forceRefresh = searchParams.get('refresh') === 'true';
 
-    // Location params — read server-side only, never trust client for auth
+    // Location params — read server-side only
     const userLat = parseCoord(searchParams.get('lat'));
     const userLng = parseCoord(searchParams.get('lng'));
     const userCity = searchParams.get('city')?.slice(0, 100) || undefined;
@@ -152,14 +166,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // SEEDS-FIRST ARCHITECTURE
-    // Seed clinics are ALWAYS returned. Network results are additive.
-    // API keys are ONLY read from server-side env vars — never from the
-    // client request. This prevents key leakage to the browser.
-    // ═══════════════════════════════════════════════════════════════════
-
-    // Cast seeds to Clinic[] — seedClinics satisfies the full Clinic type
+    // Seeds are ALWAYS returned — network results are additive
     const seedClinics = scoreAndSort(
       SEED_CLINICS as unknown as Clinic[],
       userLat || undefined,
@@ -208,11 +215,7 @@ export async function GET(request: NextRequest) {
         config,
       });
 
-      cachedResults = {
-        data: responseData,
-        timestamp: Date.now(),
-        key: cacheKey,
-      };
+      cachedResults = { data: responseData, timestamp: Date.now(), key: cacheKey };
 
       return NextResponse.json(responseData, {
         headers: {
@@ -235,7 +238,6 @@ export async function GET(request: NextRequest) {
 
     try {
       const engine = createSearchEngine(config);
-
       const HARD_DEADLINE_MS = 25_000;
 
       const results = await Promise.race([
@@ -271,10 +273,7 @@ export async function GET(request: NextRequest) {
       networkRaw = results.totalRaw;
       searchDuration = results.searchDuration;
     } catch (error) {
-      console.error(
-        '[search/route] Search engine error (seeds still returned):',
-        error,
-      );
+      console.error('[search/route] Search engine error (seeds still returned):', error);
       networkSources = [
         {
           name: 'error',
@@ -286,11 +285,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ALWAYS combine seeds + network, then deduplicate
-    const combined = deduplicateClinics([
-      ...seedClinics,
-      ...networkClinics,
-    ]);
-
+    const combined = deduplicateClinics([...seedClinics, ...networkClinics]);
     const finalClinics = scoreAndSort(
       combined,
       userLat || undefined,
@@ -299,11 +294,7 @@ export async function GET(request: NextRequest) {
     );
 
     const allSources = [
-      {
-        name: 'Curated Database',
-        count: seedClinics.length,
-        status: 'success' as const,
-      },
+      { name: 'Curated Database', count: seedClinics.length, status: 'success' as const },
       ...networkSources,
     ];
 
@@ -318,11 +309,7 @@ export async function GET(request: NextRequest) {
 
     // Only cache non-empty results
     if (finalClinics.length > 0) {
-      cachedResults = {
-        data: responseData,
-        timestamp: Date.now(),
-        key: cacheKey,
-      };
+      cachedResults = { data: responseData, timestamp: Date.now(), key: cacheKey };
     }
 
     return NextResponse.json(responseData, {
@@ -344,30 +331,18 @@ export async function GET(request: NextRequest) {
           totalClinics: fallback.length,
           totalRawResults: fallback.length,
           sources: [
-            {
-              name: 'Curated Database (fallback)',
-              count: fallback.length,
-              status: 'success',
-            },
+            { name: 'Curated Database (fallback)', count: fallback.length, status: 'success' },
           ],
           searchDuration: 0,
           timestamp: new Date().toISOString(),
           query: null,
-          hasApiKeys: {
-            google: false,
-            brave: false,
-            tavily: false,
-            eventbrite: false,
-          },
+          hasApiKeys: { google: false, brave: false, tavily: false, eventbrite: false },
           error: 'Search encountered an error; showing curated results.',
         },
-      },
+      } satisfies SearchResponseData,
       {
-        status: 200, // Still 200 — client always gets usable data
-        headers: {
-          'Cache-Control': 'no-store',
-          'X-Cache': 'ERROR-FALLBACK',
-        },
+        status: 200,
+        headers: { 'Cache-Control': 'no-store', 'X-Cache': 'ERROR-FALLBACK' },
       },
     );
   }
@@ -391,7 +366,7 @@ function buildResponse({
   searchDuration,
   query,
   config,
-}: BuildResponseParams) {
+}: BuildResponseParams): SearchResponseData {
   return {
     success: true,
     clinics: finalClinics,
