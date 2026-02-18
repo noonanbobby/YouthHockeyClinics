@@ -7,10 +7,18 @@ import { cn } from '@/lib/utils';
  * Hockey-themed loading animation — an animated puck that spins and bounces
  * with crossing sticks underneath. Used throughout the app instead of generic spinners.
  */
-export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'lg'; message?: string }) {
-  const dims = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-12 h-12';
+export function HockeyLoader({
+  size = 'md',
+  message,
+}: {
+  size?: 'sm' | 'md' | 'lg';
+  message?: string;
+}) {
+  const dims =
+    size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-12 h-12';
   const puckSize = size === 'sm' ? 24 : size === 'lg' ? 48 : 36;
-  const textSize = size === 'sm' ? 'text-[10px]' : size === 'lg' ? 'text-sm' : 'text-xs';
+  const textSize =
+    size === 'sm' ? 'text-[10px]' : size === 'lg' ? 'text-sm' : 'text-xs';
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -30,7 +38,16 @@ export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'l
           <rect x="6" y="16" width="36" height="12" rx="2" fill="#0f172a" />
           <ellipse cx="24" cy="16" rx="18" ry="6" fill="#1e293b" />
           {/* Puck stripe */}
-          <ellipse cx="24" cy="16" rx="14" ry="4" fill="none" stroke="var(--theme-primary)" strokeWidth="1.5" opacity="0.6" />
+          <ellipse
+            cx="24"
+            cy="16"
+            rx="14"
+            ry="4"
+            fill="none"
+            stroke="var(--theme-primary)"
+            strokeWidth="1.5"
+            opacity="0.6"
+          />
           {/* Shine */}
           <ellipse cx="20" cy="14" rx="4" ry="2" fill="white" opacity="0.15" />
         </motion.svg>
@@ -47,15 +64,32 @@ export function HockeyLoader({ size = 'md', message }: { size?: 'sm' | 'md' | 'l
         />
       </div>
 
-      {/* Crossed sticks */}
+      {/* Crossed sticks — only shown for md and lg */}
       {size !== 'sm' && (
         <motion.div
           className="flex justify-center -mt-1"
           animate={{ opacity: [0.3, 0.6, 0.3] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
-          <span className="text-lg" style={{ transform: 'rotate(-30deg) translateX(4px)' }}>🏒</span>
-          <span className="text-lg" style={{ transform: 'rotate(30deg) scaleX(-1) translateX(4px)' }}>🏒</span>
+          {/*
+           * These two inline transforms are intentional SVG/emoji positioning.
+           * Tailwind cannot express `rotate(-30deg) translateX(4px)` or
+           * `rotate(30deg) scaleX(-1) translateX(4px)` as single utility
+           * classes without JIT arbitrary values that would be less readable.
+           * They are purely visual, non-theme-related, and stable.
+           */}
+          <span
+            className="text-lg"
+            style={{ transform: 'rotate(-30deg) translateX(4px)' }}
+          >
+            🏒
+          </span>
+          <span
+            className="text-lg"
+            style={{ transform: 'rotate(30deg) scaleX(-1) translateX(4px)' }}
+          >
+            🏒
+          </span>
         </motion.div>
       )}
 
@@ -97,7 +131,7 @@ export function ClinicCardSkeleton() {
         </div>
         <div className="flex gap-1.5 pt-0.5">
           <div className="h-5 bg-slate-100 rounded-full w-14" />
-          <div className="h-5 bg-slate-100 rounded-full w-18" />
+          <div className="h-5 bg-slate-100 rounded-full w-[72px]" />
           <div className="h-5 bg-slate-100 rounded-full w-12" />
         </div>
       </div>
@@ -106,7 +140,7 @@ export function ClinicCardSkeleton() {
 }
 
 /**
- * A row of skeleton cards for list loading state.
+ * A column of skeleton cards for list loading state.
  */
 export function ClinicListSkeleton({ count = 4 }: { count?: number }) {
   return (
@@ -131,7 +165,23 @@ export function ClinicListSkeleton({ count = 4 }: { count?: number }) {
 export function HockeyLoadingScreen({ message }: { message?: string }) {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
-      <HockeyLoader size="lg" message={message || 'Scanning the ice...'} />
+      <HockeyLoader size="lg" message={message ?? 'Scanning the ice...'} />
     </div>
+  );
+}
+
+/**
+ * Inline spinner variant — small puck for use inside buttons and tight spaces.
+ */
+export function PuckSpinner({ className }: { className?: string }) {
+  return (
+    <motion.div
+      className={cn(
+        'w-4 h-4 rounded-full bg-current opacity-80',
+        className,
+      )}
+      animate={{ scale: [1, 0.75, 1], opacity: [0.8, 0.4, 0.8] }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
+    />
   );
 }
