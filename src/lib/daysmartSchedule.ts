@@ -277,7 +277,6 @@ export async function fetchDaySmartSchedule(facilitySlug: string, daysAhead = 28
       const attrs = event.attributes ?? {};
       const eventName = String(attrs.name ?? '').trim();
       const eventType = eventTypeMap.get(event.relationships?.eventType?.data?.id as string);
-      const resourceName = resourceMap.get(event.relationships?.resource?.data?.id as string); // kept for future use
       const date = extractDateISO(attrs.start as string);
       const startTime = extractTime24(attrs.start as string);
       const endTime = extractTime24(attrs.end as string);
@@ -352,4 +351,6 @@ export function getSlugToRinkId(): Record<string, string> {
   return SLUG_TO_RINK_ID;
 }
 
-export function isDay
+export function isDaySmartRink(rinkId: string): boolean {
+  return getDaySmartRinkIds().has(rinkId);
+}
