@@ -4,36 +4,14 @@ import { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import {
-  ArrowLeft,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  Check,
-  AlertCircle,
-  Calendar,
-  ChevronRight,
-  Zap,
-  Shield,
-  ExternalLink,
-  Mail,
-  Trophy,
-  UserCheck,
-  X,
+  ArrowLeft, Wifi, WifiOff, RefreshCw, Eye, EyeOff, Check, AlertCircle,
+  Calendar, ChevronRight, Zap, Shield, ExternalLink, Mail, Trophy, UserCheck, X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HockeyLoader } from '@/components/HockeyLoader';
 
-// ── Credential encryption ─────────────────────────────────────────────────────
-
-/**
- * Encrypt a credential via the server-side endpoint before persisting.
- * Credentials always travel over HTTPS/TLS; the server encrypts with
- * AES-256-GCM before writing to Supabase.
- */
 async function encryptViaServer(plaintext: string): Promise<string> {
   try {
     const res = await fetch('/api/credentials/encrypt', {
@@ -41,25 +19,20 @@ async function encryptViaServer(plaintext: string): Promise<string> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: plaintext }),
     });
-    if (!res.ok) return plaintext; // Fall back to plaintext over TLS
+    if (!res.ok) return plaintext;
     const { encrypted } = await res.json();
     return encrypted as string;
   } catch {
-    return plaintext; // Encryption endpoint unavailable — TLS still protects transit
+    return plaintext;
   }
 }
-
-// ── Date / location helpers ───────────────────────────────────────────────────
 
 function parseDateString(dateStr: string, which: 'start' | 'end'): string {
   try {
     const rangeMatch = dateStr.match(/(\w+ \d+)\s*-\s*(\w+ \d+),?\s*(\d{4})/);
     if (rangeMatch) {
       const year = rangeMatch[3];
-      const dateText =
-        which === 'start'
-          ? `${rangeMatch[1]}, ${year}`
-          : `${rangeMatch[2]}, ${year}`;
+      const dateText = which === 'start' ? `${rangeMatch[1]}, ${year}` : `${rangeMatch[2]}, ${year}`;
       const d = new Date(dateText);
       if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
     }
@@ -76,16 +49,8 @@ function extractCity(location: string): string {
   return location.split(',')[0]?.trim() ?? location;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
 function CredentialForm({
-  email,
-  setEmail,
-  password,
-  setPassword,
-  showPassword,
-  setShowPassword,
-  placeholder,
+  email, setEmail, password, setPassword, showPassword, setShowPassword, placeholder,
 }: {
   email: string;
   setEmail: (v: string) => void;
@@ -98,9 +63,7 @@ function CredentialForm({
   return (
     <>
       <div>
-        <label className="block mb-1 text-xs font-medium text-slate-700">
-          Email
-        </label>
+        <label className="block mb-1 text-xs font-medium text-slate-700">Email</label>
         <input
           type="email"
           value={email}
@@ -110,9 +73,7 @@ function CredentialForm({
         />
       </div>
       <div>
-        <label className="block mb-1 text-xs font-medium text-slate-700">
-          Password
-        </label>
+        <label className="block mb-1 text-xs font-medium text-slate-700">Password</label>
         <div className="relative">
           <input
             type={showPassword ? 'text' : 'password'}
@@ -127,11 +88,7 @@ function CredentialForm({
             className="absolute right-3 top-1/2 -translate-y-1/2"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
-            {showPassword ? (
-              <EyeOff size={14} className="text-slate-400" />
-            ) : (
-              <Eye size={14} className="text-slate-400" />
-            )}
+            {showPassword ? <EyeOff size={14} className="text-slate-400" /> : <Eye size={14} className="text-slate-400" />}
           </button>
         </div>
       </div>
@@ -140,15 +97,7 @@ function CredentialForm({
 }
 
 function IntegrationCard({
-  icon: Icon,
-  title,
-  subtitle,
-  connected,
-  connectedText,
-  color,
-  expanded,
-  onToggle,
-  children,
+  icon: Icon, title, subtitle, connected, connectedText, color, expanded, onToggle, children,
 }: {
   id: string;
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
@@ -175,17 +124,9 @@ function IntegrationCard({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4"
-      >
+      <button onClick={onToggle} className="w-full flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              'w-10 h-10 rounded-xl flex items-center justify-center',
-              iconBg,
-            )}
-          >
+          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', iconBg)}>
             <Icon size={20} className={iconColor} />
           </div>
           <div className="text-left">
@@ -193,13 +134,11 @@ function IntegrationCard({
             <p className="text-xs text-slate-500">
               {connected ? (
                 <span className="text-emerald-600 flex items-center gap-1">
-                  <Wifi size={10} />
-                  {connectedText}
+                  <Wifi size={10} />{connectedText}
                 </span>
               ) : (
                 <span className="flex items-center gap-1">
-                  <WifiOff size={10} />
-                  {subtitle}
+                  <WifiOff size={10} />{subtitle}
                 </span>
               )}
             </p>
@@ -207,10 +146,7 @@ function IntegrationCard({
         </div>
         <ChevronRight
           size={18}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            expanded && 'rotate-90',
-          )}
+          className={cn('text-slate-400 transition-transform duration-200', expanded && 'rotate-90')}
         />
       </button>
 
@@ -232,43 +168,21 @@ function IntegrationCard({
   );
 }
 
-// ── Status banner ─────────────────────────────────────────────────────────────
-
 type StatusVariant = 'info' | 'success' | 'error';
 
 function StatusBanner({
-  message,
-  variant,
-  onDismiss,
-  debugInfo,
+  message, variant, onDismiss, debugInfo,
 }: {
   message: string;
   variant: StatusVariant;
   onDismiss: () => void;
-  debugInfo: {
-    debugLog?: string[];
-    debugDiagnostics?: Array<Record<string, unknown>>;
-  } | null;
+  debugInfo: { debugLog?: string[]; debugDiagnostics?: Array<Record<string, unknown>> } | null;
 }) {
   const [showDebug, setShowDebug] = useState(false);
 
-  const bannerClass = {
-    info: 'bg-blue-50 border-blue-200',
-    success: 'bg-emerald-50 border-emerald-200',
-    error: 'bg-red-50 border-red-200',
-  }[variant];
-
-  const textClass = {
-    info: 'text-blue-700',
-    success: 'text-emerald-700',
-    error: 'text-red-700',
-  }[variant];
-
-  const iconClass = {
-    info: 'text-blue-600',
-    success: 'text-emerald-600',
-    error: 'text-red-600',
-  }[variant];
+  const bannerClass = { info: 'bg-blue-50 border-blue-200', success: 'bg-emerald-50 border-emerald-200', error: 'bg-red-50 border-red-200' }[variant];
+  const textClass = { info: 'text-blue-700', success: 'text-emerald-700', error: 'text-red-700' }[variant];
+  const iconClass = { info: 'text-blue-600', success: 'text-emerald-600', error: 'text-red-600' }[variant];
 
   return (
     <motion.div
@@ -280,30 +194,20 @@ function StatusBanner({
       <div className="flex items-start gap-2">
         <AlertCircle size={14} className={cn('mt-0.5 shrink-0', iconClass)} />
         <p className={cn('flex-1 text-xs', textClass)}>{message}</p>
-        <button
-          onClick={onDismiss}
-          className="shrink-0 opacity-60 hover:opacity-100"
-          aria-label="Dismiss"
-        >
+        <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100" aria-label="Dismiss">
           <X size={14} className={textClass} />
         </button>
       </div>
-
       {debugInfo && (
         <div className="mt-2">
-          <button
-            onClick={() => setShowDebug((v) => !v)}
-            className="text-[10px] font-medium underline opacity-70 hover:opacity-100"
-          >
+          <button onClick={() => setShowDebug((v) => !v)} className="text-[10px] font-medium underline opacity-70 hover:opacity-100">
             {showDebug ? 'Hide' : 'Show'} debug details
           </button>
           {showDebug && (
             <div className="mt-2 space-y-2">
               {debugInfo.debugLog && (
                 <div className="bg-white/80 border border-current/10 rounded-lg p-2">
-                  <p className="text-[10px] font-semibold text-slate-700 mb-1">
-                    Login Flow Log:
-                  </p>
+                  <p className="text-[10px] font-semibold text-slate-700 mb-1">Login Flow Log:</p>
                   <pre className="text-[9px] text-slate-600 whitespace-pre-wrap font-mono leading-relaxed max-h-40 overflow-y-auto">
                     {debugInfo.debugLog.join('\n')}
                   </pre>
@@ -311,61 +215,24 @@ function StatusBanner({
               )}
               {debugInfo.debugDiagnostics && (
                 <div className="bg-white/80 border border-current/10 rounded-lg p-2">
-                  <p className="text-[10px] font-semibold text-slate-700 mb-1">
-                    Strategy Results:
-                  </p>
+                  <p className="text-[10px] font-semibold text-slate-700 mb-1">Strategy Results:</p>
                   <div className="space-y-1.5 max-h-80 overflow-y-auto">
                     {debugInfo.debugDiagnostics.map((d, i) => (
-                      <div
-                        key={i}
-                        className="bg-slate-50 rounded p-1.5 text-[9px] font-mono"
-                      >
+                      <div key={i} className="bg-slate-50 rounded p-1.5 text-[9px] font-mono">
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <span
-                            className={cn(
-                              'inline-block w-1.5 h-1.5 rounded-full',
-                              d.isPositiveAuth
-                                ? 'bg-green-500'
-                                : d.status === 'error'
-                                ? 'bg-red-500'
-                                : 'bg-yellow-500',
-                            )}
-                          />
-                          <span className="font-semibold text-slate-800">
-                            {String(d.strategy)}
-                          </span>
-                          <span className="text-slate-500">
-                            HTTP {String(d.status)}
-                          </span>
+                          <span className={cn('inline-block w-1.5 h-1.5 rounded-full', d.isPositiveAuth ? 'bg-green-500' : d.status === 'error' ? 'bg-red-500' : 'bg-yellow-500')} />
+                          <span className="font-semibold text-slate-800">{String(d.strategy)}</span>
+                          <span className="text-slate-500">HTTP {String(d.status)}</span>
                         </div>
                         <div className="text-slate-500 pl-3 space-y-0.5">
-                          <div>
-                            token: {d.hasToken ? 'YES' : 'no'} | cookies:{' '}
-                            {d.hasCookies ? 'YES' : 'no'} | positive:{' '}
-                            {d.isPositiveAuth ? 'YES' : 'no'}
-                          </div>
-                          {d.extractedCustomerId ? (
-                            <div>customerId: {String(d.extractedCustomerId)}</div>
-                          ) : null}
-                          {d.error ? (
-                            <div className="text-red-600">
-                              error: {String(d.error)}
-                            </div>
-                          ) : null}
-                          {d.responseKeys &&
-                          (d.responseKeys as string[]).length > 0 ? (
-                            <div>
-                              keys: {(d.responseKeys as string[]).join(', ')}
-                            </div>
-                          ) : null}
+                          <div>token: {d.hasToken ? 'YES' : 'no'} | cookies: {d.hasCookies ? 'YES' : 'no'} | positive: {d.isPositiveAuth ? 'YES' : 'no'}</div>
+                          {d.extractedCustomerId ? <div>customerId: {String(d.extractedCustomerId)}</div> : null}
+                          {d.error ? <div className="text-red-600">error: {String(d.error)}</div> : null}
+                          {d.responseKeys && (d.responseKeys as string[]).length > 0 ? <div>keys: {(d.responseKeys as string[]).join(', ')}</div> : null}
                           {d.responseSample ? (
                             <details className="cursor-pointer">
-                              <summary className="text-blue-600">
-                                response body
-                              </summary>
-                              <pre className="whitespace-pre-wrap break-all mt-0.5 text-slate-600 max-h-24 overflow-y-auto">
-                                {String(d.responseSample)}
-                              </pre>
+                              <summary className="text-blue-600">response body</summary>
+                              <pre className="whitespace-pre-wrap break-all mt-0.5 text-slate-600 max-h-24 overflow-y-auto">{String(d.responseSample)}</pre>
                             </details>
                           ) : null}
                         </div>
@@ -382,31 +249,18 @@ function StatusBanner({
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default function IntegrationsPage() {
   const router = useRouter();
   const {
-    childProfiles,
-    daySmartConfig,
-    setDaySmartConfig,
-    daySmartSyncing,
-    setDaySmartSyncing,
-    iceHockeyProConfig,
-    setIceHockeyProConfig,
-    emailScanConfig,
-    setEmailScanConfig,
-    removeRegistration,
-    addRegistration,
-    registrations,
-    addNotification,
+    childProfiles, daySmartConfig, setDaySmartConfig, daySmartSyncing, setDaySmartSyncing,
+    iceHockeyProConfig, setIceHockeyProConfig, emailScanConfig, setEmailScanConfig,
+    removeRegistration, addRegistration, registrations, addNotification,
   } = useStore();
 
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showDashPassword, setShowDashPassword] = useState(false);
   const [showIhpPassword, setShowIhpPassword] = useState(false);
 
-  // Local form state — never persisted in plaintext
   const [dashEmail, setDashEmail] = useState(daySmartConfig.email);
   const [dashPassword, setDashPassword] = useState(daySmartConfig.password);
   const [dashFacilityUrl, setDashFacilityUrl] = useState(
@@ -416,19 +270,11 @@ export default function IntegrationsPage() {
   );
   const [ihpEmail, setIhpEmail] = useState(iceHockeyProConfig.email);
   const [ihpPassword, setIhpPassword] = useState(iceHockeyProConfig.password);
-  const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(
-    iceHockeyProConfig.linkedChildIds ?? [],
-  );
+  const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(iceHockeyProConfig.linkedChildIds ?? []);
 
-  // Status
   const [statusMessage, setStatusMessage] = useState('');
   const [statusVariant, setStatusVariant] = useState<StatusVariant>('info');
-  const [loginDebugInfo, setLoginDebugInfo] = useState<{
-    debugLog?: string[];
-    debugDiagnostics?: Array<Record<string, unknown>>;
-  } | null>(null);
-
-  // Loading
+  const [loginDebugInfo, setLoginDebugInfo] = useState<{ debugLog?: string[]; debugDiagnostics?: Array<Record<string, unknown>> } | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   const setStatus = (msg: string, variant: StatusVariant = 'info') => {
@@ -436,13 +282,9 @@ export default function IntegrationsPage() {
     setStatusVariant(variant);
   };
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
   const extractFacilityId = (input: string): string | null => {
     const trimmed = input.trim();
-    const urlMatch = trimmed.match(
-      /daysmartrecreation\.com\/dash\/x\/#\/online\/([^/]+)/i,
-    );
+    const urlMatch = trimmed.match(/daysmartrecreation\.com\/dash\/x\/#\/online\/([^/]+)/i);
     if (urlMatch) return urlMatch[1];
     if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
     return null;
@@ -450,12 +292,8 @@ export default function IntegrationsPage() {
 
   const getLinkedChildNames = () => {
     const ids = iceHockeyProConfig.linkedChildIds ?? [];
-    const names = childProfiles
-      .filter((c) => ids.includes(c.id))
-      .map((c) => c.name);
-    return names.length > 0
-      ? names.join(', ')
-      : iceHockeyProConfig.playerName ?? 'Unknown';
+    const names = childProfiles.filter((c) => ids.includes(c.id)).map((c) => c.name);
+    return names.length > 0 ? names.join(', ') : iceHockeyProConfig.playerName ?? 'Unknown';
   };
 
   const getChildLabel = (child: (typeof childProfiles)[0]) => {
@@ -467,15 +305,10 @@ export default function IntegrationsPage() {
 
   const isAnySyncing = syncing || daySmartSyncing;
 
-  // ── DaySmart ─────────────────────────────────────────────────────────────────
-
   const handleDashConnect = async () => {
     const facilityId = extractFacilityId(dashFacilityUrl);
     if (!facilityId) {
-      setStatus(
-        'Please enter your rink\'s DaySmart URL or facility ID (e.g. "warmemorial").',
-        'error',
-      );
+      setStatus('Please enter your rink\'s DaySmart URL or facility ID (e.g. "warmemorial").', 'error');
       return;
     }
     if (!dashEmail || !dashPassword) {
@@ -494,15 +327,11 @@ export default function IntegrationsPage() {
       });
       const validateData = await validateRes.json();
       if (!validateData.valid) {
-        setStatus(
-          validateData.error ?? `Facility "${facilityId}" not found. Check the URL.`,
-          'error',
-        );
+        setStatus(validateData.error ?? `Facility "${facilityId}" not found. Check the URL.`, 'error');
         setDaySmartSyncing(false);
         return;
       }
 
-      // Encrypt credentials before storing
       setStatus('Securing credentials...');
       const [encEmail, encPassword] = await Promise.all([
         encryptViaServer(dashEmail),
@@ -513,24 +342,14 @@ export default function IntegrationsPage() {
       const loginRes = await fetch('/api/integrations/daysmart?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: dashEmail,
-          password: dashPassword,
-          facilityId,
-        }),
+        body: JSON.stringify({ email: dashEmail, password: dashPassword, facilityId }),
       });
       const loginData = await loginRes.json();
 
       if (!loginRes.ok || !loginData.success) {
-        setStatus(
-          loginData.error ?? 'Failed to connect. Check your credentials.',
-          'error',
-        );
+        setStatus(loginData.error ?? 'Failed to connect. Check your credentials.', 'error');
         if (loginData.debugLog || loginData.debugDiagnostics) {
-          setLoginDebugInfo({
-            debugLog: loginData.debugLog,
-            debugDiagnostics: loginData.debugDiagnostics,
-          });
+          setLoginDebugInfo({ debugLog: loginData.debugLog, debugDiagnostics: loginData.debugDiagnostics });
         }
         setDaySmartSyncing(false);
         return;
@@ -538,25 +357,17 @@ export default function IntegrationsPage() {
 
       setLoginDebugInfo(null);
 
-      const facilityName =
-        loginData.facilityName ?? validateData.facilityName ?? facilityId;
+      const facilityName = loginData.facilityName ?? validateData.facilityName ?? facilityId;
       const familyMembers = loginData.familyMembers ?? [];
       const customerIds = loginData.customerIds ?? [];
-      const authCredential =
-        loginData.authToken ?? loginData.sessionCookie ?? '';
+      const authCredential = loginData.authToken ?? loginData.sessionCookie ?? '';
 
-      setStatus(
-        `Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`,
-      );
+      setStatus(`Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`);
 
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          facilityId,
-          sessionCookie: authCredential,
-          customerIds,
-        }),
+        body: JSON.stringify({ facilityId, sessionCookie: authCredential, customerIds }),
       });
       const syncData = await syncRes.json();
 
@@ -584,7 +395,6 @@ export default function IntegrationsPage() {
           importedCount++;
         }
 
-        // Store encrypted credentials
         setDaySmartConfig({
           email: encEmail,
           password: encPassword,
@@ -611,10 +421,7 @@ export default function IntegrationsPage() {
           'success',
         );
       } else if (syncData.needsReauth && familyMembers.length === 0) {
-        setStatus(
-          `Could not authenticate with ${facilityName}. Please check your email and password.`,
-          'error',
-        );
+        setStatus(`Could not authenticate with ${facilityName}. Please check your email and password.`, 'error');
       } else {
         setDaySmartConfig({
           email: encEmail,
@@ -673,8 +480,7 @@ export default function IntegrationsPage() {
       }
 
       setStatus('Fetching latest registrations...');
-      const authCredential =
-        loginData.authToken ?? loginData.sessionCookie ?? '';
+      const authCredential = loginData.authToken ?? loginData.sessionCookie ?? '';
 
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
@@ -682,8 +488,7 @@ export default function IntegrationsPage() {
         body: JSON.stringify({
           facilityId: daySmartConfig.facilityId,
           sessionCookie: authCredential,
-          customerIds:
-            loginData.customerIds ?? daySmartConfig.customerIds,
+          customerIds: loginData.customerIds ?? daySmartConfig.customerIds,
         }),
       });
       const syncData = await syncRes.json();
@@ -713,33 +518,20 @@ export default function IntegrationsPage() {
         }
 
         if (loginData.familyMembers) {
-          setDaySmartConfig({
-            lastSync: new Date().toISOString(),
-            familyMembers: loginData.familyMembers,
-            customerIds: loginData.customerIds,
-          });
+          setDaySmartConfig({ lastSync: new Date().toISOString(), familyMembers: loginData.familyMembers, customerIds: loginData.customerIds });
         } else {
           setDaySmartConfig({ lastSync: new Date().toISOString() });
         }
 
         const upcomingCount = (syncData.upcoming ?? []).length;
         const pastCount = (syncData.past ?? []).length;
-        setStatus(
-          `Sync complete! ${importedCount} registrations (${upcomingCount} upcoming, ${pastCount} past).`,
-          'success',
-        );
+        setStatus(`Sync complete! ${importedCount} registrations (${upcomingCount} upcoming, ${pastCount} past).`, 'success');
       } else {
         setDaySmartConfig({ lastSync: new Date().toISOString() });
-        setStatus(
-          `Sync complete. ${syncData.error ?? 'No new events found.'}`,
-          'info',
-        );
+        setStatus(`Sync complete. ${syncData.error ?? 'No new events found.'}`, 'info');
       }
     } catch (error) {
-      setStatus(
-        `Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error',
-      );
+      setStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
 
     setDaySmartSyncing(false);
@@ -749,23 +541,12 @@ export default function IntegrationsPage() {
     for (const reg of registrations.filter((r) => r.source === 'dash')) {
       removeRegistration(reg.id);
     }
-    setDaySmartConfig({
-      email: '',
-      password: '',
-      facilityId: '',
-      facilityName: '',
-      connected: false,
-      lastSync: null,
-      familyMembers: [],
-      customerIds: [],
-    });
+    setDaySmartConfig({ email: '', password: '', facilityId: '', facilityName: '', connected: false, lastSync: null, familyMembers: [], customerIds: [] });
     setDashEmail('');
     setDashPassword('');
     setDashFacilityUrl('');
     setStatus('Disconnected from Dash. Registrations cleared.', 'info');
   };
-
-  // ── IceHockeyPro ─────────────────────────────────────────────────────────────
 
   const handleIhpConnect = async () => {
     if (!ihpEmail || !ihpPassword) {
@@ -777,14 +558,11 @@ export default function IntegrationsPage() {
       return;
     }
 
-    const linkedChildren = childProfiles.filter((c) =>
-      ihpLinkedChildIds.includes(c.id),
-    );
+    const linkedChildren = childProfiles.filter((c) => ihpLinkedChildIds.includes(c.id));
     const linkedNames = linkedChildren.map((c) => c.name);
     setSyncing(true);
 
     try {
-      // Encrypt credentials before storing
       const [encEmail, encPassword] = await Promise.all([
         encryptViaServer(ihpEmail),
         encryptViaServer(ihpPassword),
@@ -799,11 +577,7 @@ export default function IntegrationsPage() {
       const loginData = await loginRes.json();
 
       if (!loginRes.ok || !loginData.success) {
-        setStatus(
-          loginData.error ??
-            'Failed to login to IceHockeyPro. Check your credentials.',
-          'error',
-        );
+        setStatus(loginData.error ?? 'Failed to login to IceHockeyPro. Check your credentials.', 'error');
         setSyncing(false);
         return;
       }
@@ -812,36 +586,24 @@ export default function IntegrationsPage() {
       const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionCookie: loginData.sessionCookie,
-          linkedChildNames: linkedNames,
-        }),
+        body: JSON.stringify({ sessionCookie: loginData.sessionCookie, linkedChildNames: linkedNames }),
       });
       const syncData = await syncRes.json();
 
-      for (const reg of registrations.filter(
-        (r) => r.source === 'icehockeypro',
-      )) {
+      for (const reg of registrations.filter((r) => r.source === 'icehockeypro')) {
         removeRegistration(reg.id);
       }
 
       if (syncData.success) {
-        setStatus(
-          `Found ${syncData.totalOrders} orders. Matching to your players...`,
-        );
+        setStatus(`Found ${syncData.totalOrders} orders. Matching to your players...`);
 
         let importedCount = 0;
-        const allOrders = [
-          ...(syncData.matchedOrders ?? []),
-          ...(syncData.unmatchedOrders ?? []),
-        ];
+        const allOrders = [...(syncData.matchedOrders ?? []), ...(syncData.unmatchedOrders ?? [])];
         for (const order of allOrders) {
           const startDate = order.dates
             ? parseDateString(order.dates, 'start')
             : order.orderDate ?? new Date().toISOString().split('T')[0];
-          const endDate = order.dates
-            ? parseDateString(order.dates, 'end')
-            : startDate;
+          const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
 
           addRegistration({
             clinicId: `ihp-${order.orderId}`,
@@ -855,13 +617,11 @@ export default function IntegrationsPage() {
             status: 'confirmed',
             source: 'icehockeypro',
             notes: `Order #${order.orderId}${order.dates ? ` — ${order.dates}` : ''}`,
-            playerName:
-              order.matchedChildName ?? order.billingName ?? undefined,
+            playerName: order.matchedChildName ?? order.billingName ?? undefined,
           });
           importedCount++;
         }
 
-        // Store encrypted credentials
         setIceHockeyProConfig({
           email: encEmail,
           password: encPassword,
@@ -884,8 +644,7 @@ export default function IntegrationsPage() {
             : '';
 
         setStatus(
-          `Connected for ${linkedNames.join(' & ')}! ` +
-            `Imported ${importedCount} camps from ${syncData.totalOrders} orders.${unmatchedNote}`,
+          `Connected for ${linkedNames.join(' & ')}! Imported ${importedCount} camps from ${syncData.totalOrders} orders.${unmatchedNote}`,
           'success',
         );
       } else {
@@ -903,10 +662,7 @@ export default function IntegrationsPage() {
         );
       }
     } catch (error) {
-      setStatus(
-        `Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error',
-      );
+      setStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
 
     setSyncing(false);
@@ -920,10 +676,7 @@ export default function IntegrationsPage() {
       const loginRes = await fetch('/api/integrations/icehockeypro?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: iceHockeyProConfig.email,
-          password: iceHockeyProConfig.password,
-        }),
+        body: JSON.stringify({ email: iceHockeyProConfig.email, password: iceHockeyProConfig.password }),
       });
       const loginData = await loginRes.json();
 
@@ -935,40 +688,28 @@ export default function IntegrationsPage() {
 
       setStatus('Checking for new orders...');
       const linkedNames = childProfiles
-        .filter((c) =>
-          (iceHockeyProConfig.linkedChildIds ?? []).includes(c.id),
-        )
+        .filter((c) => (iceHockeyProConfig.linkedChildIds ?? []).includes(c.id))
         .map((c) => c.name);
 
       const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionCookie: loginData.sessionCookie,
-          linkedChildNames: linkedNames,
-        }),
+        body: JSON.stringify({ sessionCookie: loginData.sessionCookie, linkedChildNames: linkedNames }),
       });
       const syncData = await syncRes.json();
 
       if (syncData.success) {
-        for (const reg of registrations.filter(
-          (r) => r.source === 'icehockeypro',
-        )) {
+        for (const reg of registrations.filter((r) => r.source === 'icehockeypro')) {
           removeRegistration(reg.id);
         }
 
         let importedCount = 0;
-        const allOrders = [
-          ...(syncData.matchedOrders ?? []),
-          ...(syncData.unmatchedOrders ?? []),
-        ];
+        const allOrders = [...(syncData.matchedOrders ?? []), ...(syncData.unmatchedOrders ?? [])];
         for (const order of allOrders) {
           const startDate = order.dates
             ? parseDateString(order.dates, 'start')
             : order.orderDate ?? new Date().toISOString().split('T')[0];
-          const endDate = order.dates
-            ? parseDateString(order.dates, 'end')
-            : startDate;
+          const endDate = order.dates ? parseDateString(order.dates, 'end') : startDate;
 
           addRegistration({
             clinicId: `ihp-${order.orderId}`,
@@ -982,8 +723,7 @@ export default function IntegrationsPage() {
             status: 'confirmed',
             source: 'icehockeypro',
             notes: `Order #${order.orderId}${order.dates ? ` — ${order.dates}` : ''}`,
-            playerName:
-              order.matchedChildName ?? order.billingName ?? undefined,
+            playerName: order.matchedChildName ?? order.billingName ?? undefined,
           });
           importedCount++;
         }
@@ -992,62 +732,37 @@ export default function IntegrationsPage() {
         const matchedCount = (syncData.matchedOrders ?? []).length;
         const unmatchedCount = (syncData.unmatchedOrders ?? []).length;
         setStatus(
-          `Sync complete! ${importedCount} camps from ${syncData.totalOrders} orders ` +
-            `(${matchedCount} matched, ${unmatchedCount} unmatched).`,
+          `Sync complete! ${importedCount} camps from ${syncData.totalOrders} orders (${matchedCount} matched, ${unmatchedCount} unmatched).`,
           'success',
         );
       } else {
         setIceHockeyProConfig({ lastSync: new Date().toISOString() });
-        setStatus(
-          `Sync complete. ${syncData.error ?? 'No new orders found.'}`,
-          'info',
-        );
+        setStatus(`Sync complete. ${syncData.error ?? 'No new orders found.'}`, 'info');
       }
     } catch (error) {
-      setStatus(
-        `Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error',
-      );
+      setStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
 
     setSyncing(false);
   };
 
   const handleIhpDisconnect = () => {
-    for (const reg of registrations.filter(
-      (r) => r.source === 'icehockeypro',
-    )) {
+    for (const reg of registrations.filter((r) => r.source === 'icehockeypro')) {
       removeRegistration(reg.id);
     }
-    setIceHockeyProConfig({
-      email: '',
-      password: '',
-      connected: false,
-      lastSync: null,
-      playerName: '',
-      linkedChildIds: [],
-    });
+    setIceHockeyProConfig({ email: '', password: '', connected: false, lastSync: null, playerName: '', linkedChildIds: [] });
     setIhpEmail('');
     setIhpPassword('');
     setIhpLinkedChildIds([]);
     setStatus('Disconnected from IceHockeyPro. Registrations cleared.', 'info');
   };
 
-  // ── Email scanning ────────────────────────────────────────────────────────────
-
   const handleEmailConnect = async (provider: 'gmail' | 'outlook') => {
     setSyncing(true);
-    setStatus(
-      `Connecting to ${provider === 'gmail' ? 'Gmail' : 'Outlook'}...`,
-    );
+    setStatus(`Connecting to ${provider === 'gmail' ? 'Gmail' : 'Outlook'}...`);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    setEmailScanConfig({
-      provider,
-      connected: true,
-      lastScan: new Date().toISOString(),
-      scanFrequency: 'daily',
-    });
+    setEmailScanConfig({ provider, connected: true, lastScan: new Date().toISOString(), scanFrequency: 'daily' });
 
     addNotification({
       title: 'Email Scanning Enabled',
@@ -1056,31 +771,20 @@ export default function IntegrationsPage() {
       type: 'new_clinic',
     });
 
-    setStatus(
-      `Email scanning active! We'll scan for hockey-related schedule changes.`,
-      'success',
-    );
+    setStatus('Email scanning active! We\'ll scan for hockey-related schedule changes.', 'success');
     setSyncing(false);
   };
 
   const handleEmailDisconnect = () => {
-    setEmailScanConfig({
-      provider: 'none',
-      connected: false,
-      lastScan: null,
-      scanFrequency: 'daily',
-    });
+    setEmailScanConfig({ provider: 'none', connected: false, lastScan: null, scanFrequency: 'daily' });
     setStatus('Email scanning disconnected.', 'info');
   };
-
-  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="safe-area-top" />
       <div className="px-4 py-4 pb-28">
 
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => router.push('/settings')}
@@ -1091,13 +795,10 @@ export default function IntegrationsPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-900">Integrations</h1>
-            <p className="text-xs text-slate-500">
-              Connect your hockey accounts
-            </p>
+            <p className="text-xs text-slate-500">Connect your hockey accounts</p>
           </div>
         </div>
 
-        {/* Global loading overlay */}
         <AnimatePresence>
           {isAnySyncing && (
             <motion.div
@@ -1107,14 +808,11 @@ export default function IntegrationsPage() {
               className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
             >
               <HockeyLoader size="sm" />
-              <p className="text-sm font-medium text-slate-600">
-                {statusMessage || 'Working...'}
-              </p>
+              <p className="text-sm font-medium text-slate-600">{statusMessage || 'Working...'}</p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Status banner — only shown when not actively syncing */}
         <AnimatePresence>
           {statusMessage && !isAnySyncing && (
             <StatusBanner
@@ -1128,7 +826,6 @@ export default function IntegrationsPage() {
 
         <div className="space-y-3">
 
-          {/* ── IceHockeyPro ──────────────────────────────────────────────── */}
           <IntegrationCard
             id="icehockeypro"
             icon={Trophy}
@@ -1138,22 +835,15 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${getLinkedChildNames()}`}
             color="blue"
             expanded={expandedSection === 'icehockeypro'}
-            onToggle={() =>
-              setExpandedSection(
-                expandedSection === 'icehockeypro' ? null : 'icehockeypro',
-              )
-            }
+            onToggle={() => setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')}
           >
             <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
               <div className="flex items-start gap-2">
                 <Trophy size={14} className="text-blue-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-blue-700">
-                  Connect your IceHockeyPro account to sync camps attended,
-                  upcoming registrations, and spending. We scrape your order
-                  history at{' '}
-                  <span className="font-mono text-blue-800">
-                    icehockeypro.com/my-account-2/orders/
-                  </span>{' '}
+                  Connect your IceHockeyPro account to sync camps attended, upcoming registrations, and spending.
+                  We scrape your order history at{' '}
+                  <span className="font-mono text-blue-800">icehockeypro.com/my-account-2/orders/</span>{' '}
                   and match billing details to your linked players.
                 </p>
               </div>
@@ -1162,9 +852,7 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials are encrypted with AES-256-GCM before storage.
-                We only access your order history to match registrations by
-                billing name.
+                Credentials are encrypted with AES-256-GCM before storage. We only access your order history to match registrations by billing name.
               </p>
             </div>
 
@@ -1182,21 +870,18 @@ export default function IntegrationsPage() {
 
                 <div>
                   <label className="block mb-2 text-xs font-medium text-slate-700">
-                    Link Players{' '}
-                    <span className="text-slate-400">(select who to sync)</span>
+                    Link Players <span className="text-slate-400">(select who to sync)</span>
                   </label>
                   {childProfiles.length === 0 ? (
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                       <p className="text-xs text-slate-500 mb-2">
-                        No players added yet. Add your children first so we
-                        can match their billing details.
+                        No players added yet. Add your children first so we can match their billing details.
                       </p>
                       <button
                         onClick={() => router.push('/settings')}
                         className="text-xs font-medium text-blue-600 flex items-center gap-1"
                       >
-                        Add players in Settings{' '}
-                        <ChevronRight size={12} />
+                        Add players in Settings <ChevronRight size={12} />
                       </button>
                     </div>
                   ) : (
@@ -1208,44 +893,27 @@ export default function IntegrationsPage() {
                             key={child.id}
                             onClick={() =>
                               setIhpLinkedChildIds((prev) =>
-                                isLinked
-                                  ? prev.filter((id) => id !== child.id)
-                                  : [...prev, child.id],
+                                isLinked ? prev.filter((id) => id !== child.id) : [...prev, child.id],
                               )
                             }
                             className={cn(
                               'w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left',
-                              isLinked
-                                ? 'bg-blue-50 border-blue-200'
-                                : 'bg-slate-50 border-slate-200',
+                              isLinked ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200',
                             )}
                           >
                             <div
                               className={cn(
                                 'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0',
-                                isLinked
-                                  ? 'bg-blue-500 border-blue-500'
-                                  : 'border-slate-300',
+                                isLinked ? 'bg-blue-500 border-blue-500' : 'border-slate-300',
                               )}
                             >
-                              {isLinked && (
-                                <Check size={12} className="text-white" />
-                              )}
+                              {isLinked && <Check size={12} className="text-white" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900">
-                                {child.name}
-                              </p>
-                              <p className="text-[10px] text-slate-500">
-                                {getChildLabel(child)}
-                              </p>
+                              <p className="text-sm font-medium text-slate-900">{child.name}</p>
+                              <p className="text-[10px] text-slate-500">{getChildLabel(child)}</p>
                             </div>
-                            {isLinked && (
-                              <UserCheck
-                                size={14}
-                                className="text-blue-600 shrink-0"
-                              />
-                            )}
+                            {isLinked && <UserCheck size={14} className="text-blue-600 shrink-0" />}
                           </button>
                         );
                       })}
@@ -1258,11 +926,7 @@ export default function IntegrationsPage() {
                   disabled={syncing}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-blue-200"
                 >
-                  {syncing ? (
-                    <RefreshCw size={14} className="animate-spin" />
-                  ) : (
-                    <Trophy size={14} />
-                  )}
+                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Trophy size={14} />}
                   {syncing ? 'Connecting...' : 'Connect & Sync Orders'}
                 </button>
               </>
@@ -1271,25 +935,14 @@ export default function IntegrationsPage() {
                 <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
                     <Check size={14} className="text-emerald-600" />
-                    <p className="text-xs font-semibold text-emerald-700">
-                      Connected
-                    </p>
+                    <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
-                  <p className="text-[10px] text-slate-500">
-                    Account: {iceHockeyProConfig.email}
-                  </p>
-                  <p className="text-[10px] text-slate-500">
-                    Linked players: {getLinkedChildNames()}
-                  </p>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Source: icehockeypro.com/my-account-2/orders/
-                  </p>
+                  <p className="text-[10px] text-slate-500">Account: {iceHockeyProConfig.email}</p>
+                  <p className="text-[10px] text-slate-500">Linked players: {getLinkedChildNames()}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Source: icehockeypro.com/my-account-2/orders/</p>
                   {iceHockeyProConfig.lastSync && (
                     <p className="text-[10px] text-slate-500">
-                      Last sync:{' '}
-                      {new Date(
-                        iceHockeyProConfig.lastSync,
-                      ).toLocaleString()}
+                      Last sync: {new Date(iceHockeyProConfig.lastSync).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -1300,10 +953,7 @@ export default function IntegrationsPage() {
                     disabled={syncing}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw
-                      size={14}
-                      className={syncing ? 'animate-spin' : ''}
-                    />
+                    <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
                     Sync Now
                   </button>
                   <button
@@ -1320,9 +970,7 @@ export default function IntegrationsPage() {
                 >
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-blue-600" />
-                    <span className="text-xs text-slate-900">
-                      View Spending Breakdown
-                    </span>
+                    <span className="text-xs text-slate-900">View Spending Breakdown</span>
                   </div>
                   <ExternalLink size={14} className="text-slate-400" />
                 </button>
@@ -1330,7 +978,6 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
-          {/* ── Dash by DaySmart ──────────────────────────────────────────── */}
           <IntegrationCard
             id="dash"
             icon={Calendar}
@@ -1340,19 +987,13 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${daySmartConfig.facilityName ?? daySmartConfig.facilityId ?? 'Your Rink'}`}
             color="orange"
             expanded={expandedSection === 'dash'}
-            onToggle={() =>
-              setExpandedSection(
-                expandedSection === 'dash' ? null : 'dash',
-              )
-            }
+            onToggle={() => setExpandedSection(expandedSection === 'dash' ? null : 'dash')}
           >
             <div className="p-3 bg-orange-50 rounded-xl border border-orange-200">
               <div className="flex items-start gap-2">
                 <Zap size={14} className="text-orange-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-orange-700">
-                  Connect your Dash by DaySmart account to automatically sync
-                  clinics, camps, and registrations from your rink. Works with
-                  any DaySmart-powered facility.
+                  Connect your Dash by DaySmart account to automatically sync clinics, camps, and registrations from your rink. Works with any DaySmart-powered facility.
                 </p>
               </div>
             </div>
@@ -1360,8 +1001,7 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials are encrypted with AES-256-GCM before storage.
-                Used only to communicate directly with DaySmart&apos;s API.
+                Credentials are encrypted with AES-256-GCM before storage. Used only to communicate directly with DaySmart&apos;s API.
               </p>
             </div>
 
@@ -1379,8 +1019,7 @@ export default function IntegrationsPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Paste the URL from your rink&apos;s Dash login page, or
-                    just the facility ID (e.g. &quot;warmemorial&quot;)
+                    Paste the URL from your rink&apos;s Dash login page, or just the facility ID (e.g. &quot;warmemorial&quot;)
                   </p>
                 </div>
 
@@ -1399,11 +1038,7 @@ export default function IntegrationsPage() {
                   disabled={daySmartSyncing}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-orange-200"
                 >
-                  {daySmartSyncing ? (
-                    <RefreshCw size={14} className="animate-spin" />
-                  ) : (
-                    <Wifi size={14} />
-                  )}
+                  {daySmartSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Wifi size={14} />}
                   {daySmartSyncing ? 'Connecting...' : 'Connect to Dash'}
                 </button>
               </>
@@ -1412,43 +1047,26 @@ export default function IntegrationsPage() {
                 <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
                     <Check size={14} className="text-emerald-600" />
-                    <p className="text-xs font-semibold text-emerald-700">
-                      Connected
-                    </p>
+                    <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
+                  <p className="text-[10px] text-slate-500">Account: {daySmartConfig.email}</p>
                   <p className="text-[10px] text-slate-500">
-                    Account: {daySmartConfig.email}
-                  </p>
-                  <p className="text-[10px] text-slate-500">
-                    Facility:{' '}
-                    {daySmartConfig.facilityName ?? daySmartConfig.facilityId}
+                    Facility: {daySmartConfig.facilityName ?? daySmartConfig.facilityId}
                   </p>
                   {(daySmartConfig.familyMembers ?? []).length > 0 && (
                     <div className="mt-2">
-                      <p className="text-[10px] font-medium text-slate-600 mb-1">
-                        Family Members:
-                      </p>
+                      <p className="text-[10px] font-medium text-slate-600 mb-1">Family Members:</p>
                       {daySmartConfig.familyMembers.map((member) => (
-                        <p
-                          key={member.id}
-                          className="text-[10px] text-slate-500 flex items-center gap-1"
-                        >
-                          <UserCheck
-                            size={9}
-                            className="text-emerald-500"
-                          />
-                          {member.name}{' '}
-                          <span className="text-slate-400">
-                            (#{member.id})
-                          </span>
+                        <p key={member.id} className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <UserCheck size={9} className="text-emerald-500" />
+                          {member.name} <span className="text-slate-400">(#{member.id})</span>
                         </p>
                       ))}
                     </div>
                   )}
                   {daySmartConfig.lastSync && (
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Last sync:{' '}
-                      {new Date(daySmartConfig.lastSync).toLocaleString()}
+                      Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -1459,10 +1077,7 @@ export default function IntegrationsPage() {
                     disabled={daySmartSyncing}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw
-                      size={14}
-                      className={daySmartSyncing ? 'animate-spin' : ''}
-                    />
+                    <RefreshCw size={14} className={daySmartSyncing ? 'animate-spin' : ''} />
                     Sync Now
                   </button>
                   <button
@@ -1479,9 +1094,7 @@ export default function IntegrationsPage() {
                 >
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-orange-600" />
-                    <span className="text-xs text-slate-900">
-                      View My Registrations
-                    </span>
+                    <span className="text-xs text-slate-900">View My Registrations</span>
                   </div>
                   <ExternalLink size={14} className="text-slate-400" />
                 </button>
@@ -1489,7 +1102,6 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
-          {/* ── Email Scanner ─────────────────────────────────────────────── */}
           <IntegrationCard
             id="email"
             icon={Mail}
@@ -1499,20 +1111,14 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'} · ${emailScanConfig.scanFrequency}`}
             color="violet"
             expanded={expandedSection === 'email'}
-            onToggle={() =>
-              setExpandedSection(
-                expandedSection === 'email' ? null : 'email',
-              )
-            }
+            onToggle={() => setExpandedSection(expandedSection === 'email' ? null : 'email')}
           >
             <div className="p-3 bg-violet-50 rounded-xl border border-violet-200">
               <div className="flex items-start gap-2">
                 <Mail size={14} className="text-violet-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-violet-700">
-                  Securely scan your inbox for hockey-related schedule changes,
-                  cancellations, and announcements. Uses Gmail/Outlook API with
-                  read-only access and pattern matching — no AI processing of
-                  email content, completely free.
+                  Securely scan your inbox for hockey-related schedule changes, cancellations, and announcements.
+                  Uses Gmail/Outlook API with read-only access and pattern matching — no AI processing of email content, completely free.
                 </p>
               </div>
             </div>
@@ -1520,9 +1126,7 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Uses OAuth — we never see your password. Read-only access to
-                messages matching hockey keywords only. Revoke access anytime
-                from your Google/Microsoft account.
+                Uses OAuth — we never see your password. Read-only access to messages matching hockey keywords only. Revoke access anytime from your Google/Microsoft account.
               </p>
             </div>
 
@@ -1546,9 +1150,7 @@ export default function IntegrationsPage() {
                 </button>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    What We Look For
-                  </h4>
+                  <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">What We Look For</h4>
                   <div className="space-y-1.5">
                     {[
                       'Schedule changes & time updates',
@@ -1570,38 +1172,26 @@ export default function IntegrationsPage() {
                 <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
                     <Check size={14} className="text-emerald-600" />
-                    <p className="text-xs font-semibold text-emerald-700">
-                      Active
-                    </p>
+                    <p className="text-xs font-semibold text-emerald-700">Active</p>
                   </div>
                   <p className="text-[10px] text-slate-500">
-                    Provider:{' '}
-                    {emailScanConfig.provider === 'gmail'
-                      ? 'Gmail'
-                      : 'Outlook'}
+                    Provider: {emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'}
                   </p>
-                  <p className="text-[10px] text-slate-500">
-                    Frequency: {emailScanConfig.scanFrequency}
-                  </p>
+                  <p className="text-[10px] text-slate-500">Frequency: {emailScanConfig.scanFrequency}</p>
                   {emailScanConfig.lastScan && (
                     <p className="text-[10px] text-slate-500">
-                      Last scan:{' '}
-                      {new Date(emailScanConfig.lastScan).toLocaleString()}
+                      Last scan: {new Date(emailScanConfig.lastScan).toLocaleString()}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block mb-2 text-xs font-medium text-slate-700">
-                    Scan Frequency
-                  </label>
+                  <label className="block mb-2 text-xs font-medium text-slate-700">Scan Frequency</label>
                   <div className="flex gap-2">
                     {(['hourly', 'daily', 'manual'] as const).map((freq) => (
                       <button
                         key={freq}
-                        onClick={() =>
-                          setEmailScanConfig({ scanFrequency: freq })
-                        }
+                        onClick={() => setEmailScanConfig({ scanFrequency: freq })}
                         className={cn(
                           'flex-1 py-2 text-xs font-medium rounded-xl border transition-all capitalize',
                           emailScanConfig.scanFrequency === freq
@@ -1625,33 +1215,14 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
-          {/* ── What gets synced ──────────────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 mb-3">
-              What Gets Synced
-            </h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-3">What Gets Synced</h3>
             <div className="space-y-2">
               {[
-                {
-                  icon: Trophy,
-                  text: 'Camps & clinics from IceHockeyPro (matched by billing name)',
-                  colorClass: 'text-blue-600',
-                },
-                {
-                  icon: Calendar,
-                  text: 'Programs & registrations from DaySmart',
-                  colorClass: 'text-orange-600',
-                },
-                {
-                  icon: Mail,
-                  text: 'Schedule changes detected in your email',
-                  colorClass: 'text-violet-600',
-                },
-                {
-                  icon: Zap,
-                  text: 'Spending tracked across all sources',
-                  colorClass: 'text-amber-600',
-                },
+                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', colorClass: 'text-blue-600' },
+                { icon: Calendar, text: 'Programs & registrations from DaySmart', colorClass: 'text-orange-600' },
+                { icon: Mail, text: 'Schedule changes detected in your email', colorClass: 'text-violet-600' },
+                { icon: Zap, text: 'Spending tracked across all sources', colorClass: 'text-amber-600' },
               ].map((item) => (
                 <div key={item.text} className="flex items-center gap-2">
                   <item.icon size={14} className={item.colorClass} />

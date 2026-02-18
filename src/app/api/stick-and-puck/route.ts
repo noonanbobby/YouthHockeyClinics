@@ -10,20 +10,6 @@ import { StickAndPuckSession } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Build YYYY-MM-DD from LOCAL wall-clock time on the server.
- *
- * Vercel runs UTC, but Florida is UTC-4/5. Using UTC getters here would
- * make "today" start at midnight UTC = 8 PM ET the previous day, which
- * would incorrectly filter out sessions that haven't happened yet in
- * Florida. We use local getters so the date matches what a user in the
- * Eastern timezone would consider "today".
- *
- * In practice on Vercel (UTC) this returns the UTC date, which is at
- * most 5 hours ahead of ET — meaning we might show a session that ended
- * up to 5 hours ago in ET. That's acceptable; the DaySmart fetcher
- * already starts its window one day early to compensate.
- */
 function localTodayStr(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -39,61 +25,44 @@ export async function GET(request: NextRequest) {
   const sessionType = searchParams.get('type') || 'all';
   const day = searchParams.get('day');
 
-  const hasLocation =
-    !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+  const hasLocation = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
 
-  // ── Fetch live DaySmart data ───────────────────────────────────────
   let daySmartSessions: StickAndPuckSession[] = [];
-  const facilityResults: Record<
-    string,
-    { count: number; fromCache: boolean; confirmed: boolean }
-  > = {};
+  const facilityResults: Record<string, { count: number; fromCache: boolean; confirmed: boolean }> = {};
 
   try {
     const result = await fetchAllDaySmartSchedules();
     daySmartSessions = result.sessions;
     Object.assign(facilityResults, result.facilityResults);
   } catch (err) {
-    console.error(
-      '[Ice Time] DaySmart fetch failed, using seed data only:',
-      err,
-    );
+    console.error('[Ice Time] DaySmart fetch failed, using seed data only:', err);
   }
 
-  // ── Determine which rinks have CONFIRMED live data ─────────────────
   const daySmartRinkIds = getDaySmartRinkIds();
   const slugToRinkId = getSlugToRinkId();
   const confirmedDaySmartRinkIds = new Set<string>();
 
   for (const [slug, info] of Object.entries(facilityResults)) {
     if (!info.confirmed) continue;
-    const rinkIdFromSessions = daySmartSessions.find((s) =>
-      s.id.startsWith(`ds-${slug}-`),
-    )?.rinkId;
+    const rinkIdFromSessions = daySmartSessions.find((s) => s.id.startsWith(`ds-${slug}-`))?.rinkId;
     const rinkId = rinkIdFromSessions ?? slugToRinkId[slug];
     if (rinkId) confirmedDaySmartRinkIds.add(rinkId);
   }
 
-  // ── Build session list ─────────────────────────────────────────────
   let sessions: StickAndPuckSession[] = [];
-
   sessions.push(...daySmartSessions);
 
   for (const seedSession of ALL_SEED_SESSIONS) {
     const isDaySmartManaged = daySmartRinkIds.has(seedSession.rinkId);
-    const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(
-      seedSession.rinkId,
-    );
+    const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(seedSession.rinkId);
     if (isDaySmartManaged && hasConfirmedLiveData) continue;
     sessions.push(seedSession);
   }
 
-  // ── Filter by session type ─────────────────────────────────────────
   if (sessionType !== 'all') {
     sessions = sessions.filter((s) => s.sessionType === sessionType);
   }
 
-  // ── Filter by day of week ──────────────────────────────────────────
   if (day !== null && day !== undefined) {
     const dayNum = parseInt(day, 10);
     if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
@@ -101,43 +70,32 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Filter out past sessions ───────────────────────────────────────
   const today = localTodayStr();
   sessions = sessions.filter((s) => s.date >= today);
 
-  // ── Add distance ───────────────────────────────────────────────────
   const sessionsWithDistance = sessions.map((s) => ({
     ...s,
-    distance: hasLocation
-      ? calculateDistance(lat, lng, s.location.lat, s.location.lng)
-      : null,
+    distance: hasLocation ? calculateDistance(lat, lng, s.location.lat, s.location.lng) : null,
   }));
 
-  // ── Sort: date → time → distance ──────────────────────────────────
   sessionsWithDistance.sort((a, b) => {
     const dateComp = a.date.localeCompare(b.date);
     if (dateComp !== 0) return dateComp;
     const timeComp = a.startTime.localeCompare(b.startTime);
     if (timeComp !== 0) return timeComp;
-    if (a.distance != null && b.distance != null)
-      return a.distance - b.distance;
+    if (a.distance != null && b.distance != null) return a.distance - b.distance;
     return 0;
   });
 
-  // ── Build rink list ────────────────────────────────────────────────
   const rinkIds = new Set(sessionsWithDistance.map((s) => s.rinkId));
   const rinks = SEED_RINKS.filter((r) => rinkIds.has(r.id)).map((r) => ({
     ...r,
     sessions: [],
-    distance: hasLocation
-      ? calculateDistance(lat, lng, r.location.lat, r.location.lng)
-      : null,
+    distance: hasLocation ? calculateDistance(lat, lng, r.location.lat, r.location.lng) : null,
   }));
 
   if (hasLocation) {
-    rinks.sort(
-      (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
-    );
+    rinks.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
   }
 
   return NextResponse.json({
@@ -147,9 +105,7 @@ export async function GET(request: NextRequest) {
     totalRinks: rinks.length,
     sources: {
       daysmart: confirmedDaySmartRinkIds.size,
-      daysmartSessions: sessionsWithDistance.filter(
-        (s) => s.source === 'daysmart',
-      ).length,
+      daysmartSessions: sessionsWithDistance.filter((s) => s.source === 'daysmart').length,
       seed: sessionsWithDistance.filter((s) => s.source === 'seed').length,
       facilityResults,
     },

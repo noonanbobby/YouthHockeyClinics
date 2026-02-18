@@ -1,10 +1,5 @@
 import { Rink, StickAndPuckSession } from '@/types';
 
-// ── Date helpers ──────────────────────────────────────────────────────
-// Build a YYYY-MM-DD string from a Date object using LOCAL time,
-// not UTC. This prevents timezone-shift bugs where a Monday 6 AM ET
-// session becomes Sunday in UTC.
-
 function toLocalDateStr(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -12,7 +7,6 @@ function toLocalDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// ── Helper to generate recurring weekly sessions ──────────────────────
 function weeklySession(
   rinkId: string,
   rinkName: string,
@@ -20,7 +14,7 @@ function weeklySession(
   opts: {
     sessionType: StickAndPuckSession['sessionType'];
     name: string;
-    days: number[]; // 0=Sun..6=Sat
+    days: number[];
     startTime: string;
     endTime: string;
     price: number;
@@ -36,7 +30,6 @@ function weeklySession(
   const todayStr = toLocalDateStr(now);
   const [startHour, startMin] = opts.startTime.split(':').map(Number);
 
-  // Generate next 4 weeks of sessions
   for (let weekOffset = 0; weekOffset < 4; weekOffset++) {
     for (const day of opts.days) {
       const date = new Date(now);
@@ -45,17 +38,14 @@ function weeklySession(
       if (daysUntil < 0) daysUntil += 7;
       date.setDate(now.getDate() + daysUntil + weekOffset * 7);
 
-      // Use local date string — avoids UTC timezone shift
       const dateStr = toLocalDateStr(date);
 
-      // Skip sessions that have already started today
       if (dateStr === todayStr) {
         const sessionStart = new Date(now);
         sessionStart.setHours(startHour, startMin, 0, 0);
         if (sessionStart <= now) continue;
       }
 
-      // Skip dates in the past
       if (dateStr < todayStr) continue;
 
       sessions.push({
@@ -85,8 +75,6 @@ function weeklySession(
   return sessions;
 }
 
-// ══ SOUTH FLORIDA RINKS ══════════════════════════════════════════════
-
 const ICEPLEX_LOCATION = {
   venue: 'Baptist Health IcePlex',
   address: '3299 Sportsplex Dr',
@@ -101,7 +89,7 @@ const ICEDEN_LOCATION = {
   address: '3299 Sportsplex Dr',
   city: 'Coral Springs',
   state: 'FL',
-  lat: 26.2710,
+  lat: 26.271,
   lng: -80.2534,
 };
 
@@ -143,7 +131,6 @@ const RINKATBEACH_LOCATION = {
 
 const FULL_EQUIP = ['Full hockey equipment required'];
 
-// ── Baptist Health IcePlex ──────────────────────────────────────────
 const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -243,7 +230,6 @@ const iceplexSessions = [
   }),
 ];
 
-// ── Florida Panthers IceDen ─────────────────────────────────────────
 const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -343,7 +329,6 @@ const icedenSessions = [
   }),
 ];
 
-// ── Pines Ice Arena ─────────────────────────────────────────────────
 const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -428,7 +413,6 @@ const pinesSessions = [
   }),
 ];
 
-// ── Incredible Ice ──────────────────────────────────────────────────
 const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -512,7 +496,6 @@ const incredibleSessions = [
   }),
 ];
 
-// ── Saveology Arena ─────────────────────────────────────────────────
 const saveologySessions = [
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -588,7 +571,6 @@ const saveologySessions = [
   }),
 ];
 
-// ── The Rink at the Beach ───────────────────────────────────────────
 const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'stick-and-puck',
@@ -677,8 +659,6 @@ const rinkAtBeachSessions = [
   }),
 ];
 
-// ══ ASSEMBLE RINKS ═══════════════════════════════════════════════════
-
 export const SEED_RINKS: Rink[] = [
   {
     id: 'iceplex',
@@ -696,7 +676,7 @@ export const SEED_RINKS: Rink[] = [
     name: 'Florida Panthers IceDen',
     slug: 'iceden',
     platform: 'daysmart',
-    location: { address: '3299 Sportsplex Dr', city: 'Coral Springs', state: 'FL', lat: 26.2710, lng: -80.2534 },
+    location: { address: '3299 Sportsplex Dr', city: 'Coral Springs', state: 'FL', lat: 26.271, lng: -80.2534 },
     phone: '(954) 341-9956',
     website: 'https://www.floridapanthersiceden.com',
     scheduleUrl: 'https://www.floridapanthersiceden.com/schedule',
@@ -739,5 +719,4 @@ export const SEED_RINKS: Rink[] = [
   },
 ];
 
-// Flat list of all sessions across all rinks
-export const ALL_SEED_SESSIONS: StickAndPuckSession[] = SEED_RINKS.flatMap(r => r.sessions);
+export const ALL_SEED_SESSIONS: StickAndPuckSession[] = SEED_RINKS.flatMap((r) => r.sessions);

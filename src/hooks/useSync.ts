@@ -28,10 +28,7 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
     syncable[key] = state[key as keyof typeof state];
   }
 
-  if (
-    syncable.iceHockeyProConfig &&
-    typeof syncable.iceHockeyProConfig === 'object'
-  ) {
+  if (syncable.iceHockeyProConfig && typeof syncable.iceHockeyProConfig === 'object') {
     const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
     delete ihp.sessionCookie;
     syncable.iceHockeyProConfig = ihp;
@@ -99,9 +96,7 @@ export function useSync() {
 
       try {
         if (remote.favoriteIds?.length) {
-          const merged = [
-            ...new Set([...store.favoriteIds, ...remote.favoriteIds]),
-          ];
+          const merged = [...new Set([...store.favoriteIds, ...remote.favoriteIds])];
           useStore.setState({ favoriteIds: merged });
         }
         if (remote.childProfiles?.length && !store.childProfiles.length) {
@@ -123,9 +118,7 @@ export function useSync() {
           useStore.setState({ homeLocation: remote.homeLocation });
         }
         if (remote.notificationsEnabled !== undefined) {
-          useStore.setState({
-            notificationsEnabled: remote.notificationsEnabled,
-          });
+          useStore.setState({ notificationsEnabled: remote.notificationsEnabled });
         }
         if (remote.preferredCurrency) {
           useStore.setState({ preferredCurrency: remote.preferredCurrency });
@@ -133,16 +126,10 @@ export function useSync() {
         if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
           useStore.setState({ daySmartConfig: remote.daySmartConfig });
         }
-        if (
-          remote.iceHockeyProConfig?.email &&
-          !store.iceHockeyProConfig.email
-        ) {
+        if (remote.iceHockeyProConfig?.email && !store.iceHockeyProConfig.email) {
           useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
         }
-        if (
-          remote.emailScanConfig?.connected &&
-          !store.emailScanConfig.connected
-        ) {
+        if (remote.emailScanConfig?.connected && !store.emailScanConfig.connected) {
           useStore.setState({ emailScanConfig: remote.emailScanConfig });
         }
       } finally {

@@ -1,14 +1,3 @@
-/**
- * AES-256-GCM credential encryption.
- *
- * Key: CREDENTIAL_ENCRYPTION_KEY env var — exactly 64 hex chars (32 bytes).
- * Generate with: openssl rand -hex 32
- *
- * Wire format: enc:<iv_b64url>.<ciphertext+tag_b64url>
- *
- * Uses only Web Crypto API — safe in Node.js and Edge runtimes.
- */
-
 const SENTINEL = 'enc:';
 
 function getEnvKey(): string {
@@ -29,10 +18,7 @@ async function importKey(): Promise<CryptoKey> {
   for (let i = 0; i < 32; i++) {
     raw[i] = parseInt(envKey.slice(i * 2, i * 2 + 2), 16);
   }
-  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
-    'encrypt',
-    'decrypt',
-  ]);
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 function toBase64url(buf: ArrayBuffer): string {
@@ -64,11 +50,7 @@ export async function encryptCredential(plaintext: string): Promise<string> {
     const key = await importKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(plaintext);
-    const cipherBuf = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      encoded,
-    );
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
     return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
   } catch {
     return plaintext;
@@ -80,9 +62,7 @@ export async function decryptCredential(wire: string): Promise<string> {
   if (!wire.startsWith(SENTINEL)) return wire;
 
   if (!isEncryptionConfigured()) {
-    console.warn(
-      '[crypto] Encrypted credential found but CREDENTIAL_ENCRYPTION_KEY is not set',
-    );
+    console.warn('[crypto] Encrypted credential found but CREDENTIAL_ENCRYPTION_KEY is not set');
     return '';
   }
 
@@ -95,11 +75,7 @@ export async function decryptCredential(wire: string): Promise<string> {
     const iv = fromBase64url(payload.slice(0, dotIdx));
     const cipherBuf = fromBase64url(payload.slice(dotIdx + 1));
 
-    const plainBuf = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      cipherBuf,
-    );
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBuf);
     return new TextDecoder().decode(plainBuf);
   } catch {
     return '';
