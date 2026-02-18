@@ -196,8 +196,9 @@ async function fetchEventsPage(
     const data: JsonApiResource[] = Array.isArray(json?.data) ? json.data : [];
     const included: JsonApiResource[] = Array.isArray(json?.included) ? json.included : [];
 
-    const pageMeta = json?.meta as any;
-    const lastPage = Number(pageMeta?.page?.['last-page'] ?? pageMeta?.page?.last_page ?? 1);
+    const pageMeta = json?.meta as Record<string, unknown> | undefined;
+    const pageInfo = pageMeta?.page as Record<string, unknown> | undefined;
+    const lastPage = Number(pageInfo?.['last-page'] ?? pageInfo?.last_page ?? 1);
 
     return { data, included, lastPage };
   }
@@ -276,7 +277,7 @@ export async function fetchDaySmartSchedule(facilitySlug: string, daysAhead = 28
       const attrs = event.attributes ?? {};
       const eventName = String(attrs.name ?? '').trim();
       const eventType = eventTypeMap.get(event.relationships?.eventType?.data?.id as string);
-      const resourceName = resourceMap.get(event.relationships?.resource?.data?.id as string);
+      const resourceName = resourceMap.get(event.relationships?.resource?.data?.id as string); // kept for future use
       const date = extractDateISO(attrs.start as string);
       const startTime = extractTime24(attrs.start as string);
       const endTime = extractTime24(attrs.end as string);
@@ -343,6 +344,12 @@ export function getDaySmartFacilitySlugs(): string[] {
   return Object.keys(FACILITY_META);
 }
 
-export function isDaySmartRink(rinkId: string): boolean {
-  return Object.values(FACILITY_META).some(m => m.rinkId === rinkId);
+export function getDaySmartRinkIds(): Set<string> {
+  return new Set(Object.values(FACILITY_META).map((m) => m.rinkId));
 }
+
+export function getSlugToRinkId(): Record<string, string> {
+  return SLUG_TO_RINK_ID;
+}
+
+export function isDay
