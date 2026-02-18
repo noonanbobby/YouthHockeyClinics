@@ -67,7 +67,6 @@ export async function GET(request: NextRequest) {
 
   for (const [slug, info] of Object.entries(facilityResults)) {
     if (!info.confirmed) continue;
-    // Prefer rinkId from actual returned sessions; fall back to slug map
     const rinkIdFromSessions = daySmartSessions.find((s) =>
       s.id.startsWith(`ds-${slug}-`),
     )?.rinkId;
@@ -76,8 +75,6 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Build session list ─────────────────────────────────────────────
-  // Live DaySmart sessions take priority. Seed sessions are only used
-  // for rinks where we have no confirmed live data.
   let sessions: StickAndPuckSession[] = [];
 
   sessions.push(...daySmartSessions);
@@ -87,7 +84,6 @@ export async function GET(request: NextRequest) {
     const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(
       seedSession.rinkId,
     );
-    // Only suppress seed data when we have confirmed live data for that rink
     if (isDaySmartManaged && hasConfirmedLiveData) continue;
     sessions.push(seedSession);
   }

@@ -28,15 +28,11 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
     syncable[key] = state[key as keyof typeof state];
   }
 
-  // Strip the IceHockeyPro session cookie — ephemeral, per-device, not
-  // suitable for cross-device sync.
   if (
     syncable.iceHockeyProConfig &&
     typeof syncable.iceHockeyProConfig === 'object'
   ) {
-    const ihp = {
-      ...(syncable.iceHockeyProConfig as Record<string, unknown>),
-    };
+    const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
     delete ihp.sessionCookie;
     syncable.iceHockeyProConfig = ihp;
   }
@@ -51,7 +47,6 @@ export function useSync() {
   const isPullingRef = useRef(false);
   const mountedRef = useRef(true);
 
-  // Track mounted state so async callbacks don't update refs after unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -59,7 +54,6 @@ export function useSync() {
     };
   }, []);
 
-  // ── Push local settings to remote (debounced) ──────────────────────
   const pushSettings = useCallback(async () => {
     if (isPullingRef.current) return;
 
@@ -82,7 +76,6 @@ export function useSync() {
     }
   }, []);
 
-  // ── Pull remote settings on login ──────────────────────────────────
   const pullSettings = useCallback(async () => {
     if (hasPulledRef.current) return;
     hasPulledRef.current = true;
@@ -91,7 +84,6 @@ export function useSync() {
       const res = await fetch('/api/sync');
       if (!res.ok) {
         if (res.status !== 503) {
-          // 503 = Supabase not configured — expected in dev, don't warn
           console.warn('[useSync] Pull failed:', res.status);
         }
         return;
@@ -103,8 +95,6 @@ export function useSync() {
       const store = useStore.getState();
       const remote = data.settings;
 
-      // Set pull guard BEFORE mutating the store to prevent the
-      // store subscription from scheduling a push for these changes.
       isPullingRef.current = true;
 
       try {
@@ -147,16 +137,15 @@ export function useSync() {
           remote.iceHockeyProConfig?.email &&
           !store.iceHockeyProConfig.email
         ) {
-          useStore.setState({
-            iceHockeyProConfig: remote.iceHockeyProConfig,
-          });
+          useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
         }
-        if (remote.emailScanConfig?.connected && !store.emailScanConfig.connected) {
+        if (
+          remote.emailScanConfig?.connected &&
+          !store.emailScanConfig.connected
+        ) {
           useStore.setState({ emailScanConfig: remote.emailScanConfig });
         }
       } finally {
-        // Release the pull guard after Zustand subscribers have fired.
-        // Only update the ref if the component is still mounted.
         setTimeout(() => {
           if (mountedRef.current) {
             isPullingRef.current = false;
@@ -164,14 +153,12 @@ export function useSync() {
         }, 150);
       }
     } catch {
-      // Sync is optional — don't break the app
       if (mountedRef.current) {
-        hasPulledRef.current = false; // Allow retry on next mount
+        hasPulledRef.current = false;
       }
     }
   }, []);
 
-  // ── Pull on authentication ─────────────────────────────────────────
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.email) {
       pullSettings();
@@ -182,7 +169,6 @@ export function useSync() {
     }
   }, [status, session?.user?.email, pullSettings]);
 
-  // ── Subscribe to store changes and push (debounced) ────────────────
   useEffect(() => {
     if (status !== 'authenticated') return;
 

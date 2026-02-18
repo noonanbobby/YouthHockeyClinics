@@ -254,17 +254,7 @@ function buildHeaders(facilitySlug: string): Record<string, string> {
 }
 
 // ── Org-ID discovery ────────────────────────────────────────────────────
-/**
- * DaySmart's JSON:API requires a numeric organization ID for some filter
- * params. We discover it once by hitting the /organizations endpoint
- * filtered by slug and cache it for the process lifetime.
- *
- * Multiple filter strategies are tried in order because different
- * DaySmart instances respond to different param names.
- *
- * Returns null if the org cannot be found (we fall back to slug-only
- * params in that case).
- */
+
 async function discoverOrgId(
   facilitySlug: string,
   headers: Record<string, string>,
@@ -273,7 +263,6 @@ async function discoverOrgId(
     return orgIdCache.get(facilitySlug) ?? null;
   }
 
-  // Try multiple filter strategies — DaySmart instances vary
   const strategies = [
     `${API_BASE}/organizations?filter[slug]=${encodeURIComponent(facilitySlug)}&page[size]=5`,
     `${API_BASE}/organizations?filter[company]=${encodeURIComponent(facilitySlug)}&page[size]=5`,
@@ -293,7 +282,6 @@ async function discoverOrgId(
 
       if (orgs.length === 0) continue;
 
-      // Try to match by slug attribute, name, or just take the first
       const match =
         orgs.find(
           (o) =>
@@ -317,17 +305,15 @@ async function discoverOrgId(
     }
   }
 
-  console.warn(`[DaySmart] Could not discover org ID for ${facilitySlug} — proceeding without it`);
+  console.warn(
+    `[DaySmart] Could not discover org ID for ${facilitySlug} — proceeding without it`,
+  );
   orgIdCache.set(facilitySlug, null);
   return null;
 }
 
 // ── Single-page event fetch ─────────────────────────────────────────────
-/**
- * Fetch one page of events. Tries with the league-exclusion filter first;
- * if the API returns a non-2xx we retry without that filter so an
- * unsupported param never blocks all results.
- */
+
 async function fetchEventsPage(
   facilitySlug: string,
   orgId: string | null,
@@ -335,14 +321,19 @@ async function fetchEventsPage(
   endDateStr: string,
   page: number,
   headers: Record<string, string>,
-): Promise<{ data: JsonApiResource[]; included: JsonApiResource[]; lastPage: number } | null> {
+): Promise<{
+  data: JsonApiResource[];
+  included: JsonApiResource[];
+  lastPage: number;
+} | null> {
   const buildUrl = (excludeLeague: boolean): string => {
     const url = new URL(`${API_BASE}/events`);
     url.searchParams.set('company', facilitySlug);
     url.searchParams.set('filter[end__gte]', startDateStr);
     url.searchParams.set('filter[start__lt]', endDateStr);
     if (orgId) url.searchParams.set('filter[organization]', orgId);
-    if (excludeLeague) url.searchParams.set('filter[eventType.code__not]', 'L');
+    if (excludeLeague)
+      url.searchParams.set('filter[eventType.code__not]', 'L');
     url.searchParams.set('include', 'resource,resourceArea,eventType');
     url.searchParams.set('sort', 'start');
     url.searchParams.set('page[size]', '100');
@@ -350,23 +341,27 @@ async function fetchEventsPage(
     return url.toString();
   };
 
-  // First attempt: with league exclusion filter
   for (const excludeLeague of [true, false]) {
     const urlStr = buildUrl(excludeLeague);
     let res: Response;
     try {
       res = await fetchWithRetry(urlStr, headers, 2, 15000);
     } catch (err) {
-      console.error(`[DaySmart] Network error for ${facilitySlug} page ${page}:`, err);
+      console.error(
+        `[DaySmart] Network error for ${facilitySlug} page ${page}:`,
+        err,
+      );
       return null;
     }
 
     if (!res.ok) {
       console.warn(
         `[DaySmart] HTTP ${res.status} for ${facilitySlug} page ${page}` +
-          (excludeLeague ? ' (with league filter) — retrying without' : ' (without league filter)'),
+          (excludeLeague
+            ? ' (with league filter) — retrying without'
+            : ' (without league filter)'),
       );
-      if (excludeLeague) continue; // retry without the filter
+      if (excludeLeague) continue;
       return null;
     }
 
@@ -374,7 +369,9 @@ async function fetchEventsPage(
     try {
       json = await res.json();
     } catch {
-      console.error(`[DaySmart] JSON parse error for ${facilitySlug} page ${page}`);
+      console.error(
+        `[DaySmart] JSON parse error for ${facilitySlug} page ${page}`,
+      );
       return null;
     }
 
@@ -433,18 +430,17 @@ export async function fetchDaySmartSchedule(
 
   try {
     const headers = buildHeaders(facilitySlug);
-
-    // ── Discover org ID (best-effort) ──────────────────────────────────
     const orgId = await discoverOrgId(facilitySlug, headers);
 
-    // ── Build date range ───────────────────────────────────────────────
-    // Start ONE DAY BEFORE today (UTC) so that early-morning sessions in
-    // Florida (UTC-4/5) that have already started in UTC are still included.
-    // The route-level filter (s.date >= today) uses local time and will
-    // drop truly past sessions before returning to the client.
+    // Start one day before UTC today so Florida early-morning sessions
+    // aren't missed when Vercel is already past midnight UTC.
     const now = new Date();
     const startDate = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - 1,
+      ),
     );
     const endDate = new Date(
       startDate.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000,
@@ -453,7 +449,6 @@ export async function fetchDaySmartSchedule(
     const startDateStr = toNaiveISOStr(startDate);
     const endDateStr = toNaiveISOStr(endDate);
 
-    // ── Paginated fetch ────────────────────────────────────────────────
     let allEvents: JsonApiResource[] = [];
     let allIncluded: JsonApiResource[] = [];
     let page = 1;
@@ -489,7 +484,6 @@ export async function fetchDaySmartSchedule(
       gotAnyResponse = true;
       allEvents = allEvents.concat(result.data);
 
-      // Merge included resources (deduplicate by id+type)
       for (const inc of result.included) {
         if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type)) {
           allIncluded.push(inc);
@@ -500,7 +494,6 @@ export async function fetchDaySmartSchedule(
       page++;
     }
 
-    // ── No events returned ─────────────────────────────────────────────
     if (allEvents.length === 0) {
       console.warn(`[DaySmart] No events returned for ${facilitySlug}`);
       scheduleCache.set(facilitySlug, {
@@ -511,7 +504,7 @@ export async function fetchDaySmartSchedule(
       return { sessions: [], fromCache: false, confirmed: true };
     }
 
-    // ── Build lookup maps from included resources ───────────────────────
+    // ── Build lookup maps ──────────────────────────────────────────────
     const resourceMap = new Map<string, string>();
     const eventTypeMap = new Map<string, { name: string; code: string }>();
 
@@ -538,33 +531,27 @@ export async function fetchDaySmartSchedule(
       const endStr = attrs.end as string | undefined;
       if (!startStr || !endStr) continue;
 
-      // Resolve event type
       const etRel = event.relationships?.eventType?.data;
       const etId = etRel && !Array.isArray(etRel) ? etRel.id : null;
       const eventType = etId ? eventTypeMap.get(etId) : null;
       const eventTypeName = eventType?.name ?? '';
 
-      // Classify — skip non-public-ice events
       const sessionType = classifySessionType(eventName, eventTypeName);
       if (!sessionType) continue;
 
-      // Resolve resource (rink surface name)
       const resRel = event.relationships?.resource?.data;
       const resId = resRel && !Array.isArray(resRel) ? resRel.id : null;
       const resourceName = resId ? resourceMap.get(resId) : null;
 
       const date = extractDateISO(startStr);
-      // Use noon UTC to avoid any DST edge cases when computing day-of-week
       const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
 
-      // Price
       const rawPrice = attrs.price ?? attrs.cost ?? 0;
       const price =
         typeof rawPrice === 'number'
           ? rawPrice
           : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
 
-      // Capacity
       const maxParticipants =
         typeof attrs.max_participants === 'number'
           ? attrs.max_participants
@@ -578,7 +565,6 @@ export async function fetchDaySmartSchedule(
           ? attrs.registeredCount
           : undefined;
 
-      // Notes
       const noteParts: string[] = [];
       if (resourceName) noteParts.push(resourceName);
       const desc = attrs.description ?? attrs.notes;
@@ -589,14 +575,10 @@ export async function fetchDaySmartSchedule(
       ) {
         noteParts.push(desc.trim());
       }
-      if (
-        registeredCount !== undefined &&
-        maxParticipants !== undefined
-      ) {
+      if (registeredCount !== undefined && maxParticipants !== undefined) {
         noteParts.push(`${registeredCount}/${maxParticipants} registered`);
       }
 
-      // Goalie-free detection
       const combinedText =
         `${eventName} ${eventTypeName} ${typeof desc === 'string' ? desc : ''}`.toLowerCase();
       const goaliesFree =

@@ -8,16 +8,10 @@ import { encryptCredential, isEncryptionConfigured } from '@/lib/crypto';
  * Called by the integrations page before persisting sensitive values.
  *
  * Body: { value: string }
- * Response: { encrypted: string }
+ * Response: { encrypted: string, wasEncrypted: boolean }
  *
  * If CREDENTIAL_ENCRYPTION_KEY is not configured the value is returned
  * unchanged — credentials are still protected in transit by TLS.
- *
- * This endpoint intentionally has NO authentication requirement because:
- * - It only encrypts values the caller already possesses
- * - The encryption key never leaves the server
- * - An attacker who can call this endpoint gains nothing — they already
- *   have the plaintext and the encrypted output is useless without the key
  */
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +33,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[encrypt] Error:', error);
-    // Return the original value on error so the caller can still proceed
     return NextResponse.json(
       { error: 'Encryption failed', encrypted: '' },
       { status: 500 },
