@@ -4,31 +4,34 @@ function getEnvKey(): string {
   return process.env.CREDENTIAL_ENCRYPTION_KEY ?? '';
 }
 
-export function isEncryptionConfigured(): boolean {
+function isEncryptionConfigured(): boolean {
   const key = getEnvKey();
   return key.length === 64 && /^[0-9a-fA-F]+$/.test(key);
 }
 
 async function importKey(): Promise<CryptoKey> {
   if (!isEncryptionConfigured()) {
-    throw new Error('CREDENTIAL_ENCRYPTION_KEY is not configured or invalid');
+    console.warn('[crypto] CREDENTIAL_ENCRYPTION_KEY not configured');
+    throw new Error('Encryption not configured');
   }
   const envKey = getEnvKey();
   const raw = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     raw[i] = parseInt(envKey.slice(i * 2, i * 2 + 2), 16);
   }
-  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
-    'encrypt',
-    'decrypt',
-  ]);
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-function toBase64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
+function toBase64url(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 function fromBase64url(s: string): Uint8Array {
@@ -42,17 +45,14 @@ function fromBase64url(s: string): Uint8Array {
 
 export async function encryptCredential(plaintext: string): Promise<string> {
   if (!plaintext) return plaintext;
-  if (plaintext.startsWith(SENTINEL)) return plaintext; // already encrypted
-  if (!isEncryptionConfigured()) {
-    console.warn('[crypto] encryptCredential: CREDENTIAL_ENCRYPTION_KEY not configured — storing plaintext');
-    return plaintext;
-  }
+  if (plaintext.startsWith(SENTINEL)) return plaintext;
+  if (!isEncryptionConfigured()) return plaintext;
   try {
     const key = await importKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(plaintext);
     const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-    return `${SENTINEL}${toBase64url(iv)}.${toBase64url(new Uint8Array(cipherBuf))}`;
+    return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
   } catch (err) {
     console.error('[crypto] encryptCredential failed:', err);
     return plaintext;
@@ -61,94 +61,55 @@ export async function encryptCredential(plaintext: string): Promise<string> {
 
 export async function decryptCredential(wire: string): Promise<string> {
   if (!wire) return wire;
-  if (!wire.startsWith(SENTINEL)) return wire; // not encrypted — pass through
+  if (!wire.startsWith(SENTINEL)) return wire;
   if (!isEncryptionConfigured()) {
-    console.warn(
-      '[crypto] decryptCredential: encrypted value found but CREDENTIAL_ENCRYPTION_KEY is not set — returning empty string',
-    );
+    console.warn('[crypto] Encrypted credential found but CREDENTIAL_ENCRYPTION_KEY is not set');
     return '';
   }
   try {
     const payload = wire.slice(SENTINEL.length);
     const dotIdx = payload.indexOf('.');
-    if (dotIdx === -1) {
-      console.error('[crypto] decryptCredential: malformed payload (no dot separator)');
-      return '';
-    }
+    if (dotIdx === -1) return '';
+
     const key = await importKey();
     const iv = fromBase64url(payload.slice(0, dotIdx));
     const cipherBuf = fromBase64url(payload.slice(dotIdx + 1));
     const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBuf);
     return new TextDecoder().decode(plainBuf);
   } catch (err) {
-    console.error('[crypto] decryptCredential failed (wrong key or corrupt data):', err);
+    console.error('[crypto] decryptCredential failed:', err);
     return '';
   }
 }
 
-export async function encryptSettingsCredentials(
-  settings: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+export async function encryptSettingsCredentials(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
   const out = { ...settings };
-
   if (out.daySmartConfig && typeof out.daySmartConfig === 'object') {
     const dsc = { ...(out.daySmartConfig as Record<string, unknown>) };
-    if (typeof dsc.password === 'string' && dsc.password)
-      dsc.password = await encryptCredential(dsc.password);
-    // Never persist the raw session cookie
+    if (typeof dsc.password === 'string' && dsc.password) dsc.password = await encryptCredential(dsc.password);
     delete dsc.sessionCookie;
     out.daySmartConfig = dsc;
   }
-
   if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
     const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
-    if (typeof ihp.password === 'string' && ihp.password)
-      ihp.password = await encryptCredential(ihp.password);
+    if (typeof ihp.password === 'string' && ihp.password) ihp.password = await encryptCredential(ihp.password);
     delete ihp.sessionCookie;
     out.iceHockeyProConfig = ihp;
   }
-
-  if (out.emailScanConfig && typeof out.emailScanConfig === 'object') {
-    const esc = { ...(out.emailScanConfig as Record<string, unknown>) };
-    if (typeof esc.password === 'string' && esc.password)
-      esc.password = await encryptCredential(esc.password);
-    if (typeof esc.accessToken === 'string' && esc.accessToken)
-      esc.accessToken = await encryptCredential(esc.accessToken);
-    if (typeof esc.refreshToken === 'string' && esc.refreshToken)
-      esc.refreshToken = await encryptCredential(esc.refreshToken);
-    out.emailScanConfig = esc;
-  }
-
   return out;
 }
 
-export async function decryptSettingsCredentials(
-  settings: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+export async function decryptSettingsCredentials(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
   const out = { ...settings };
-
   if (out.daySmartConfig && typeof out.daySmartConfig === 'object') {
     const dsc = { ...(out.daySmartConfig as Record<string, unknown>) };
     if (typeof dsc.password === 'string') dsc.password = await decryptCredential(dsc.password);
     out.daySmartConfig = dsc;
   }
-
   if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
     const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
     if (typeof ihp.password === 'string') ihp.password = await decryptCredential(ihp.password);
-    delete ihp.sessionCookie;
     out.iceHockeyProConfig = ihp;
   }
-
-  if (out.emailScanConfig && typeof out.emailScanConfig === 'object') {
-    const esc = { ...(out.emailScanConfig as Record<string, unknown>) };
-    if (typeof esc.password === 'string') esc.password = await decryptCredential(esc.password);
-    if (typeof esc.accessToken === 'string')
-      esc.accessToken = await decryptCredential(esc.accessToken);
-    if (typeof esc.refreshToken === 'string')
-      esc.refreshToken = await decryptCredential(esc.refreshToken);
-    out.emailScanConfig = esc;
-  }
-
   return out;
 }
