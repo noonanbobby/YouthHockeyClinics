@@ -18,7 +18,8 @@ import * as cheerio from 'cheerio';
 
 const IHP_BASE = 'https://icehockeypro.com';
 
-// All category URLs to scrape for camps (including Max Ivanov)
+// ── Category / search URLs ─────────────────────────────────────────────
+// Ordered from most-specific to broadest so we get the best results first.
 const CAMP_CATEGORY_URLS = [
   `${IHP_BASE}/product-category/youth-camps/`,
   `${IHP_BASE}/product-category/camps/`,
@@ -26,14 +27,20 @@ const CAMP_CATEGORY_URLS = [
   `${IHP_BASE}/product-category/clinics/`,
   `${IHP_BASE}/product-category/skills-clinics/`,
   `${IHP_BASE}/shop/`,
+  `${IHP_BASE}/shop/page/2/`,
+  `${IHP_BASE}/shop/page/3/`,
 ];
 
-// Direct search URLs for Max Ivanov camps
+// Max Ivanov — multiple search strategies to maximise discovery
 const MAX_IVANOV_SEARCH_URLS = [
-  `${IHP_BASE}/?s=max+ivanov&post_type=product`,
-  `${IHP_BASE}/?s=ivanov&post_type=product`,
-  `${IHP_BASE}/?s=super+skills&post_type=product`,
-  `${IHP_BASE}/?s=max+ivanov+2026&post_type=product`,
+  `${IHP_BASE}/?s=max+ivanov`,
+  `${IHP_BASE}/?s=ivanov`,
+  `${IHP_BASE}/?s=super+skills`,
+  `${IHP_BASE}/?s=max+ivanov+2026`,
+  // Direct known product slugs (update as new camps are published)
+  `${IHP_BASE}/product/max-ivanov-super-skills-camp/`,
+  `${IHP_BASE}/product/max-ivanov-skills-camp/`,
+  `${IHP_BASE}/product/max-ivanov-hockey-camp/`,
 ];
 
 interface ScrapedOrder {
@@ -87,20 +94,9 @@ function scoreCampName(value: string, key: string): number {
   const kl = key.toLowerCase();
   const vl = clean.toLowerCase();
 
-  if (
-    kl === 'name' ||
-    kl === 'camp name' ||
-    kl === 'event name' ||
-    kl === 'title'
-  )
-    score += 60;
+  if (kl === 'name' || kl === 'camp name' || kl === 'event name' || kl === 'title') score += 60;
   if (kl === 'program' || kl === 'class') score += 40;
-  if (
-    kl.includes('camp') &&
-    !kl.includes('date') &&
-    !kl.includes('location')
-  )
-    score += 50;
+  if (kl.includes('camp') && !kl.includes('date') && !kl.includes('location')) score += 50;
 
   const hockeyWords = [
     'hockey', 'skating', 'skills', 'clinic', 'tournament', 'league',
@@ -124,9 +120,7 @@ function scoreCampName(value: string, key: string): number {
 
   // Penalize date-like values
   if (
-    /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(
-      clean,
-    )
+    /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(clean)
   ) {
     score -= 40;
   }
@@ -134,7 +128,6 @@ function scoreCampName(value: string, key: string): number {
   // Penalize price-like values
   if (/^\$?\d+\.?\d*$/.test(clean)) score -= 100;
 
-  // Do NOT penalize ALL-CAPS — Max Ivanov uses them
   return Math.max(score, 0);
 }
 
@@ -143,7 +136,7 @@ function scoreCampName(value: string, key: string): number {
 async function fetchPage(
   url: string,
   extraHeaders: Record<string, string> = {},
-  timeoutMs = 10000,
+  timeoutMs = 12000,
 ): Promise<{ html: string; ok: boolean; status: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -152,8 +145,9 @@ async function fetchPage(
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
         ...extraHeaders,
       },
       redirect: 'follow',
@@ -169,8 +163,6 @@ async function fetchPage(
 }
 
 // ── Safe body parser ──────────────────────────────────────────────────
-// Returns an empty object rather than throwing when the body is absent
-// or malformed (e.g. the `camps` action sends no body).
 
 async function safeParseBody(
   request: NextRequest,
@@ -187,8 +179,7 @@ async function safeParseBody(
 // ── Main route handler ────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const action =
-    request.nextUrl.searchParams.get('action') || 'sync';
+  const action = request.nextUrl.searchParams.get('action') || 'sync';
 
   try {
     const body = await safeParseBody(request);
@@ -208,18 +199,12 @@ export async function POST(request: NextRequest) {
       case 'camps':
         return handleCamps();
       default:
-        return NextResponse.json(
-          { error: 'Unknown action' },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
   } catch (error) {
     console.error('[IceHockeyPro] Error:', error);
     return NextResponse.json(
-      {
-        error: 'IceHockeyPro integration error',
-        details: String(error),
-      },
+      { error: 'IceHockeyPro integration error', details: String(error) },
       { status: 500 },
     );
   }
@@ -250,8 +235,7 @@ async function handleLogin(email: string, password: string) {
     const loginPageHtml = await loginPageRes.text();
     const $loginPage = cheerio.load(loginPageHtml);
     const nonce =
-      ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) ||
-      '';
+      ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) || '';
 
     const initCookies = (loginPageRes.headers.getSetCookie?.() || [])
       .map((c) => c.split(';')[0])
@@ -287,11 +271,7 @@ async function handleLogin(email: string, password: string) {
     }
     const cookies = allCookies.join('; ');
 
-    if (
-      res.status !== 302 &&
-      res.status !== 301 &&
-      res.status !== 200
-    ) {
+    if (res.status !== 302 && res.status !== 301 && res.status !== 200) {
       return NextResponse.json(
         { error: 'Login failed. Check your email and password.' },
         { status: 401 },
@@ -321,11 +301,7 @@ async function handleLogin(email: string, password: string) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      sessionCookie: cookies,
-      hasOrders,
-    });
+    return NextResponse.json({ success: true, sessionCookie: cookies, hasOrders });
   } catch (error) {
     console.error('[IceHockeyPro] Login error:', error);
     return NextResponse.json(
@@ -340,10 +316,7 @@ async function handleLogin(email: string, password: string) {
 
 // ── Sync (authenticated order history) ───────────────────────────────
 
-async function handleSync(
-  sessionCookie: string,
-  linkedChildNames: string[],
-) {
+async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
   const headers: Record<string, string> = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -361,8 +334,7 @@ async function handleSync(
       return NextResponse.json(
         {
           error: `Failed to fetch orders: ${ordersRes.status}`,
-          needsReauth:
-            ordersRes.status === 403 || ordersRes.status === 401,
+          needsReauth: ordersRes.status === 403 || ordersRes.status === 401,
         },
         { status: ordersRes.status },
       );
@@ -418,13 +390,8 @@ async function handleSync(
           'td.product-name, .woocommerce-table--order-details .product-name',
         ).first();
 
-        const productLinkText = $productCell
-          .find('a')
-          .first()
-          .text()
-          .trim();
-        const productHref =
-          $productCell.find('a').first().attr('href') || '';
+        const productLinkText = $productCell.find('a').first().text().trim();
+        const productHref = $productCell.find('a').first().attr('href') || '';
         const slugMatch = productHref.match(/\/product\/([^/?#]+)/);
         const slugName = slugMatch
           ? decodeURIComponent(slugMatch[1])
@@ -432,59 +399,10 @@ async function handleSync(
               .replace(/\b\w/g, (c) => c.toUpperCase())
           : '';
 
-        const variations: Record<string, string> = {};
-
-        $productCell
-          .find('dl.variation dt, dl.wc-item-meta dt')
-          .each((_, el) => {
-            const key = $order(el)
-              .text()
-              .replace(/[:\s]+$/, '')
-              .trim()
-              .toLowerCase();
-            const val = $order(el).next('dd').text().trim();
-            if (key && val) variations[key] = val;
-          });
-
-        $productCell
-          .find('.wc-item-meta li, ul.wc-item-meta li')
-          .each((_, el) => {
-            const label = $order(el)
-              .find('strong, .wc-item-meta-label')
-              .text()
-              .replace(/[:\s]+$/, '')
-              .trim()
-              .toLowerCase();
-            const fullText = $order(el).text().trim();
-            const labelText = $order(el)
-              .find('strong, .wc-item-meta-label')
-              .text()
-              .trim();
-            const val = fullText
-              .replace(labelText, '')
-              .replace(/^[:\s]+/, '')
-              .trim();
-            if (label && val) variations[label] = val;
-          });
-
-        $productCell.find('table.wc-item-meta tr').each((_, el) => {
-          const key = $order(el)
-            .find('td:first-child, th')
-            .text()
-            .replace(/[:\s]+$/, '')
-            .trim()
-            .toLowerCase();
-          const val = $order(el).find('td:last-child').text().trim();
-          if (key && val && key !== val) variations[key] = val;
-        });
-
+        const variations = extractVariations($order, $productCell);
         const fullCellText = $productCell.text().trim();
 
-        const candidates: {
-          name: string;
-          score: number;
-          source: string;
-        }[] = [];
+        const candidates: { name: string; score: number; source: string }[] = [];
 
         for (const [key, val] of Object.entries(variations)) {
           const clean = val.replace(/\s*×\s*\d+$/, '').trim();
@@ -595,10 +513,8 @@ async function handleSync(
           .last()
           .text()
           .trim();
-        const priceText =
-          itemPriceText || cellPriceText || orderTotalText;
-        const price =
-          parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+        const priceText = itemPriceText || cellPriceText || orderTotalText;
+        const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
         const currency = priceText.includes('€') ? 'EUR' : 'USD';
 
         const billingName =
@@ -623,9 +539,7 @@ async function handleSync(
             .text()
             .trim() || 'completed';
         const orderDate =
-          $order(
-            '.woocommerce-order-data__meta time, .order-date time',
-          )
+          $order('.woocommerce-order-data__meta time, .order-date time')
             .first()
             .attr('datetime') ||
           $order('.woocommerce-order-data__meta, .order-date')
@@ -652,11 +566,7 @@ async function handleSync(
             candidateCount: candidates.length,
             topCandidates: candidates
               .slice(0, 5)
-              .map((c) => ({
-                name: c.name,
-                score: c.score,
-                source: c.source,
-              })),
+              .map((c) => ({ name: c.name, score: c.score, source: c.source })),
             fullCellTextPreview: fullCellText.substring(0, 300),
           },
         });
@@ -678,8 +588,7 @@ async function handleSync(
             (name) =>
               name.toLowerCase().split(/\s+/).pop() === billingLast,
           );
-          if (lastNameMatches.length === 1)
-            matchedChild = lastNameMatches[0];
+          if (lastNameMatches.length === 1) matchedChild = lastNameMatches[0];
         }
       }
       return {
@@ -701,23 +610,79 @@ async function handleSync(
   } catch (error) {
     console.error('[IceHockeyPro] Sync error:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to scrape IceHockeyPro orders',
-        details: String(error),
-      },
+      { error: 'Failed to scrape IceHockeyPro orders', details: String(error) },
       { status: 500 },
     );
   }
+}
+
+// ── Variation extractor (shared between sync and detail scraper) ───────
+
+function extractVariations(
+  $: ReturnType<typeof cheerio.load>,
+  $productCell: ReturnType<ReturnType<typeof cheerio.load>>,
+): Record<string, string> {
+  const variations: Record<string, string> = {};
+
+  // Strategy 1: <dl> definition list (standard WooCommerce variation display)
+  $productCell.find('dl.variation dt, dl.wc-item-meta dt').each((_, el) => {
+    const key = $(el)
+      .text()
+      .replace(/[:\s]+$/, '')
+      .trim()
+      .toLowerCase();
+    const val = $(el).next('dd').text().trim();
+    if (key && val) variations[key] = val;
+  });
+
+  // Strategy 2: <ul> meta list
+  $productCell.find('.wc-item-meta li, ul.wc-item-meta li').each((_, el) => {
+    const label = $(el)
+      .find('strong, .wc-item-meta-label')
+      .text()
+      .replace(/[:\s]+$/, '')
+      .trim()
+      .toLowerCase();
+    const fullText = $(el).text().trim();
+    const labelText = $(el).find('strong, .wc-item-meta-label').text().trim();
+    const val = fullText.replace(labelText, '').replace(/^[:\s]+/, '').trim();
+    if (label && val) variations[label] = val;
+  });
+
+  // Strategy 3: <table> meta
+  $productCell.find('table.wc-item-meta tr').each((_, el) => {
+    const key = $(el)
+      .find('td:first-child, th')
+      .text()
+      .replace(/[:\s]+$/, '')
+      .trim()
+      .toLowerCase();
+    const val = $(el).find('td:last-child').text().trim();
+    if (key && val && key !== val) variations[key] = val;
+  });
+
+  // Strategy 4: Paragraph-based key: value pairs (some themes use this)
+  $productCell.find('p').each((_, el) => {
+    const text = $(el).text().trim();
+    const match = text.match(/^([^:]{2,40}):\s*(.+)$/);
+    if (match) {
+      const key = match[1].trim().toLowerCase();
+      const val = match[2].trim();
+      if (!variations[key] && isMeaningful(val)) {
+        variations[key] = val;
+      }
+    }
+  });
+
+  return variations;
 }
 
 // ── Camps catalog (public, no auth) ──────────────────────────────────
 
 async function handleCamps() {
   try {
-    const urlsToScrape = [
-      ...CAMP_CATEGORY_URLS,
-      ...MAX_IVANOV_SEARCH_URLS,
-    ];
+    // Fetch all category pages and Max Ivanov search pages in parallel
+    const urlsToScrape = [...CAMP_CATEGORY_URLS, ...MAX_IVANOV_SEARCH_URLS];
 
     const pageResults = await Promise.allSettled(
       urlsToScrape.map((url) => fetchPage(url)),
@@ -726,100 +691,116 @@ async function handleCamps() {
     const productUrlSet = new Set<string>();
     const quickCamps: ScrapedCamp[] = [];
 
-    for (const result of pageResults) {
-      if (result.status !== 'fulfilled' || !result.value.ok) continue;
+    for (let i = 0; i < pageResults.length; i++) {
+      const result = pageResults[i];
+      const sourceUrl = urlsToScrape[i];
 
-      const { html } = result.value;
+      if (result.status !== 'fulfilled') continue;
+      const { html, ok } = result.value;
+      if (!ok || !html) continue;
+
       const $ = cheerio.load(html);
 
-      $('li.product, .product-item, .woocommerce ul.products li').each(
-        (_, el) => {
-          const $el = $(el);
-          const name = $el
-            .find(
-              '.woocommerce-loop-product__title, h2, .product-title',
-            )
-            .first()
-            .text()
-            .trim();
-          const url =
-            $el
-              .find('a.woocommerce-LoopProduct-link, a')
-              .first()
-              .attr('href') || '';
-          const priceText = $el
-            .find('.woocommerce-Price-amount, .price .amount')
-            .first()
-            .text()
-            .trim();
-          const price =
-            parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
-          const imageUrl =
-            $el.find('img').first().attr('src') || '';
-          const desc = $el
-            .find('.short-description, .product-excerpt, p')
-            .first()
-            .text()
-            .trim();
+      // ── If this is a direct product page (Max Ivanov known URL) ──────
+      if (sourceUrl.includes('/product/') && $('body').hasClass('single-product')) {
+        const camp = await scrapeProductDetailFromHtml(sourceUrl, html);
+        if (camp && !productUrlSet.has(sourceUrl)) {
+          productUrlSet.add(sourceUrl);
+          quickCamps.push(camp);
+        }
+        continue;
+      }
 
-          if (name && url && !productUrlSet.has(url)) {
-            productUrlSet.add(url);
-            const nameLower = name.toLowerCase();
-            const descLower = desc.toLowerCase();
-            const isMaxIvanov =
-              nameLower.includes('ivanov') ||
-              nameLower.includes('max ivanov') ||
-              descLower.includes('ivanov');
+      // ── Product listing page ──────────────────────────────────────────
+      $('li.product, .product-item, .woocommerce ul.products li').each((_, el) => {
+        const $el = $(el);
+        const name = $el
+          .find('.woocommerce-loop-product__title, h2, .product-title')
+          .first()
+          .text()
+          .trim();
+        const url =
+          $el.find('a.woocommerce-LoopProduct-link, a').first().attr('href') || '';
+        const priceText = $el
+          .find('.woocommerce-Price-amount, .price .amount')
+          .first()
+          .text()
+          .trim();
+        const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+        const imageUrl = $el.find('img').first().attr('src') || '';
+        const desc = $el
+          .find('.short-description, .product-excerpt, p')
+          .first()
+          .text()
+          .trim();
 
-            const parsed = parseCampDescription(`${name} | ${desc}`);
-            quickCamps.push({
-              name,
-              url,
-              location: parsed.location || '',
-              dates: parsed.dates || '',
-              price,
-              currency: priceText.includes('€') ? 'EUR' : 'USD',
-              description: desc,
-              imageUrl,
-              isMaxIvanov,
-            });
-          }
-        },
-      );
+        if (name && url && !productUrlSet.has(url)) {
+          productUrlSet.add(url);
+          const nameLower = name.toLowerCase();
+          const descLower = desc.toLowerCase();
+          const isMaxIvanov =
+            nameLower.includes('ivanov') ||
+            nameLower.includes('max ivanov') ||
+            descLower.includes('ivanov');
 
-      // Pick up product links from search result pages
+          const parsed = parseCampDescription(`${name} | ${desc}`);
+          quickCamps.push({
+            name,
+            url,
+            location: parsed.location || '',
+            dates: parsed.dates || '',
+            price,
+            currency: priceText.includes('€') ? 'EUR' : 'USD',
+            description: desc,
+            imageUrl,
+            isMaxIvanov,
+          });
+        }
+      });
+
+      // ── Also pick up product links from search result pages ───────────
       $('a[href*="/product/"]').each((_, el) => {
         const href = $(el).attr('href') || '';
-        if (
-          href &&
-          !productUrlSet.has(href) &&
-          /\/product\/[a-z0-9-]+\/?$/.test(href)
-        ) {
+        if (href && !productUrlSet.has(href) && /\/product\/[a-z0-9-]+\/?$/.test(href)) {
           productUrlSet.add(href);
+          // We'll scrape these in the detail pass below
+          quickCamps.push({
+            name: $(el).text().trim() || href,
+            url: href,
+            location: '',
+            dates: '',
+            price: 0,
+            currency: 'USD',
+            description: '',
+            imageUrl: '',
+            isMaxIvanov:
+              href.toLowerCase().includes('ivanov') ||
+              $(el).text().toLowerCase().includes('ivanov'),
+          });
         }
       });
     }
 
     // Deduplicate by URL
-    const uniqueCamps = quickCamps.filter(
-      (c, idx, arr) =>
-        arr.findIndex((x) => x.url === c.url) === idx,
-    );
+    const seen = new Set<string>();
+    const uniqueCamps = quickCamps.filter((c) => {
+      if (!c.url || seen.has(c.url)) return false;
+      seen.add(c.url);
+      return true;
+    });
 
-    // Max Ivanov camps + camps missing details → scrape detail pages
+    // Determine which camps need detail-page scraping
     const needsDetail = uniqueCamps.filter(
-      (c) => c.isMaxIvanov || !c.dates || !c.location,
+      (c) => c.isMaxIvanov || !c.dates || !c.location || c.price === 0,
     );
     const alreadyComplete = uniqueCamps.filter(
-      (c) => !c.isMaxIvanov && !!c.dates && !!c.location,
+      (c) => !c.isMaxIvanov && !!c.dates && !!c.location && c.price > 0,
     );
 
-    // Cap at 20 detail pages to avoid rate limiting
-    const detailLimit = Math.min(needsDetail.length, 20);
+    // Cap at 25 detail pages to avoid rate limiting / timeout
+    const detailLimit = Math.min(needsDetail.length, 25);
     const detailResults = await Promise.allSettled(
-      needsDetail
-        .slice(0, detailLimit)
-        .map((camp) => scrapeProductDetail(camp)),
+      needsDetail.slice(0, detailLimit).map((camp) => scrapeProductDetail(camp)),
     );
 
     const detailedCamps: ScrapedCamp[] = [];
@@ -828,6 +809,7 @@ async function handleCamps() {
         detailedCamps.push(result.value);
       }
     }
+    // Append any that exceeded the limit without detail scraping
     for (const camp of needsDetail.slice(detailLimit)) {
       detailedCamps.push(camp);
     }
@@ -861,10 +843,7 @@ async function handleCamps() {
   } catch (error) {
     console.error('[IceHockeyPro] Camps error:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to scrape IceHockeyPro camps',
-        details: String(error),
-      },
+      { error: 'Failed to scrape IceHockeyPro camps', details: String(error) },
       { status: 500 },
     );
   }
@@ -872,19 +851,24 @@ async function handleCamps() {
 
 // ── Product detail page scraper ───────────────────────────────────────
 
-async function scrapeProductDetail(
-  camp: ScrapedCamp,
-): Promise<ScrapedCamp> {
+async function scrapeProductDetail(camp: ScrapedCamp): Promise<ScrapedCamp> {
   if (!camp.url) return camp;
-
   const { html, ok } = await fetchPage(camp.url);
-  if (!ok) return camp;
+  if (!ok || !html) return camp;
+  return scrapeProductDetailFromHtml(camp.url, html, camp);
+}
 
+async function scrapeProductDetailFromHtml(
+  url: string,
+  html: string,
+  baseCamp?: Partial<ScrapedCamp>,
+): Promise<ScrapedCamp> {
   const $detail = cheerio.load(html);
 
   const detailTitle =
-    $detail('.product_title, h1.entry-title').first().text().trim() ||
-    camp.name;
+    $detail('.product_title, h1.entry-title, h1.product-title').first().text().trim() ||
+    baseCamp?.name ||
+    url;
 
   const shortDesc = $detail(
     '.woocommerce-product-details__short-description, .product-short-description, .entry-summary .description',
@@ -893,50 +877,43 @@ async function scrapeProductDetail(
     .trim();
 
   const longDesc = $detail(
-    '.woocommerce-Tabs-panel--description, .product-description, #tab-description',
+    '.woocommerce-Tabs-panel--description, .product-description, #tab-description, .entry-content',
   )
     .text()
     .trim();
 
-  const detailPriceText = $detail(
-    '.woocommerce-Price-amount, .price .amount',
-  )
+  const detailPriceText = $detail('.woocommerce-Price-amount, .price .amount')
     .first()
     .text()
     .trim();
   const detailPrice =
-    parseFloat(detailPriceText.replace(/[^0-9.]/g, '')) || camp.price;
+    parseFloat(detailPriceText.replace(/[^0-9.]/g, '')) || baseCamp?.price || 0;
 
   const detailImage =
-    $detail(
-      '.woocommerce-product-gallery__image img, .wp-post-image',
-    )
+    $detail('.woocommerce-product-gallery__image img, .wp-post-image')
       .first()
-      .attr('src') || camp.imageUrl;
+      .attr('src') ||
+    baseCamp?.imageUrl ||
+    '';
 
-  const combined = `${detailTitle} | ${shortDesc} | ${longDesc}`;
-  const parsed = parseCampDescription(combined);
-
-  // JSON-LD structured data — most reliable source for dates/location
+  // ── JSON-LD structured data — most reliable for dates/location ────────
   let jsonLdDates = '';
   let jsonLdLocation = '';
   $detail('script[type="application/ld+json"]').each((_, el) => {
     try {
       const data = JSON.parse($detail(el).html() || '{}');
-      const items = Array.isArray(data['@graph'])
-        ? data['@graph']
-        : [data];
+      const items = Array.isArray(data['@graph']) ? data['@graph'] : [data];
       for (const item of items) {
         if (item.startDate && !jsonLdDates) {
           jsonLdDates = item.startDate;
           if (item.endDate) jsonLdDates += ` – ${item.endDate}`;
         }
-        if (item.location) {
-          if (typeof item.location === 'string' && !jsonLdLocation) {
+        if (item.location && !jsonLdLocation) {
+          if (typeof item.location === 'string') {
             jsonLdLocation = item.location;
-          } else if (item.location.name && !jsonLdLocation) {
+          } else if (item.location.name) {
             jsonLdLocation = item.location.name;
-          } else if (item.location.address && !jsonLdLocation) {
+          } else if (item.location.address) {
             const addr = item.location.address;
             jsonLdLocation = [
               addr.streetAddress,
@@ -953,18 +930,59 @@ async function scrapeProductDetail(
     }
   });
 
+  // ── Scan page text for date patterns ─────────────────────────────────
+  let scrapedDates = jsonLdDates;
+  if (!scrapedDates) {
+    const fullText = `${shortDesc} ${longDesc}`;
+    // Match patterns like "July 14-18, 2026" or "August 3 – 7, 2026"
+    const dateMatch = fullText.match(
+      /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:\s*[-–]\s*\d{1,2})?,?\s*\d{4}/i,
+    );
+    if (dateMatch) scrapedDates = dateMatch[0];
+  }
+
+  // ── Scan page text for location patterns ─────────────────────────────
+  let scrapedLocation = jsonLdLocation;
+  if (!scrapedLocation) {
+    const fullText = `${shortDesc} ${longDesc}`;
+    // Match "City, ST" or "City, State" patterns
+    const locMatch = fullText.match(
+      /\b([A-Z][a-zA-Z\s]{2,}),\s*([A-Z]{2}|[A-Za-z]{4,})\b/,
+    );
+    if (locMatch) scrapedLocation = locMatch[0];
+  }
+
+  // ── WooCommerce product attributes table ──────────────────────────────
+  if (!scrapedDates || !scrapedLocation) {
+    $detail('.woocommerce-product-attributes tr, .shop_attributes tr').each((_, el) => {
+      const label = $detail(el).find('th').text().trim().toLowerCase();
+      const val = $detail(el).find('td').text().trim();
+      if (!val) return;
+      if (!scrapedDates && (label.includes('date') || label.includes('when'))) {
+        scrapedDates = val;
+      }
+      if (!scrapedLocation && (label.includes('location') || label.includes('where') || label.includes('venue'))) {
+        scrapedLocation = val;
+      }
+    });
+  }
+
+  const combined = `${detailTitle} | ${shortDesc} | ${longDesc}`;
+  const parsed = parseCampDescription(combined);
+
   const isMaxIvanov =
-    camp.isMaxIvanov ||
+    baseCamp?.isMaxIvanov ||
     combined.toLowerCase().includes('ivanov') ||
     combined.toLowerCase().includes('max ivanov');
 
   return {
-    ...camp,
     name: detailTitle,
-    description: shortDesc || camp.description,
-    location: jsonLdLocation || parsed.location || camp.location,
-    dates: jsonLdDates || parsed.dates || camp.dates,
+    url,
+    description: shortDesc || baseCamp?.description || '',
+    location: scrapedLocation || parsed.location || baseCamp?.location || '',
+    dates: scrapedDates || parsed.dates || baseCamp?.dates || '',
     price: detailPrice,
+    currency: detailPriceText.includes('€') ? 'EUR' : 'USD',
     imageUrl: detailImage,
     isMaxIvanov,
   };
@@ -984,14 +1002,9 @@ function parseCampDescription(description: string): {
   let dates = '';
 
   for (const part of parts.slice(1)) {
-    const locationMatch = part.match(
-      /([A-Z][a-zA-Z\s]+),\s*([A-Za-z\s]+?)(?:\s*-\s*[A-Z]{2,3})?$/,
-    );
-    if (locationMatch && !dates) {
-      location = location || part;
-      continue;
-    }
+    if (!part) continue;
 
+    // Date detection — month name + digit
     const dateMatch = part.match(
       /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d/i,
     );
@@ -1000,11 +1013,23 @@ function parseCampDescription(description: string): {
       continue;
     }
 
+    // Year-only date hint
     if (/\b202[5-9]\b/.test(part) && !dates) {
       dates = part;
+      continue;
     }
 
-    if (!location && part.length > 3) location = part;
+    // Location detection — "City, ST" pattern
+    const locationMatch = part.match(
+      /^[A-Z][a-zA-Z\s]{2,},\s*(?:[A-Z]{2}|[A-Za-z]{4,})$/,
+    );
+    if (locationMatch) {
+      location = location || part;
+      continue;
+    }
+
+    // Fallback: first non-name, non-date part is location
+    if (!location && part.length > 3 && !dates) location = part;
   }
 
   name = name.replace(/\s*×\s*\d+$/, '').trim();

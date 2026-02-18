@@ -1,6 +1,7 @@
 /**
  * AES-256-GCM credential encryption for sensitive fields
- * (DaySmart password, IceHockeyPro password) before writing to Supabase.
+ * (DaySmart password, IceHockeyPro password, EmailScan credentials)
+ * before writing to Supabase.
  *
  * Key material: CREDENTIAL_ENCRYPTION_KEY env var — exactly 64 hex chars
  * (32 bytes = 256-bit key).  Generate with: openssl rand -hex 32
@@ -16,14 +17,32 @@
  *
  * NOTE: Uses only Web Crypto API + TextEncoder/TextDecoder — no Node.js
  * Buffer — so this module is safe in both Node.js and Edge runtimes.
+ *
+ * SECURITY NOTES:
+ * - ENV_KEY is read lazily (inside functions) so it picks up the correct
+ *   runtime value even in environments where env vars are injected after
+ *   module load (e.g. some edge runtimes).
+ * - decryptCredential returns an empty string (not the raw wire string)
+ *   when encryption is configured but decryption fails, preventing
+ *   encrypted blobs from leaking to the client.
+ * - encryptSettingsCredentials / decryptSettingsCredentials cover all
+ *   known credential-bearing config objects: daySmartConfig,
+ *   iceHockeyProConfig, and emailScanConfig.
  */
 
-const ENV_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY ?? '';
 const SENTINEL = 'enc:';
+
+// ── Key helpers ────────────────────────────────────────────────────────
+
+/** Read the encryption key from the environment at call time (lazy). */
+function getEnvKey(): string {
+  return process.env.CREDENTIAL_ENCRYPTION_KEY ?? '';
+}
 
 /** Returns true when a valid 64-hex-char key is configured */
 export function isEncryptionConfigured(): boolean {
-  return ENV_KEY.length === 64 && /^[0-9a-fA-F]+$/.test(ENV_KEY);
+  const key = getEnvKey();
+  return key.length === 64 && /^[0-9a-fA-F]+$/.test(key);
 }
 
 /** Import the hex key as a CryptoKey for AES-GCM */
@@ -31,15 +50,18 @@ async function importKey(): Promise<CryptoKey> {
   if (!isEncryptionConfigured()) {
     throw new Error('CREDENTIAL_ENCRYPTION_KEY is not configured');
   }
+  const envKey = getEnvKey();
   const raw = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
-    raw[i] = parseInt(ENV_KEY.slice(i * 2, i * 2 + 2), 16);
+    raw[i] = parseInt(envKey.slice(i * 2, i * 2 + 2), 16);
   }
   return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
     'encrypt',
     'decrypt',
   ]);
 }
+
+// ── Base64url helpers ──────────────────────────────────────────────────
 
 /** Encode ArrayBuffer to base64url string — no Node.js Buffer */
 function toBase64url(buf: ArrayBuffer): string {
@@ -66,6 +88,8 @@ function fromBase64url(s: string): Uint8Array {
   return bytes;
 }
 
+// ── Core encrypt / decrypt ─────────────────────────────────────────────
+
 /**
  * Encrypt a plaintext string.
  * Returns a sentinel-prefixed wire string, or the original value if
@@ -73,8 +97,8 @@ function fromBase64url(s: string): Uint8Array {
  */
 export async function encryptCredential(plaintext: string): Promise<string> {
   if (!plaintext) return plaintext;
-  if (plaintext.startsWith(SENTINEL)) return plaintext;
-  if (!isEncryptionConfigured()) return plaintext;
+  if (plaintext.startsWith(SENTINEL)) return plaintext; // Already encrypted
+  if (!isEncryptionConfigured()) return plaintext;       // Pass-through in dev
 
   try {
     const key = await importKey();
@@ -96,11 +120,25 @@ export async function encryptCredential(plaintext: string): Promise<string> {
  * Decrypt a wire string produced by encryptCredential.
  * Returns the original plaintext, or the input unchanged if it was
  * never encrypted (no sentinel prefix).
+ *
+ * Returns an empty string (NOT the raw wire string) when:
+ *   - The wire string is malformed
+ *   - Decryption fails (wrong key, tampered ciphertext)
+ *   - Encryption is configured but the key doesn't match
+ *
+ * This prevents encrypted blobs from leaking to the client.
  */
 export async function decryptCredential(wire: string): Promise<string> {
   if (!wire) return wire;
+
+  // Not encrypted — return as-is
   if (!wire.startsWith(SENTINEL)) return wire;
-  if (!isEncryptionConfigured()) return wire;
+
+  // Encrypted but no key configured — return empty string (safe failure)
+  if (!isEncryptionConfigured()) {
+    console.warn('[crypto] Encrypted credential found but CREDENTIAL_ENCRYPTION_KEY is not set');
+    return '';
+  }
 
   try {
     const payload = wire.slice(SENTINEL.length);
@@ -118,19 +156,26 @@ export async function decryptCredential(wire: string): Promise<string> {
     );
     return new TextDecoder().decode(plainBuf);
   } catch {
+    // Decryption failure — return empty string, never the raw wire string
     return '';
   }
 }
 
+// ── Settings-level helpers ─────────────────────────────────────────────
+
 /**
  * Encrypt sensitive credential fields in a settings object before
  * writing to Supabase.
+ *
+ * Covers: daySmartConfig.password, iceHockeyProConfig.password,
+ *         emailScanConfig (no password field currently, but future-proofed).
  */
 export async function encryptSettingsCredentials(
   settings: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const out = { ...settings };
 
+  // ── DaySmart ────────────────────────────────────────────────────────
   if (out.daySmartConfig && typeof out.daySmartConfig === 'object') {
     const dsc = { ...(out.daySmartConfig as Record<string, unknown>) };
     if (typeof dsc.password === 'string' && dsc.password) {
@@ -139,17 +184,31 @@ export async function encryptSettingsCredentials(
     out.daySmartConfig = dsc;
   }
 
-  if (
-    out.iceHockeyProConfig &&
-    typeof out.iceHockeyProConfig === 'object'
-  ) {
-    const ihp = {
-      ...(out.iceHockeyProConfig as Record<string, unknown>),
-    };
+  // ── IceHockeyPro ────────────────────────────────────────────────────
+  if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
+    const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
     if (typeof ihp.password === 'string' && ihp.password) {
       ihp.password = await encryptCredential(ihp.password);
     }
+    // Never persist the session cookie — it's ephemeral and per-device
+    delete ihp.sessionCookie;
     out.iceHockeyProConfig = ihp;
+  }
+
+  // ── EmailScan (future-proofed — no password field today) ────────────
+  // If a password or token field is added to EmailScanConfig, encrypt it here.
+  if (out.emailScanConfig && typeof out.emailScanConfig === 'object') {
+    const esc = { ...(out.emailScanConfig as Record<string, unknown>) };
+    if (typeof esc.password === 'string' && esc.password) {
+      esc.password = await encryptCredential(esc.password);
+    }
+    if (typeof esc.accessToken === 'string' && esc.accessToken) {
+      esc.accessToken = await encryptCredential(esc.accessToken);
+    }
+    if (typeof esc.refreshToken === 'string' && esc.refreshToken) {
+      esc.refreshToken = await encryptCredential(esc.refreshToken);
+    }
+    out.emailScanConfig = esc;
   }
 
   return out;
@@ -157,12 +216,16 @@ export async function encryptSettingsCredentials(
 
 /**
  * Decrypt credential fields after pulling from Supabase.
+ *
+ * Mirrors encryptSettingsCredentials exactly — any field encrypted on
+ * write must be decrypted on read.
  */
 export async function decryptSettingsCredentials(
   settings: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const out = { ...settings };
 
+  // ── DaySmart ────────────────────────────────────────────────────────
   if (out.daySmartConfig && typeof out.daySmartConfig === 'object') {
     const dsc = { ...(out.daySmartConfig as Record<string, unknown>) };
     if (typeof dsc.password === 'string') {
@@ -171,17 +234,30 @@ export async function decryptSettingsCredentials(
     out.daySmartConfig = dsc;
   }
 
-  if (
-    out.iceHockeyProConfig &&
-    typeof out.iceHockeyProConfig === 'object'
-  ) {
-    const ihp = {
-      ...(out.iceHockeyProConfig as Record<string, unknown>),
-    };
+  // ── IceHockeyPro ────────────────────────────────────────────────────
+  if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
+    const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
     if (typeof ihp.password === 'string') {
       ihp.password = await decryptCredential(ihp.password);
     }
+    // sessionCookie is never stored — ensure it's absent after decrypt too
+    delete ihp.sessionCookie;
     out.iceHockeyProConfig = ihp;
+  }
+
+  // ── EmailScan ───────────────────────────────────────────────────────
+  if (out.emailScanConfig && typeof out.emailScanConfig === 'object') {
+    const esc = { ...(out.emailScanConfig as Record<string, unknown>) };
+    if (typeof esc.password === 'string') {
+      esc.password = await decryptCredential(esc.password);
+    }
+    if (typeof esc.accessToken === 'string') {
+      esc.accessToken = await decryptCredential(esc.accessToken);
+    }
+    if (typeof esc.refreshToken === 'string') {
+      esc.refreshToken = await decryptCredential(esc.refreshToken);
+    }
+    out.emailScanConfig = esc;
   }
 
   return out;
