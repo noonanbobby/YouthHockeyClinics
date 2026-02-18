@@ -15,7 +15,6 @@ import {
 import { calculateDistance } from '@/lib/geocoder';
 
 // ── Boot-time demo-registration scrub ────────────────────────────────────────
-// Runs once at module load, before Zustand reads localStorage.
 if (typeof window !== 'undefined') {
   try {
     const STORE_KEY = 'hockey-clinics-storage';
@@ -37,6 +36,8 @@ if (typeof window !== 'undefined') {
           if (cn.includes('learn to skate')) return false;
           if (cn.includes('elite summer hockey')) return false;
           if (cn.includes('max ivanov spring skills')) return false;
+          if (cn.includes('saveology')) return false;
+          if (cn.includes('rink at the beach')) return false;
           return true;
         });
         if (data.state.registrations.length < before) {
@@ -51,11 +52,9 @@ if (typeof window !== 'undefined') {
 
 // ── Age group helpers ─────────────────────────────────────────────────────────
 
-/** Compute USA Hockey age group from a child's date of birth */
 export function getAgeGroupFromDOB(dob: string): AgeGroup {
   const birthDate = new Date(dob);
   const now = new Date();
-  // USA Hockey uses Sept 1 cutoff for the season year
   const cutoffYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   const cutoff = new Date(cutoffYear, 8, 1);
   const ageAtCutoff = Math.floor(
@@ -69,7 +68,6 @@ export function getAgeGroupFromDOB(dob: string): AgeGroup {
   return 'junior';
 }
 
-/** Get child's current age in years */
 export function getChildAge(dob: string): number {
   const birth = new Date(dob);
   const now = new Date();
@@ -81,10 +79,6 @@ export function getChildAge(dob: string): number {
 
 // ── Filter helpers ────────────────────────────────────────────────────────────
 
-/**
- * Pre-computed filter context — built once per applyFilters call.
- * Using Sets for O(1) membership tests instead of Array.includes O(n).
- */
 interface FilterContext {
   queryWords: string[];
   ageGroupSet: Set<string>;
@@ -125,10 +119,6 @@ function buildFilterContext(filters: FilterState): FilterContext {
   };
 }
 
-/**
- * Per-clinic search text cache — avoids re-building the haystack string
- * on every filter call. WeakMap allows GC when clinic objects are dropped.
- */
 const searchTextCache = new WeakMap<Clinic, string>();
 
 function getSearchText(clinic: Clinic): string {
@@ -153,7 +143,6 @@ function getSearchText(clinic: Clinic): string {
   return text;
 }
 
-/** Returns true if the clinic passes all active filters */
 function clinicPassesFilters(
   clinic: Clinic,
   filters: FilterState,
@@ -162,10 +151,8 @@ function clinicPassesFilters(
   activeChildAgeGroups: AgeGroup[],
   activeKidsAllPlayers: boolean,
 ): boolean {
-  // ── Clinic type ───────────────────────────────────────────────────
   if (ctx.hasClinicTypes && !ctx.clinicTypeSet.has(clinic.type)) return false;
 
-  // ── Age groups ────────────────────────────────────────────────────
   if (ctx.hasAgeGroups) {
     const hasMatch = clinic.ageGroups.some(
       (ag) => ag === 'all' || ctx.ageGroupSet.has(ag),
@@ -173,7 +160,6 @@ function clinicPassesFilters(
     if (!hasMatch) return false;
   }
 
-  // ── Skill levels ──────────────────────────────────────────────────
   if (ctx.hasSkillLevels) {
     const hasMatch = clinic.skillLevels.some(
       (sl) => sl === 'all' || ctx.skillLevelSet.has(sl),
@@ -181,16 +167,13 @@ function clinicPassesFilters(
     if (!hasMatch) return false;
   }
 
-  // ── Country ───────────────────────────────────────────────────────
   if (ctx.hasCountry && clinic.location.country !== filters.country) return false;
 
-  // ── Price ─────────────────────────────────────────────────────────
   if (ctx.hasPriceFilter) {
     const amount = clinic.price?.amount ?? 0;
     if (amount > filters.maxPrice! && amount !== 0) return false;
   }
 
-  // ── Date range ────────────────────────────────────────────────────
   if (ctx.hasDateRange) {
     const endMs = clinic.dates.end ? new Date(clinic.dates.end).getTime() : 0;
     const startMs = clinic.dates.start ? new Date(clinic.dates.start).getTime() : 0;
@@ -198,13 +181,9 @@ function clinicPassesFilters(
     if (ctx.dateEndMs < Infinity && startMs > ctx.dateEndMs) return false;
   }
 
-  // ── Spots available ───────────────────────────────────────────────
   if (filters.spotsAvailable && clinic.spotsRemaining <= 0) return false;
-
-  // ── Featured ──────────────────────────────────────────────────────
   if (filters.featured && !clinic.featured) return false;
 
-  // ── Goalie filter ─────────────────────────────────────────────────
   const clinicText = getSearchText(clinic);
   const isGoalieFocused =
     (clinicText.includes('goalie') ||
@@ -214,17 +193,13 @@ function clinicPassesFilters(
     !clinicText.includes('all positions');
 
   if (filters.goalieOnly && !isGoalieFocused) return false;
-
-  // Auto-hide goalie clinics when all active children are skaters
   if (!filters.goalieOnly && activeKidsAllPlayers && isGoalieFocused) return false;
 
-  // ── Already registered ────────────────────────────────────────────
   if (registeredClinicNames.size > 0) {
     const clinicNameSlug = clinic.name.toLowerCase().slice(0, 20);
     if (registeredClinicNames.has(clinicNameSlug)) return false;
   }
 
-  // ── Full-text search ──────────────────────────────────────────────
   if (ctx.hasQuery) {
     const text = getSearchText(clinic);
     if (!ctx.queryWords.every((w) => text.includes(w))) return false;
@@ -233,21 +208,28 @@ function clinicPassesFilters(
   return true;
 }
 
+// ── Deferred applyFilters helper ─────────────────────────────────────────────
+
+function scheduleApplyFilters(fn: () => void) {
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(fn);
+  } else {
+    setTimeout(fn, 0);
+  }
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AppState {
-  // View
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
 
-  // Clinics (from API)
   clinics: Clinic[];
   filteredClinics: Clinic[];
   setClinics: (clinics: Clinic[]) => void;
   selectedClinic: Clinic | null;
   setSelectedClinic: (clinic: Clinic | null) => void;
 
-  // Loading / search state
   isLoading: boolean;
   setLoading: (loading: boolean) => void;
   isRefreshing: boolean;
@@ -264,33 +246,28 @@ interface AppState {
   error: string | null;
   setError: (error: string | null) => void;
 
-  // Filters
   filters: FilterState;
   setFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
   resetFilters: () => void;
   applyFilters: () => void;
   activeFilterCount: () => number;
 
-  // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   recentSearches: string[];
   addRecentSearch: (query: string) => void;
   clearRecentSearches: () => void;
 
-  // Favorites
   favoriteIds: string[];
   toggleFavorite: (clinicId: string) => void;
   isFavorite: (clinicId: string) => boolean;
 
-  // Notifications
   notifications: NotificationItem[];
   unreadCount: number;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
 
-  // Child Profiles
   childProfiles: ChildProfile[];
   activeChildIds: string[];
   addChildProfile: (profile: Omit<ChildProfile, 'id' | 'createdAt'>) => void;
@@ -300,27 +277,22 @@ interface AppState {
   setActiveChildren: (ids: string[]) => void;
   getActiveChildAgeGroups: () => AgeGroup[];
 
-  // Registrations
   registrations: Registration[];
   addRegistration: (reg: Omit<Registration, 'id' | 'registeredAt'>) => void;
   updateRegistration: (id: string, updates: Partial<Registration>) => void;
   removeRegistration: (id: string) => void;
 
-  // DaySmart / Dash integration
   daySmartConfig: DaySmartConfig;
   setDaySmartConfig: (config: Partial<DaySmartConfig>) => void;
   daySmartSyncing: boolean;
   setDaySmartSyncing: (syncing: boolean) => void;
 
-  // IceHockeyPro integration
   iceHockeyProConfig: IceHockeyProConfig;
   setIceHockeyProConfig: (config: Partial<IceHockeyProConfig>) => void;
 
-  // Email scanning
   emailScanConfig: EmailScanConfig;
   setEmailScanConfig: (config: Partial<EmailScanConfig>) => void;
 
-  // Settings / API keys
   notificationsEnabled: boolean;
   setNotificationsEnabled: (enabled: boolean) => void;
   locationEnabled: boolean;
@@ -357,15 +329,12 @@ interface AppState {
   searchRadiusMiles: number;
   setSearchRadiusMiles: (miles: number) => void;
 
-  // Color mode
   colorMode: 'light' | 'dark' | 'system';
   setColorMode: (mode: 'light' | 'dark' | 'system') => void;
 
-  // Theme / Branding
   teamThemeId: string;
   setTeamTheme: (teamId: string) => void;
 
-  // UI
   isFilterOpen: boolean;
   setFilterOpen: (open: boolean) => void;
   isSearchOpen: boolean;
@@ -404,7 +373,6 @@ export const useStore = create<AppState>()(
         const existingIds = new Set(state.clinics.map((c) => c.id));
         const newClinics = clinics.filter((c) => !existingIds.has(c.id));
 
-        // Notify about new clinics (only after first load)
         if (newClinics.length > 0 && state.clinics.length > 0) {
           for (const nc of newClinics.slice(0, 5)) {
             state.addNotification({
@@ -415,7 +383,6 @@ export const useStore = create<AppState>()(
             });
           }
 
-          // Notify if new clinic matches active children
           const activeAgs = state.getActiveChildAgeGroups();
           const activeKids = state.childProfiles.filter((c) =>
             state.activeChildIds.includes(c.id),
@@ -447,7 +414,7 @@ export const useStore = create<AppState>()(
         }
 
         set({ clinics });
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       selectedClinic: null,
       setSelectedClinic: (clinic) => set({ selectedClinic: clinic }),
@@ -477,35 +444,21 @@ export const useStore = create<AppState>()(
         get().applyFilters();
       },
 
-      /**
-       * applyFilters — optimized single-pass implementation.
-       *
-       * Performance improvements over the original:
-       * 1. Filter context built once (Sets for O(1) lookups vs O(n) Array.includes)
-       * 2. Search text cached per clinic object via WeakMap
-       * 3. Registered clinic names pre-computed as a Set before the loop
-       * 4. Active child state computed once before the loop
-       * 5. Single pass: filter + sort, no intermediate arrays beyond what's needed
-       */
       applyFilters: () => {
         const { filters, clinics, activeChildIds, childProfiles, registrations } = get();
 
-        // Pre-compute filter context (Sets, flags, parsed dates)
         const ctx = buildFilterContext(filters);
 
-        // Pre-compute registered clinic name slugs for O(1) exclusion
         const activeRegs = registrations.filter((r) => r.status !== 'cancelled');
         const registeredClinicNames = new Set(
           activeRegs.map((r) => r.clinicName.toLowerCase().slice(0, 20)),
         );
 
-        // Pre-compute active child state
         const activeKids = childProfiles.filter((c) => activeChildIds.includes(c.id));
         const activeChildAgeGroups = get().getActiveChildAgeGroups();
         const activeKidsAllPlayers =
           activeKids.length > 0 && activeKids.every((c) => c.position === 'player');
 
-        // Single-pass filter
         const filtered: Clinic[] = [];
         for (const clinic of clinics) {
           if (
@@ -522,7 +475,6 @@ export const useStore = create<AppState>()(
           }
         }
 
-        // Sort
         const loc = get().getEffectiveLocation();
         filtered.sort((a, b) => {
           let comparison = 0;
@@ -541,8 +493,18 @@ export const useStore = create<AppState>()(
               break;
             case 'distance':
               if (loc) {
-                const distA = calculateDistance(loc.lat, loc.lng, a.location.lat, a.location.lng);
-                const distB = calculateDistance(loc.lat, loc.lng, b.location.lat, b.location.lng);
+                const distA = calculateDistance(
+                  loc.lat,
+                  loc.lng,
+                  a.location.lat,
+                  a.location.lng,
+                );
+                const distB = calculateDistance(
+                  loc.lat,
+                  loc.lng,
+                  b.location.lat,
+                  b.location.lng,
+                );
                 comparison = distA - distB;
               } else {
                 comparison = (a.dates.start ?? '').localeCompare(b.dates.start ?? '');
@@ -648,7 +610,7 @@ export const useStore = create<AppState>()(
                 : state.activeChildIds,
           };
         });
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       updateChildProfile: (id, updates) => {
         set((state) => ({
@@ -656,14 +618,14 @@ export const useStore = create<AppState>()(
             c.id === id ? { ...c, ...updates } : c,
           ),
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       removeChildProfile: (id) => {
         set((state) => ({
           childProfiles: state.childProfiles.filter((c) => c.id !== id),
           activeChildIds: state.activeChildIds.filter((cid) => cid !== id),
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       toggleActiveChild: (id) => {
         set((state) => ({
@@ -671,11 +633,11 @@ export const useStore = create<AppState>()(
             ? state.activeChildIds.filter((cid) => cid !== id)
             : [...state.activeChildIds, id],
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       setActiveChildren: (ids) => {
         set({ activeChildIds: ids });
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       getActiveChildAgeGroups: () => {
         const state = get();
@@ -704,7 +666,7 @@ export const useStore = create<AppState>()(
             ...state.registrations,
           ],
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       updateRegistration: (id, updates) => {
         set((state) => ({
@@ -712,13 +674,13 @@ export const useStore = create<AppState>()(
             r.id === id ? { ...r, ...updates } : r,
           ),
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
       removeRegistration: (id) => {
         set((state) => ({
           registrations: state.registrations.filter((r) => r.id !== id),
         }));
-        setTimeout(() => get().applyFilters(), 0);
+        scheduleApplyFilters(() => get().applyFilters());
       },
 
       // ── DaySmart / Dash ──────────────────────────────────────────────────────
@@ -816,7 +778,7 @@ export const useStore = create<AppState>()(
     // ── Persistence ───────────────────────────────────────────────────────────
     {
       name: 'hockey-clinics-storage',
-      version: 8,
+      version: 9,
 
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
@@ -907,13 +869,32 @@ export const useStore = create<AppState>()(
               const clinicName = ((r.clinicName as string) ?? '').toLowerCase();
               if (cid.startsWith('seed-')) return false;
               if (r.isDemo) return false;
-              if (venue.includes('baptist health iceplex') || venue.includes('panthers iceden'))
+              if (
+                venue.includes('baptist health iceplex') ||
+                venue.includes('panthers iceden')
+              )
                 return false;
               if (clinicName.includes('spring break hockey camp')) return false;
               if (clinicName.includes('power skating clinic')) return false;
               if (clinicName.includes('learn to skate')) return false;
               if (clinicName.includes('elite summer hockey')) return false;
               if (clinicName.includes('max ivanov spring skills')) return false;
+              return true;
+            });
+          }
+        }
+
+        if (version < 9) {
+          // Remove registrations from fictional rinks that were removed in seed v9
+          const regs = state.registrations as Array<Record<string, unknown>> | undefined;
+          if (regs) {
+            state.registrations = regs.filter((r) => {
+              const venue = ((r.venue as string) ?? '').toLowerCase();
+              const clinicName = ((r.clinicName as string) ?? '').toLowerCase();
+              if (venue.includes('saveology')) return false;
+              if (venue.includes('rink at the beach')) return false;
+              if (clinicName.includes('saveology')) return false;
+              if (clinicName.includes('rink at the beach')) return false;
               return true;
             });
           }
@@ -948,7 +929,7 @@ export const useStore = create<AppState>()(
 
       onRehydrateStorage: () => (state) => {
         if (state && state.clinics.length > 0) {
-          setTimeout(() => state.applyFilters(), 0);
+          scheduleApplyFilters(() => state.applyFilters());
         }
       },
     },

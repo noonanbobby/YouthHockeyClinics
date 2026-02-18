@@ -20,8 +20,10 @@ export async function GET(request: NextRequest) {
   const lng = parseFloat(searchParams.get('lng') || '0');
   const sessionType = searchParams.get('type') || 'all';
   const day = searchParams.get('day');
+  const radiusMiles = parseFloat(searchParams.get('radius') || '0');
 
   const hasLocation = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+  const hasRadius = hasLocation && radiusMiles > 0;
 
   let daySmartSessions: StickAndPuckSession[] = [];
   const facilityResults: Record<string, { count: number; fromCache: boolean; confirmed: boolean }> = {};
@@ -74,7 +76,12 @@ export async function GET(request: NextRequest) {
     distance: hasLocation ? calculateDistance(lat, lng, s.location.lat, s.location.lng) : null,
   }));
 
-  sessionsWithDistance.sort((a, b) => {
+  // Optional radius filter
+  const filteredByRadius = hasRadius
+    ? sessionsWithDistance.filter((s) => s.distance === null || s.distance <= radiusMiles)
+    : sessionsWithDistance;
+
+  filteredByRadius.sort((a, b) => {
     const dateComp = a.date.localeCompare(b.date);
     if (dateComp !== 0) return dateComp;
     const timeComp = a.startTime.localeCompare(b.startTime);
@@ -83,7 +90,7 @@ export async function GET(request: NextRequest) {
     return 0;
   });
 
-  const rinkIds = new Set(sessionsWithDistance.map((s) => s.rinkId));
+  const rinkIds = new Set(filteredByRadius.map((s) => s.rinkId));
   const rinks = SEED_RINKS.filter((r) => rinkIds.has(r.id)).map((r) => ({
     ...r,
     sessions: [],
@@ -95,14 +102,14 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    sessions: sessionsWithDistance,
+    sessions: filteredByRadius,
     rinks,
-    totalSessions: sessionsWithDistance.length,
+    totalSessions: filteredByRadius.length,
     totalRinks: rinks.length,
     sources: {
       daysmart: confirmedDaySmartRinkIds.size,
-      daysmartSessions: sessionsWithDistance.filter((s) => s.source === 'daysmart').length,
-      seed: sessionsWithDistance.filter((s) => s.source === 'seed').length,
+      daysmartSessions: filteredByRadius.filter((s) => s.source === 'daysmart').length,
+      seed: filteredByRadius.filter((s) => s.source === 'seed').length,
       facilityResults,
     },
   });

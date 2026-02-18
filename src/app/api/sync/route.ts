@@ -15,13 +15,22 @@ function getSupabase(): SupabaseClient | null {
 
   if (!url || !key) {
     if (!key && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('[sync] SUPABASE_SERVICE_ROLE_KEY is not set. Refusing to use the anon key for server-side data operations.');
+      console.error(
+        '[sync] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
+          'Refusing to use the anon key for server-side data operations.',
+      );
+    } else {
+      console.warn('[sync] Supabase not configured — NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing');
     }
     return null;
   }
 
   _supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
   return _supabase;
 }
@@ -30,12 +39,15 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated', synced: false }, { status: 401 });
     }
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json({ error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing', synced: false },
+        { status: 503 },
+      );
     }
 
     const { data, error } = await supabase
@@ -45,19 +57,31 @@ export async function GET() {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Supabase fetch error:', error);
-      return NextResponse.json({ error: 'Fetch failed' }, { status: 500 });
+      console.error('[sync] Supabase fetch error:', error.message, error.code);
+      return NextResponse.json(
+        { error: 'Fetch failed', detail: error.message, synced: false },
+        { status: 500 },
+      );
     }
 
     let settings = data?.settings || null;
     if (settings && typeof settings === 'object') {
-      settings = await decryptSettingsCredentials(settings as Record<string, unknown>);
+      try {
+        settings = await decryptSettingsCredentials(settings as Record<string, unknown>);
+      } catch (decryptErr) {
+        console.error('[sync] Decrypt error:', decryptErr);
+        // Return settings as-is rather than failing the whole request
+      }
     }
 
-    return NextResponse.json({ settings, updatedAt: data?.updated_at || null, synced: true });
+    return NextResponse.json({
+      settings,
+      updatedAt: data?.updated_at || null,
+      synced: true,
+    });
   } catch (err) {
-    console.error('Sync GET error:', err);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    console.error('[sync] GET unhandled error:', err);
+    return NextResponse.json({ error: 'Internal error', synced: false }, { status: 500 });
   }
 }
 
@@ -70,17 +94,34 @@ export async function PUT(request: NextRequest) {
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json({ error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
+        { status: 503 },
+      );
     }
 
-    const body = await request.json();
+    let body: { settings?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     const { settings } = body;
 
     if (!settings || typeof settings !== 'object') {
       return NextResponse.json({ error: 'No settings provided' }, { status: 400 });
     }
 
-    const encryptedSettings = await encryptSettingsCredentials(settings as Record<string, unknown>);
+    let encryptedSettings: Record<string, unknown>;
+    try {
+      encryptedSettings = await encryptSettingsCredentials(
+        settings as Record<string, unknown>,
+      );
+    } catch (encErr) {
+      console.error('[sync] Encrypt error:', encErr);
+      return NextResponse.json({ error: 'Encryption failed' }, { status: 500 });
+    }
 
     const { error } = await supabase.from('user_settings').upsert(
       {
@@ -93,13 +134,16 @@ export async function PUT(request: NextRequest) {
     );
 
     if (error) {
-      console.error('Supabase upsert error:', error);
-      return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+      console.error('[sync] Supabase upsert error:', error.message, error.code);
+      return NextResponse.json(
+        { error: 'Save failed', detail: error.message },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true, updatedAt: new Date().toISOString() });
   } catch (err) {
-    console.error('Sync PUT error:', err);
+    console.error('[sync] PUT unhandled error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

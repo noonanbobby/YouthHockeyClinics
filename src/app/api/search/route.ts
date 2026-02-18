@@ -5,7 +5,6 @@ import { deduplicateClinics } from '@/lib/deduplicator';
 import { calculateDistance } from '@/lib/geocoder';
 import type { Clinic } from '@/types';
 
-// Vercel serverless function config
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
@@ -24,20 +23,15 @@ interface SearchResponseData {
   };
 }
 
-// In-memory server-side cache (persists between warm invocations)
 let cachedResults: { data: SearchResponseData; timestamp: number; key: string } | null = null;
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 15 * 60 * 1000;
 
-/**
- * Score and sort clinics by relevance (distance + quality).
- */
 function scoreAndSort(
   clinics: Clinic[],
   userLat?: number,
   userLng?: number,
   query?: string,
 ): Clinic[] {
-  // Filter by query if provided
   let filtered = clinics;
   if (query && query.trim().length > 0) {
     const words = query
@@ -118,9 +112,6 @@ function scoreAndSort(
     .map((s) => s.clinic);
 }
 
-/**
- * Validate and sanitize a numeric coordinate from query params.
- */
 function parseCoord(value: string | null): number {
   if (!value) return 0;
   const n = parseFloat(value);
@@ -131,27 +122,28 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Sanitize query — strip any HTML/script injection attempts
+    // Sanitize query — strip HTML/script injection attempts, limit length
     const rawQuery = searchParams.get('q') ?? '';
-    const query = rawQuery.replace(/<[^>]*>/g, '').trim() || undefined;
+    const query = rawQuery
+      .replace(/<[^>]*>/g, '')
+      .replace(/[^\w\s,.'"-]/g, '')
+      .trim()
+      .slice(0, 200) || undefined;
 
     const forceRefresh = searchParams.get('refresh') === 'true';
 
-    // Location params — read server-side only
     const userLat = parseCoord(searchParams.get('lat'));
     const userLng = parseCoord(searchParams.get('lng'));
     const userCity = searchParams.get('city')?.slice(0, 100) || undefined;
     const userState = searchParams.get('state')?.slice(0, 100) || undefined;
     const userCountry = searchParams.get('country')?.slice(0, 100) || undefined;
 
-    // Build a location-aware cache key
     const locationKey =
       userLat !== 0
         ? `${userLat.toFixed(1)},${userLng.toFixed(1)}`
         : 'global';
     const cacheKey = `${query ?? '__all__'}:${locationKey}`;
 
-    // ── Server-side cache check ──────────────────────────────────────────
     if (
       !forceRefresh &&
       cachedResults &&
@@ -166,7 +158,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Seeds are ALWAYS returned — network results are additive
     const seedClinics = scoreAndSort(
       SEED_CLINICS as unknown as Clinic[],
       userLat || undefined,
@@ -174,7 +165,6 @@ export async function GET(request: NextRequest) {
       query,
     );
 
-    // Build config exclusively from server-side environment variables
     const config: SearchConfig = {
       googleApiKey: process.env.GOOGLE_API_KEY || undefined,
       googleCseId: process.env.GOOGLE_CSE_ID || undefined,
@@ -198,7 +188,6 @@ export async function GET(request: NextRequest) {
       config.eventbriteApiKey
     );
 
-    // Fast path: no API keys configured — return seeds immediately
     if (!hasAnyApiKey && !forceRefresh) {
       const responseData = buildResponse({
         finalClinics: seedClinics,
@@ -225,7 +214,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // ── Network search ───────────────────────────────────────────────────
     let networkClinics: Clinic[] = [];
     let networkSources: {
       name: string;
@@ -284,7 +272,6 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // ALWAYS combine seeds + network, then deduplicate
     const combined = deduplicateClinics([...seedClinics, ...networkClinics]);
     const finalClinics = scoreAndSort(
       combined,
@@ -307,7 +294,6 @@ export async function GET(request: NextRequest) {
       config,
     });
 
-    // Only cache non-empty results
     if (finalClinics.length > 0) {
       cachedResults = { data: responseData, timestamp: Date.now(), key: cacheKey };
     }
@@ -321,7 +307,6 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[search/route] Unhandled error:', err);
 
-    // Always return seeds as a last resort — never a blank 500
     const fallback = scoreAndSort(SEED_CLINICS as unknown as Clinic[]);
     return NextResponse.json(
       {
@@ -347,8 +332,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-// ── Helper ────────────────────────────────────────────────────────────────────
 
 interface BuildResponseParams {
   finalClinics: Clinic[];
@@ -377,7 +360,6 @@ function buildResponse({
       searchDuration,
       timestamp: new Date().toISOString(),
       query: query ?? null,
-      // Only expose boolean flags — never the actual key values
       hasApiKeys: {
         google: !!(config.googleApiKey && config.googleCseId),
         brave: !!config.braveApiKey,

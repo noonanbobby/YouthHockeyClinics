@@ -47,19 +47,39 @@
    Used in stick-and-puck/page.tsx to avoid all
    inline style={{}} props.                        */
 .theme-primary-bg       { background-color: var(--theme-primary); }
-.theme-primary-bg-faint { background-color: color-mix(in srgb, var(--theme-primary) 12%, transparent); }
 .theme-primary-text     { color: var(--theme-primary); }
 .theme-primary-border   { border-color: var(--theme-primary); }
 
-/* Alpha variants */
-.theme-bg-primary-5  { background-color: color-mix(in srgb, var(--theme-primary)  5%, transparent); }
-.theme-bg-primary-10 { background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent); }
-.theme-bg-primary-15 { background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent); }
-.theme-bg-primary-20 { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
+/* Faint primary background — use oklch fallback for Safari < 15.4 */
+.theme-primary-bg-faint {
+  background-color: rgba(14, 165, 233, 0.12); /* fallback */
+  background-color: color-mix(in srgb, var(--theme-primary) 12%, transparent);
+}
+
+/* Alpha variants — with rgba fallbacks for older Safari */
+.theme-bg-primary-5 {
+  background-color: rgba(14, 165, 233, 0.05);
+  background-color: color-mix(in srgb, var(--theme-primary) 5%, transparent);
+}
+.theme-bg-primary-10 {
+  background-color: rgba(14, 165, 233, 0.10);
+  background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+}
+.theme-bg-primary-15 {
+  background-color: rgba(14, 165, 233, 0.15);
+  background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent);
+}
+.theme-bg-primary-20 {
+  background-color: rgba(14, 165, 233, 0.20);
+  background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent);
+}
 
 /* Borders */
 .theme-border        { border-color: var(--theme-card-border); }
-.theme-border-strong { border-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+.theme-border-strong {
+  border-color: rgba(14, 165, 233, 0.30);
+  border-color: color-mix(in srgb, var(--theme-primary) 30%, transparent);
+}
 
 /* Ring / Focus */
 .theme-ring      { --tw-ring-color: var(--theme-primary); }
@@ -88,6 +108,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   overflow-x: hidden;
   background-color: var(--theme-bg);
 }

@@ -43,7 +43,7 @@ const FACILITY_META: Record<string, FacilityMeta> = {
     location: {
       venue: 'Baptist Health IcePlex',
       address: '3299 Sportsplex Dr',
-      city: 'Fort Lauderdale',
+      city: 'Sunrise',
       state: 'FL',
       lat: 26.1275,
       lng: -80.1727,
@@ -66,18 +66,25 @@ const FACILITY_META: Record<string, FacilityMeta> = {
 function classifySessionType(eventName: string, eventTypeName: string): SessionType | null {
   const combined = `${eventName} | ${eventTypeName}`.toLowerCase();
 
+  // Stick & Puck — check first (most specific)
   if (combined.includes('stick') && combined.includes('puck')) return 'stick-and-puck';
   if (combined.includes('s&p') || combined.includes('s & p')) return 'stick-and-puck';
   if (/\bstick\s*n\s*puck\b/.test(combined)) return 'stick-and-puck';
+  if (/\bstick\s*&\s*puck\b/.test(combined)) return 'stick-and-puck';
 
+  // Public skate
   if (combined.includes('public') && combined.includes('skat')) return 'public-skate';
   if (/\bopen\s+skat/.test(combined)) return 'public-skate';
   if (combined.includes('family skate')) return 'public-skate';
+  if (combined.includes('learn to skate')) return 'public-skate';
+  if (combined.includes('tot skate') || combined.includes('toddler skate')) return 'public-skate';
 
+  // Drop-in
   if (combined.includes('drop-in') || combined.includes('drop in')) return 'drop-in';
   if (combined.includes('rat hockey')) return 'drop-in';
   if (combined.includes('shinny')) return 'drop-in';
 
+  // Open hockey
   if (combined.includes('open hockey')) return 'open-hockey';
   if (
     combined.includes('pickup hockey') ||
@@ -87,13 +94,15 @@ function classifySessionType(eventName: string, eventTypeName: string): SessionT
   if (combined.includes('adult hockey') && !combined.includes('league')) return 'open-hockey';
   if (combined.includes('adult open') && combined.includes('hock')) return 'open-hockey';
 
+  // Skip non-ice-time events
   const skip = [
     'freestyle', 'figure', 'practice', 'game', 'lesson', 'clinic', 'camp',
-    'class', 'learn to', 'rental', 'party', 'private', 'maintenance',
+    'class', 'rental', 'party', 'private', 'maintenance',
     'locker', 'meeting', 'office', 'training', 'rehearsal', 'show',
     'competition', 'test', 'evaluation', 'tryout', 'showcase', 'broomball',
     'curling', 'resurfac', 'zamboni', 'hockey school', 'power skating',
-    'synchro', 'synchronized',
+    'synchro', 'synchronized', 'birthday', 'corporate', 'team building',
+    'league game', 'tournament game', 'playoff',
   ];
   for (const s of skip) {
     if (combined.includes(s)) return null;
@@ -103,6 +112,7 @@ function classifySessionType(eventName: string, eventTypeName: string): SessionT
 }
 
 function extractTime24(iso: string): string {
+  // Treat naive datetime strings (no Z, no offset) as local/facility time
   if (iso.length >= 16 && !iso.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(iso)) {
     return iso.slice(11, 16);
   }
@@ -162,13 +172,17 @@ function buildHeaders(facilitySlug: string): Record<string, string> {
   return {
     Accept: 'application/vnd.api+json, application/json',
     'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     Referer: `${DASH_BASE}/${facilitySlug}/`,
     Origin: 'https://apps.daysmartrecreation.com',
   };
 }
 
-async function discoverOrgId(facilitySlug: string, headers: Record<string, string>): Promise<string | null> {
+async function discoverOrgId(
+  facilitySlug: string,
+  headers: Record<string, string>,
+): Promise<string | null> {
   if (orgIdCache.has(facilitySlug)) return orgIdCache.get(facilitySlug) ?? null;
 
   const strategies = [
@@ -191,13 +205,17 @@ async function discoverOrgId(facilitySlug: string, headers: Record<string, strin
           (o) =>
             (o.attributes?.slug as string | undefined) === facilitySlug ||
             (o.attributes?.company as string | undefined) === facilitySlug ||
-            (o.attributes?.name as string | undefined)?.toLowerCase().replace(/\s+/g, '') ===
+            (o.attributes?.name as string | undefined)
+              ?.toLowerCase()
+              .replace(/\s+/g, '') ===
               facilitySlug.toLowerCase().replace(/\s+/g, ''),
         ) ?? (orgs.length === 1 ? orgs[0] : null);
 
       if (match?.id) {
         orgIdCache.set(facilitySlug, match.id);
-        console.log(`[DaySmart] Discovered org ID for ${facilitySlug}: ${match.id} (via ${url})`);
+        console.log(
+          `[DaySmart] Discovered org ID for ${facilitySlug}: ${match.id} (via ${url})`,
+        );
         return match.id;
       }
     } catch (err) {
@@ -205,7 +223,9 @@ async function discoverOrgId(facilitySlug: string, headers: Record<string, strin
     }
   }
 
-  console.warn(`[DaySmart] Could not discover org ID for ${facilitySlug} — proceeding without it`);
+  console.warn(
+    `[DaySmart] Could not discover org ID for ${facilitySlug} — proceeding without it`,
+  );
   orgIdCache.set(facilitySlug, null);
   return null;
 }
@@ -245,7 +265,9 @@ async function fetchEventsPage(
     if (!res.ok) {
       console.warn(
         `[DaySmart] HTTP ${res.status} for ${facilitySlug} page ${page}` +
-          (excludeLeague ? ' (with league filter) — retrying without' : ' (without league filter)'),
+          (excludeLeague
+            ? ' (with league filter) — retrying without'
+            : ' (without league filter)'),
       );
       if (excludeLeague) continue;
       return null;
@@ -259,11 +281,20 @@ async function fetchEventsPage(
       return null;
     }
 
-    const data: JsonApiResource[] = Array.isArray(json?.data) ? (json.data as JsonApiResource[]) : [];
-    const included: JsonApiResource[] = Array.isArray(json?.included) ? (json.included as JsonApiResource[]) : [];
+    const data: JsonApiResource[] = Array.isArray(json?.data)
+      ? (json.data as JsonApiResource[])
+      : [];
+    const included: JsonApiResource[] = Array.isArray(json?.included)
+      ? (json.included as JsonApiResource[])
+      : [];
     const pageMeta = json?.meta as Record<string, unknown> | undefined;
     const pageInfo = pageMeta?.page as Record<string, unknown> | undefined;
-    const lastPage = Number(pageInfo?.['last-page'] ?? pageInfo?.last_page ?? pageMeta?.['last-page'] ?? 1);
+    const lastPage = Number(
+      pageInfo?.['last-page'] ??
+        pageInfo?.last_page ??
+        pageMeta?.['last-page'] ??
+        1,
+    );
 
     return { data, included, lastPage };
   }
@@ -294,8 +325,12 @@ export async function fetchDaySmartSchedule(
     const orgId = await discoverOrgId(facilitySlug, headers);
 
     const now = new Date();
-    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-    const endDate = new Date(startDate.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000);
+    const startDate = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
+    );
+    const endDate = new Date(
+      startDate.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000,
+    );
     const startDateStr = toNaiveISOStr(startDate);
     const endDateStr = toNaiveISOStr(endDate);
 
@@ -306,11 +341,22 @@ export async function fetchDaySmartSchedule(
     let gotAnyResponse = false;
 
     while (hasMore && page <= 10) {
-      const result = await fetchEventsPage(facilitySlug, orgId, startDateStr, endDateStr, page, headers);
+      const result = await fetchEventsPage(
+        facilitySlug,
+        orgId,
+        startDateStr,
+        endDateStr,
+        page,
+        headers,
+      );
 
       if (!result) {
         if (!gotAnyResponse) {
-          scheduleCache.set(facilitySlug, { data: staleData, timestamp: Date.now(), confirmed: false });
+          scheduleCache.set(facilitySlug, {
+            data: staleData,
+            timestamp: Date.now(),
+            confirmed: false,
+          });
           return { sessions: staleData, fromCache: staleData.length > 0, confirmed: false };
         }
         break;
@@ -319,7 +365,8 @@ export async function fetchDaySmartSchedule(
       gotAnyResponse = true;
       allEvents = allEvents.concat(result.data);
       for (const inc of result.included) {
-        if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type)) allIncluded.push(inc);
+        if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type))
+          allIncluded.push(inc);
       }
       hasMore = page < result.lastPage && result.data.length > 0;
       page++;
@@ -371,7 +418,9 @@ export async function fetchDaySmartSchedule(
 
       const rawPrice = attrs.price ?? attrs.cost ?? 0;
       const price =
-        typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
+        typeof rawPrice === 'number'
+          ? rawPrice
+          : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
 
       const maxParticipants =
         typeof attrs.max_participants === 'number'
@@ -389,14 +438,19 @@ export async function fetchDaySmartSchedule(
       const noteParts: string[] = [];
       if (resourceName) noteParts.push(resourceName);
       const desc = attrs.description ?? attrs.notes;
-      if (typeof desc === 'string' && desc.trim().length > 0 && desc.trim().length < 200) {
+      if (
+        typeof desc === 'string' &&
+        desc.trim().length > 0 &&
+        desc.trim().length < 200
+      ) {
         noteParts.push(desc.trim());
       }
       if (registeredCount !== undefined && maxParticipants !== undefined) {
         noteParts.push(`${registeredCount}/${maxParticipants} registered`);
       }
 
-      const combinedText = `${eventName} ${eventTypeName} ${typeof desc === 'string' ? desc : ''}`.toLowerCase();
+      const combinedText =
+        `${eventName} ${eventTypeName} ${typeof desc === 'string' ? desc : ''}`.toLowerCase();
       const goaliesFree =
         combinedText.includes('goalie free') ||
         combinedText.includes('goalies free') ||
@@ -431,11 +485,17 @@ export async function fetchDaySmartSchedule(
     }
 
     scheduleCache.set(facilitySlug, { data: sessions, timestamp: Date.now(), confirmed: true });
-    console.log(`[DaySmart] ${facilitySlug}: ${sessions.length} ice-time sessions from ${allEvents.length} total events (${page - 1} page(s))`);
+    console.log(
+      `[DaySmart] ${facilitySlug}: ${sessions.length} ice-time sessions from ${allEvents.length} total events (${page - 1} page(s))`,
+    );
     return { sessions, fromCache: false, confirmed: true };
   } catch (error) {
     console.error(`[DaySmart] Fatal error for ${facilitySlug}:`, error);
-    scheduleCache.set(facilitySlug, { data: staleData, timestamp: Date.now(), confirmed: false });
+    scheduleCache.set(facilitySlug, {
+      data: staleData,
+      timestamp: Date.now(),
+      confirmed: false,
+    });
     return { sessions: staleData, fromCache: staleData.length > 0, confirmed: false };
   }
 }
@@ -445,10 +505,15 @@ export async function fetchAllDaySmartSchedules(): Promise<{
   facilityResults: Record<string, { count: number; fromCache: boolean; confirmed: boolean }>;
 }> {
   const slugs = Object.keys(FACILITY_META);
-  const results = await Promise.allSettled(slugs.map((slug) => fetchDaySmartSchedule(slug)));
+  const results = await Promise.allSettled(
+    slugs.map((slug) => fetchDaySmartSchedule(slug)),
+  );
 
   const sessions: StickAndPuckSession[] = [];
-  const facilityResults: Record<string, { count: number; fromCache: boolean; confirmed: boolean }> = {};
+  const facilityResults: Record<
+    string,
+    { count: number; fromCache: boolean; confirmed: boolean }
+  > = {};
 
   for (let i = 0; i < slugs.length; i++) {
     const slug = slugs[i];
@@ -461,7 +526,10 @@ export async function fetchAllDaySmartSchedules(): Promise<{
         confirmed: result.value.confirmed,
       };
     } else {
-      console.error(`[DaySmart] fetchAllDaySmartSchedules: ${slug} rejected:`, result.reason);
+      console.error(
+        `[DaySmart] fetchAllDaySmartSchedules: ${slug} rejected:`,
+        result.reason,
+      );
       facilityResults[slug] = { count: 0, fromCache: false, confirmed: false };
     }
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { getAgeGroupFromDOB, getChildAge } from '@/store/useStore';
 import {
@@ -21,21 +21,33 @@ async function encryptViaServer(plaintext: string): Promise<string> {
     });
     if (!res.ok) return plaintext;
     const { encrypted } = await res.json();
-    return encrypted as string;
+    return typeof encrypted === 'string' ? encrypted : plaintext;
   } catch {
     return plaintext;
   }
 }
 
 function parseDateString(dateStr: string, which: 'start' | 'end'): string {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
   try {
-    const rangeMatch = dateStr.match(/(\w+ \d+)\s*-\s*(\w+ \d+),?\s*(\d{4})/);
+    // "June 23 - July 4, 2025" style
+    const rangeMatch = dateStr.match(/(\w+ \d+)\s*[-–]\s*(\w+ \d+),?\s*(\d{4})/);
     if (rangeMatch) {
       const year = rangeMatch[3];
-      const dateText = which === 'start' ? `${rangeMatch[1]}, ${year}` : `${rangeMatch[2]}, ${year}`;
+      const dateText =
+        which === 'start'
+          ? `${rangeMatch[1]}, ${year}`
+          : `${rangeMatch[2]}, ${year}`;
       const d = new Date(dateText);
       if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
     }
+    // "June 23, 2025" style
+    const singleMatch = dateStr.match(/(\w+ \d+,?\s*\d{4})/);
+    if (singleMatch) {
+      const d = new Date(singleMatch[1]);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    // ISO or parseable
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
   } catch {
@@ -69,6 +81,7 @@ function CredentialForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={`Your ${placeholder} email`}
+          autoComplete="email"
           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
         />
       </div>
@@ -80,6 +93,7 @@ function CredentialForm({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder={`Your ${placeholder} password`}
+            autoComplete="current-password"
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
           />
           <button
@@ -88,7 +102,9 @@ function CredentialForm({
             className="absolute right-3 top-1/2 -translate-y-1/2"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
-            {showPassword ? <EyeOff size={14} className="text-slate-400" /> : <Eye size={14} className="text-slate-400" />}
+            {showPassword
+              ? <EyeOff size={14} className="text-slate-400" />
+              : <Eye size={14} className="text-slate-400" />}
           </button>
         </div>
       </div>
@@ -180,9 +196,21 @@ function StatusBanner({
 }) {
   const [showDebug, setShowDebug] = useState(false);
 
-  const bannerClass = { info: 'bg-blue-50 border-blue-200', success: 'bg-emerald-50 border-emerald-200', error: 'bg-red-50 border-red-200' }[variant];
-  const textClass = { info: 'text-blue-700', success: 'text-emerald-700', error: 'text-red-700' }[variant];
-  const iconClass = { info: 'text-blue-600', success: 'text-emerald-600', error: 'text-red-600' }[variant];
+  const bannerClass = {
+    info: 'bg-blue-50 border-blue-200',
+    success: 'bg-emerald-50 border-emerald-200',
+    error: 'bg-red-50 border-red-200',
+  }[variant];
+  const textClass = {
+    info: 'text-blue-700',
+    success: 'text-emerald-700',
+    error: 'text-red-700',
+  }[variant];
+  const iconClass = {
+    info: 'text-blue-600',
+    success: 'text-emerald-600',
+    error: 'text-red-600',
+  }[variant];
 
   return (
     <motion.div
@@ -200,7 +228,10 @@ function StatusBanner({
       </div>
       {debugInfo && (
         <div className="mt-2">
-          <button onClick={() => setShowDebug((v) => !v)} className="text-[10px] font-medium underline opacity-70 hover:opacity-100">
+          <button
+            onClick={() => setShowDebug((v) => !v)}
+            className="text-[10px] font-medium underline opacity-70 hover:opacity-100"
+          >
             {showDebug ? 'Hide' : 'Show'} debug details
           </button>
           {showDebug && (
@@ -220,19 +251,40 @@ function StatusBanner({
                     {debugInfo.debugDiagnostics.map((d, i) => (
                       <div key={i} className="bg-slate-50 rounded p-1.5 text-[9px] font-mono">
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className={cn('inline-block w-1.5 h-1.5 rounded-full', d.isPositiveAuth ? 'bg-green-500' : d.status === 'error' ? 'bg-red-500' : 'bg-yellow-500')} />
+                          <span
+                            className={cn(
+                              'inline-block w-1.5 h-1.5 rounded-full',
+                              d.isPositiveAuth
+                                ? 'bg-green-500'
+                                : d.status === 'error'
+                                ? 'bg-red-500'
+                                : 'bg-yellow-500',
+                            )}
+                          />
                           <span className="font-semibold text-slate-800">{String(d.strategy)}</span>
                           <span className="text-slate-500">HTTP {String(d.status)}</span>
                         </div>
                         <div className="text-slate-500 pl-3 space-y-0.5">
-                          <div>token: {d.hasToken ? 'YES' : 'no'} | cookies: {d.hasCookies ? 'YES' : 'no'} | positive: {d.isPositiveAuth ? 'YES' : 'no'}</div>
-                          {d.extractedCustomerId ? <div>customerId: {String(d.extractedCustomerId)}</div> : null}
-                          {d.error ? <div className="text-red-600">error: {String(d.error)}</div> : null}
-                          {d.responseKeys && (d.responseKeys as string[]).length > 0 ? <div>keys: {(d.responseKeys as string[]).join(', ')}</div> : null}
+                          <div>
+                            token: {d.hasToken ? 'YES' : 'no'} | cookies:{' '}
+                            {d.hasCookies ? 'YES' : 'no'} | positive:{' '}
+                            {d.isPositiveAuth ? 'YES' : 'no'}
+                          </div>
+                          {d.extractedCustomerId ? (
+                            <div>customerId: {String(d.extractedCustomerId)}</div>
+                          ) : null}
+                          {d.error ? (
+                            <div className="text-red-600">error: {String(d.error)}</div>
+                          ) : null}
+                          {d.responseKeys && (d.responseKeys as string[]).length > 0 ? (
+                            <div>keys: {(d.responseKeys as string[]).join(', ')}</div>
+                          ) : null}
                           {d.responseSample ? (
                             <details className="cursor-pointer">
                               <summary className="text-blue-600">response body</summary>
-                              <pre className="whitespace-pre-wrap break-all mt-0.5 text-slate-600 max-h-24 overflow-y-auto">{String(d.responseSample)}</pre>
+                              <pre className="whitespace-pre-wrap break-all mt-0.5 text-slate-600 max-h-24 overflow-y-auto">
+                                {String(d.responseSample)}
+                              </pre>
                             </details>
                           ) : null}
                         </div>
@@ -252,8 +304,10 @@ function StatusBanner({
 export default function IntegrationsPage() {
   const router = useRouter();
   const {
-    childProfiles, daySmartConfig, setDaySmartConfig, daySmartSyncing, setDaySmartSyncing,
-    iceHockeyProConfig, setIceHockeyProConfig, emailScanConfig, setEmailScanConfig,
+    childProfiles,
+    daySmartConfig, setDaySmartConfig, daySmartSyncing, setDaySmartSyncing,
+    iceHockeyProConfig, setIceHockeyProConfig,
+    emailScanConfig, setEmailScanConfig,
     removeRegistration, addRegistration, registrations, addNotification,
   } = useStore();
 
@@ -270,23 +324,29 @@ export default function IntegrationsPage() {
   );
   const [ihpEmail, setIhpEmail] = useState(iceHockeyProConfig.email);
   const [ihpPassword, setIhpPassword] = useState(iceHockeyProConfig.password);
-  const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(iceHockeyProConfig.linkedChildIds ?? []);
+  const [ihpLinkedChildIds, setIhpLinkedChildIds] = useState<string[]>(
+    iceHockeyProConfig.linkedChildIds ?? [],
+  );
 
   const [statusMessage, setStatusMessage] = useState('');
   const [statusVariant, setStatusVariant] = useState<StatusVariant>('info');
-  const [loginDebugInfo, setLoginDebugInfo] = useState<{ debugLog?: string[]; debugDiagnostics?: Array<Record<string, unknown>> } | null>(null);
+  const [loginDebugInfo, setLoginDebugInfo] = useState<{
+    debugLog?: string[];
+    debugDiagnostics?: Array<Record<string, unknown>>;
+  } | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  const setStatus = (msg: string, variant: StatusVariant = 'info') => {
+  const setStatus = useCallback((msg: string, variant: StatusVariant = 'info') => {
     setStatusMessage(msg);
     setStatusVariant(variant);
-  };
+  }, []);
 
   const extractFacilityId = (input: string): string | null => {
     const trimmed = input.trim();
     const urlMatch = trimmed.match(/daysmartrecreation\.com\/dash\/x\/#\/online\/([^/]+)/i);
     if (urlMatch) return urlMatch[1];
-    if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+    if (/^[a-zA-Z0-9_-]+$/.test(trimmed) && trimmed.length > 0 && trimmed.length <= 60)
+      return trimmed;
     return null;
   };
 
@@ -305,10 +365,21 @@ export default function IntegrationsPage() {
 
   const isAnySyncing = syncing || daySmartSyncing;
 
+  const toggleIhpChild = useCallback((childId: string) => {
+    setIhpLinkedChildIds((prev) =>
+      prev.includes(childId) ? prev.filter((id) => id !== childId) : [...prev, childId],
+    );
+  }, []);
+
+  // ── DaySmart / Dash ──────────────────────────────────────────────────────────
+
   const handleDashConnect = async () => {
     const facilityId = extractFacilityId(dashFacilityUrl);
     if (!facilityId) {
-      setStatus('Please enter your rink\'s DaySmart URL or facility ID (e.g. "warmemorial").', 'error');
+      setStatus(
+        'Please enter your rink\'s DaySmart URL or facility ID (e.g. "warmemorial").',
+        'error',
+      );
       return;
     }
     if (!dashEmail || !dashPassword) {
@@ -327,7 +398,10 @@ export default function IntegrationsPage() {
       });
       const validateData = await validateRes.json();
       if (!validateData.valid) {
-        setStatus(validateData.error ?? `Facility "${facilityId}" not found. Check the URL.`, 'error');
+        setStatus(
+          validateData.error ?? `Facility "${facilityId}" not found. Check the URL.`,
+          'error',
+        );
         setDaySmartSyncing(false);
         return;
       }
@@ -349,7 +423,10 @@ export default function IntegrationsPage() {
       if (!loginRes.ok || !loginData.success) {
         setStatus(loginData.error ?? 'Failed to connect. Check your credentials.', 'error');
         if (loginData.debugLog || loginData.debugDiagnostics) {
-          setLoginDebugInfo({ debugLog: loginData.debugLog, debugDiagnostics: loginData.debugDiagnostics });
+          setLoginDebugInfo({
+            debugLog: loginData.debugLog,
+            debugDiagnostics: loginData.debugDiagnostics,
+          });
         }
         setDaySmartSyncing(false);
         return;
@@ -362,7 +439,9 @@ export default function IntegrationsPage() {
       const customerIds = loginData.customerIds ?? [];
       const authCredential = loginData.authToken ?? loginData.sessionCookie ?? '';
 
-      setStatus(`Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`);
+      setStatus(
+        `Connected! Found ${familyMembers.length} family member(s). Fetching registrations...`,
+      );
 
       const syncRes = await fetch('/api/integrations/daysmart?action=sync', {
         method: 'POST',
@@ -421,7 +500,10 @@ export default function IntegrationsPage() {
           'success',
         );
       } else if (syncData.needsReauth && familyMembers.length === 0) {
-        setStatus(`Could not authenticate with ${facilityName}. Please check your email and password.`, 'error');
+        setStatus(
+          `Could not authenticate with ${facilityName}. Please check your email and password.`,
+          'error',
+        );
       } else {
         setDaySmartConfig({
           email: encEmail,
@@ -518,20 +600,30 @@ export default function IntegrationsPage() {
         }
 
         if (loginData.familyMembers) {
-          setDaySmartConfig({ lastSync: new Date().toISOString(), familyMembers: loginData.familyMembers, customerIds: loginData.customerIds });
+          setDaySmartConfig({
+            lastSync: new Date().toISOString(),
+            familyMembers: loginData.familyMembers,
+            customerIds: loginData.customerIds,
+          });
         } else {
           setDaySmartConfig({ lastSync: new Date().toISOString() });
         }
 
         const upcomingCount = (syncData.upcoming ?? []).length;
         const pastCount = (syncData.past ?? []).length;
-        setStatus(`Sync complete! ${importedCount} registrations (${upcomingCount} upcoming, ${pastCount} past).`, 'success');
+        setStatus(
+          `Sync complete! ${importedCount} registrations (${upcomingCount} upcoming, ${pastCount} past).`,
+          'success',
+        );
       } else {
         setDaySmartConfig({ lastSync: new Date().toISOString() });
         setStatus(`Sync complete. ${syncData.error ?? 'No new events found.'}`, 'info');
       }
     } catch (error) {
-      setStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      setStatus(
+        `Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error',
+      );
     }
 
     setDaySmartSyncing(false);
@@ -541,12 +633,23 @@ export default function IntegrationsPage() {
     for (const reg of registrations.filter((r) => r.source === 'dash')) {
       removeRegistration(reg.id);
     }
-    setDaySmartConfig({ email: '', password: '', facilityId: '', facilityName: '', connected: false, lastSync: null, familyMembers: [], customerIds: [] });
+    setDaySmartConfig({
+      email: '',
+      password: '',
+      facilityId: '',
+      facilityName: '',
+      connected: false,
+      lastSync: null,
+      familyMembers: [],
+      customerIds: [],
+    });
     setDashEmail('');
     setDashPassword('');
     setDashFacilityUrl('');
     setStatus('Disconnected from Dash. Registrations cleared.', 'info');
   };
+
+  // ── IceHockeyPro ─────────────────────────────────────────────────────────────
 
   const handleIhpConnect = async () => {
     if (!ihpEmail || !ihpPassword) {
@@ -577,7 +680,10 @@ export default function IntegrationsPage() {
       const loginData = await loginRes.json();
 
       if (!loginRes.ok || !loginData.success) {
-        setStatus(loginData.error ?? 'Failed to login to IceHockeyPro. Check your credentials.', 'error');
+        setStatus(
+          loginData.error ?? 'Failed to login to IceHockeyPro. Check your credentials.',
+          'error',
+        );
         setSyncing(false);
         return;
       }
@@ -586,7 +692,10 @@ export default function IntegrationsPage() {
       const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionCookie: loginData.sessionCookie, linkedChildNames: linkedNames }),
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          linkedChildNames: linkedNames,
+        }),
       });
       const syncData = await syncRes.json();
 
@@ -598,7 +707,10 @@ export default function IntegrationsPage() {
         setStatus(`Found ${syncData.totalOrders} orders. Matching to your players...`);
 
         let importedCount = 0;
-        const allOrders = [...(syncData.matchedOrders ?? []), ...(syncData.unmatchedOrders ?? [])];
+        const allOrders = [
+          ...(syncData.matchedOrders ?? []),
+          ...(syncData.unmatchedOrders ?? []),
+        ];
         for (const order of allOrders) {
           const startDate = order.dates
             ? parseDateString(order.dates, 'start')
@@ -662,7 +774,10 @@ export default function IntegrationsPage() {
         );
       }
     } catch (error) {
-      setStatus(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      setStatus(
+        `Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error',
+      );
     }
 
     setSyncing(false);
@@ -676,7 +791,10 @@ export default function IntegrationsPage() {
       const loginRes = await fetch('/api/integrations/icehockeypro?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: iceHockeyProConfig.email, password: iceHockeyProConfig.password }),
+        body: JSON.stringify({
+          email: iceHockeyProConfig.email,
+          password: iceHockeyProConfig.password,
+        }),
       });
       const loginData = await loginRes.json();
 
@@ -694,7 +812,10 @@ export default function IntegrationsPage() {
       const syncRes = await fetch('/api/integrations/icehockeypro?action=sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionCookie: loginData.sessionCookie, linkedChildNames: linkedNames }),
+        body: JSON.stringify({
+          sessionCookie: loginData.sessionCookie,
+          linkedChildNames: linkedNames,
+        }),
       });
       const syncData = await syncRes.json();
 
@@ -704,7 +825,10 @@ export default function IntegrationsPage() {
         }
 
         let importedCount = 0;
-        const allOrders = [...(syncData.matchedOrders ?? []), ...(syncData.unmatchedOrders ?? [])];
+        const allOrders = [
+          ...(syncData.matchedOrders ?? []),
+          ...(syncData.unmatchedOrders ?? []),
+        ];
         for (const order of allOrders) {
           const startDate = order.dates
             ? parseDateString(order.dates, 'start')
@@ -740,7 +864,10 @@ export default function IntegrationsPage() {
         setStatus(`Sync complete. ${syncData.error ?? 'No new orders found.'}`, 'info');
       }
     } catch (error) {
-      setStatus(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      setStatus(
+        `Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error',
+      );
     }
 
     setSyncing(false);
@@ -750,19 +877,33 @@ export default function IntegrationsPage() {
     for (const reg of registrations.filter((r) => r.source === 'icehockeypro')) {
       removeRegistration(reg.id);
     }
-    setIceHockeyProConfig({ email: '', password: '', connected: false, lastSync: null, playerName: '', linkedChildIds: [] });
+    setIceHockeyProConfig({
+      email: '',
+      password: '',
+      connected: false,
+      lastSync: null,
+      playerName: '',
+      linkedChildIds: [],
+    });
     setIhpEmail('');
     setIhpPassword('');
     setIhpLinkedChildIds([]);
     setStatus('Disconnected from IceHockeyPro. Registrations cleared.', 'info');
   };
 
+  // ── Email ─────────────────────────────────────────────────────────────────────
+
   const handleEmailConnect = async (provider: 'gmail' | 'outlook') => {
     setSyncing(true);
     setStatus(`Connecting to ${provider === 'gmail' ? 'Gmail' : 'Outlook'}...`);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    setEmailScanConfig({ provider, connected: true, lastScan: new Date().toISOString(), scanFrequency: 'daily' });
+    setEmailScanConfig({
+      provider,
+      connected: true,
+      lastScan: new Date().toISOString(),
+      scanFrequency: 'daily',
+    });
 
     addNotification({
       title: 'Email Scanning Enabled',
@@ -771,14 +912,24 @@ export default function IntegrationsPage() {
       type: 'new_clinic',
     });
 
-    setStatus('Email scanning active! We\'ll scan for hockey-related schedule changes.', 'success');
+    setStatus(
+      "Email scanning active! We'll scan for hockey-related schedule changes.",
+      'success',
+    );
     setSyncing(false);
   };
 
   const handleEmailDisconnect = () => {
-    setEmailScanConfig({ provider: 'none', connected: false, lastScan: null, scanFrequency: 'daily' });
+    setEmailScanConfig({
+      provider: 'none',
+      connected: false,
+      lastScan: null,
+      scanFrequency: 'daily',
+    });
     setStatus('Email scanning disconnected.', 'info');
   };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -808,7 +959,9 @@ export default function IntegrationsPage() {
               className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
             >
               <HockeyLoader size="sm" />
-              <p className="text-sm font-medium text-slate-600">{statusMessage || 'Working...'}</p>
+              <p className="text-sm font-medium text-slate-600">
+                {statusMessage || 'Working...'}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -826,6 +979,7 @@ export default function IntegrationsPage() {
 
         <div className="space-y-3">
 
+          {/* ── IceHockeyPro ── */}
           <IntegrationCard
             id="icehockeypro"
             icon={Trophy}
@@ -835,15 +989,19 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${getLinkedChildNames()}`}
             color="blue"
             expanded={expandedSection === 'icehockeypro'}
-            onToggle={() => setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')}
+            onToggle={() =>
+              setExpandedSection(expandedSection === 'icehockeypro' ? null : 'icehockeypro')
+            }
           >
             <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
               <div className="flex items-start gap-2">
                 <Trophy size={14} className="text-blue-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-blue-700">
-                  Connect your IceHockeyPro account to sync camps attended, upcoming registrations, and spending.
-                  We scrape your order history at{' '}
-                  <span className="font-mono text-blue-800">icehockeypro.com/my-account-2/orders/</span>{' '}
+                  Connect your IceHockeyPro account to sync camps attended, upcoming
+                  registrations, and spending. We scrape your order history at{' '}
+                  <span className="font-mono text-blue-800">
+                    icehockeypro.com/my-account-2/orders/
+                  </span>{' '}
                   and match billing details to your linked players.
                 </p>
               </div>
@@ -852,7 +1010,8 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials are encrypted with AES-256-GCM before storage. We only access your order history to match registrations by billing name.
+                Credentials are encrypted with AES-256-GCM before storage. We only access
+                your order history to match registrations by billing name.
               </p>
             </div>
 
@@ -870,12 +1029,14 @@ export default function IntegrationsPage() {
 
                 <div>
                   <label className="block mb-2 text-xs font-medium text-slate-700">
-                    Link Players <span className="text-slate-400">(select who to sync)</span>
+                    Link Players{' '}
+                    <span className="text-slate-400">(select who to sync)</span>
                   </label>
                   {childProfiles.length === 0 ? (
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                       <p className="text-xs text-slate-500 mb-2">
-                        No players added yet. Add your children first so we can match their billing details.
+                        No players added yet. Add your children first so we can match their
+                        billing details.
                       </p>
                       <button
                         onClick={() => router.push('/settings')}
@@ -891,29 +1052,35 @@ export default function IntegrationsPage() {
                         return (
                           <button
                             key={child.id}
-                            onClick={() =>
-                              setIhpLinkedChildIds((prev) =>
-                                isLinked ? prev.filter((id) => id !== child.id) : [...prev, child.id],
-                              )
-                            }
+                            onClick={() => toggleIhpChild(child.id)}
                             className={cn(
                               'w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left',
-                              isLinked ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200',
+                              isLinked
+                                ? 'bg-blue-50 border-blue-200'
+                                : 'bg-slate-50 border-slate-200',
                             )}
                           >
                             <div
                               className={cn(
                                 'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0',
-                                isLinked ? 'bg-blue-500 border-blue-500' : 'border-slate-300',
+                                isLinked
+                                  ? 'bg-blue-500 border-blue-500'
+                                  : 'border-slate-300',
                               )}
                             >
                               {isLinked && <Check size={12} className="text-white" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900">{child.name}</p>
-                              <p className="text-[10px] text-slate-500">{getChildLabel(child)}</p>
+                              <p className="text-sm font-medium text-slate-900">
+                                {child.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500">
+                                {getChildLabel(child)}
+                              </p>
                             </div>
-                            {isLinked && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                            {isLinked && (
+                              <UserCheck size={14} className="text-blue-600 shrink-0" />
+                            )}
                           </button>
                         );
                       })}
@@ -926,7 +1093,11 @@ export default function IntegrationsPage() {
                   disabled={syncing}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-blue-200"
                 >
-                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Trophy size={14} />}
+                  {syncing ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Trophy size={14} />
+                  )}
                   {syncing ? 'Connecting...' : 'Connect & Sync Orders'}
                 </button>
               </>
@@ -937,12 +1108,19 @@ export default function IntegrationsPage() {
                     <Check size={14} className="text-emerald-600" />
                     <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
-                  <p className="text-[10px] text-slate-500">Account: {iceHockeyProConfig.email}</p>
-                  <p className="text-[10px] text-slate-500">Linked players: {getLinkedChildNames()}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">Source: icehockeypro.com/my-account-2/orders/</p>
+                  <p className="text-[10px] text-slate-500">
+                    Account: {iceHockeyProConfig.email}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Linked players: {getLinkedChildNames()}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Source: icehockeypro.com/my-account-2/orders/
+                  </p>
                   {iceHockeyProConfig.lastSync && (
                     <p className="text-[10px] text-slate-500">
-                      Last sync: {new Date(iceHockeyProConfig.lastSync).toLocaleString()}
+                      Last sync:{' '}
+                      {new Date(iceHockeyProConfig.lastSync).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -978,6 +1156,7 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
+          {/* ── Dash by DaySmart ── */}
           <IntegrationCard
             id="dash"
             icon={Calendar}
@@ -987,13 +1166,17 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${daySmartConfig.facilityName ?? daySmartConfig.facilityId ?? 'Your Rink'}`}
             color="orange"
             expanded={expandedSection === 'dash'}
-            onToggle={() => setExpandedSection(expandedSection === 'dash' ? null : 'dash')}
+            onToggle={() =>
+              setExpandedSection(expandedSection === 'dash' ? null : 'dash')
+            }
           >
             <div className="p-3 bg-orange-50 rounded-xl border border-orange-200">
               <div className="flex items-start gap-2">
                 <Zap size={14} className="text-orange-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-orange-700">
-                  Connect your Dash by DaySmart account to automatically sync clinics, camps, and registrations from your rink. Works with any DaySmart-powered facility.
+                  Connect your Dash by DaySmart account to automatically sync clinics,
+                  camps, and registrations from your rink. Works with any DaySmart-powered
+                  facility.
                 </p>
               </div>
             </div>
@@ -1001,7 +1184,8 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Credentials are encrypted with AES-256-GCM before storage. Used only to communicate directly with DaySmart&apos;s API.
+                Credentials are encrypted with AES-256-GCM before storage. Used only to
+                communicate directly with DaySmart&apos;s API.
               </p>
             </div>
 
@@ -1019,7 +1203,8 @@ export default function IntegrationsPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Paste the URL from your rink&apos;s Dash login page, or just the facility ID (e.g. &quot;warmemorial&quot;)
+                    Paste the URL from your rink&apos;s Dash login page, or just the
+                    facility ID (e.g. &quot;warmemorial&quot;)
                   </p>
                 </div>
 
@@ -1038,7 +1223,11 @@ export default function IntegrationsPage() {
                   disabled={daySmartSyncing}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 border border-orange-200"
                 >
-                  {daySmartSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Wifi size={14} />}
+                  {daySmartSyncing ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Wifi size={14} />
+                  )}
                   {daySmartSyncing ? 'Connecting...' : 'Connect to Dash'}
                 </button>
               </>
@@ -1049,24 +1238,33 @@ export default function IntegrationsPage() {
                     <Check size={14} className="text-emerald-600" />
                     <p className="text-xs font-semibold text-emerald-700">Connected</p>
                   </div>
-                  <p className="text-[10px] text-slate-500">Account: {daySmartConfig.email}</p>
+                  <p className="text-[10px] text-slate-500">
+                    Account: {daySmartConfig.email}
+                  </p>
                   <p className="text-[10px] text-slate-500">
                     Facility: {daySmartConfig.facilityName ?? daySmartConfig.facilityId}
                   </p>
                   {(daySmartConfig.familyMembers ?? []).length > 0 && (
                     <div className="mt-2">
-                      <p className="text-[10px] font-medium text-slate-600 mb-1">Family Members:</p>
+                      <p className="text-[10px] font-medium text-slate-600 mb-1">
+                        Family Members:
+                      </p>
                       {daySmartConfig.familyMembers.map((member) => (
-                        <p key={member.id} className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <p
+                          key={member.id}
+                          className="text-[10px] text-slate-500 flex items-center gap-1"
+                        >
                           <UserCheck size={9} className="text-emerald-500" />
-                          {member.name} <span className="text-slate-400">(#{member.id})</span>
+                          {member.name}{' '}
+                          <span className="text-slate-400">(#{member.id})</span>
                         </p>
                       ))}
                     </div>
                   )}
                   {daySmartConfig.lastSync && (
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Last sync: {new Date(daySmartConfig.lastSync).toLocaleString()}
+                      Last sync:{' '}
+                      {new Date(daySmartConfig.lastSync).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -1077,7 +1275,10 @@ export default function IntegrationsPage() {
                     disabled={daySmartSyncing}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw size={14} className={daySmartSyncing ? 'animate-spin' : ''} />
+                    <RefreshCw
+                      size={14}
+                      className={daySmartSyncing ? 'animate-spin' : ''}
+                    />
                     Sync Now
                   </button>
                   <button
@@ -1102,6 +1303,7 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
+          {/* ── Email Scanner ── */}
           <IntegrationCard
             id="email"
             icon={Mail}
@@ -1111,14 +1313,18 @@ export default function IntegrationsPage() {
             connectedText={`Connected — ${emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'} · ${emailScanConfig.scanFrequency}`}
             color="violet"
             expanded={expandedSection === 'email'}
-            onToggle={() => setExpandedSection(expandedSection === 'email' ? null : 'email')}
+            onToggle={() =>
+              setExpandedSection(expandedSection === 'email' ? null : 'email')
+            }
           >
             <div className="p-3 bg-violet-50 rounded-xl border border-violet-200">
               <div className="flex items-start gap-2">
                 <Mail size={14} className="text-violet-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-violet-700">
-                  Securely scan your inbox for hockey-related schedule changes, cancellations, and announcements.
-                  Uses Gmail/Outlook API with read-only access and pattern matching — no AI processing of email content, completely free.
+                  Securely scan your inbox for hockey-related schedule changes,
+                  cancellations, and announcements. Uses Gmail/Outlook API with read-only
+                  access and pattern matching — no AI processing of email content,
+                  completely free.
                 </p>
               </div>
             </div>
@@ -1126,7 +1332,9 @@ export default function IntegrationsPage() {
             <div className="flex items-start gap-2">
               <Shield size={12} className="text-slate-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500">
-                Uses OAuth — we never see your password. Read-only access to messages matching hockey keywords only. Revoke access anytime from your Google/Microsoft account.
+                Uses OAuth — we never see your password. Read-only access to messages
+                matching hockey keywords only. Revoke access anytime from your
+                Google/Microsoft account.
               </p>
             </div>
 
@@ -1150,7 +1358,9 @@ export default function IntegrationsPage() {
                 </button>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">What We Look For</h4>
+                  <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    What We Look For
+                  </h4>
                   <div className="space-y-1.5">
                     {[
                       'Schedule changes & time updates',
@@ -1175,18 +1385,24 @@ export default function IntegrationsPage() {
                     <p className="text-xs font-semibold text-emerald-700">Active</p>
                   </div>
                   <p className="text-[10px] text-slate-500">
-                    Provider: {emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'}
+                    Provider:{' '}
+                    {emailScanConfig.provider === 'gmail' ? 'Gmail' : 'Outlook'}
                   </p>
-                  <p className="text-[10px] text-slate-500">Frequency: {emailScanConfig.scanFrequency}</p>
+                  <p className="text-[10px] text-slate-500">
+                    Frequency: {emailScanConfig.scanFrequency}
+                  </p>
                   {emailScanConfig.lastScan && (
                     <p className="text-[10px] text-slate-500">
-                      Last scan: {new Date(emailScanConfig.lastScan).toLocaleString()}
+                      Last scan:{' '}
+                      {new Date(emailScanConfig.lastScan).toLocaleString()}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block mb-2 text-xs font-medium text-slate-700">Scan Frequency</label>
+                  <label className="block mb-2 text-xs font-medium text-slate-700">
+                    Scan Frequency
+                  </label>
                   <div className="flex gap-2">
                     {(['hourly', 'daily', 'manual'] as const).map((freq) => (
                       <button
@@ -1215,14 +1431,31 @@ export default function IntegrationsPage() {
             )}
           </IntegrationCard>
 
+          {/* ── What Gets Synced ── */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
             <h3 className="text-sm font-bold text-slate-900 mb-3">What Gets Synced</h3>
             <div className="space-y-2">
               {[
-                { icon: Trophy, text: 'Camps & clinics from IceHockeyPro (matched by billing name)', colorClass: 'text-blue-600' },
-                { icon: Calendar, text: 'Programs & registrations from DaySmart', colorClass: 'text-orange-600' },
-                { icon: Mail, text: 'Schedule changes detected in your email', colorClass: 'text-violet-600' },
-                { icon: Zap, text: 'Spending tracked across all sources', colorClass: 'text-amber-600' },
+                {
+                  icon: Trophy,
+                  text: 'Camps & clinics from IceHockeyPro (matched by billing name)',
+                  colorClass: 'text-blue-600',
+                },
+                {
+                  icon: Calendar,
+                  text: 'Programs & registrations from DaySmart',
+                  colorClass: 'text-orange-600',
+                },
+                {
+                  icon: Mail,
+                  text: 'Schedule changes detected in your email',
+                  colorClass: 'text-violet-600',
+                },
+                {
+                  icon: Zap,
+                  text: 'Spending tracked across all sources',
+                  colorClass: 'text-amber-600',
+                },
               ].map((item) => (
                 <div key={item.text} className="flex items-center gap-2">
                   <item.icon size={14} className={item.colorClass} />
