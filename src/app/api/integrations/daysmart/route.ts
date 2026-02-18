@@ -1449,7 +1449,7 @@ async function handleSchedule(facilityId: string) {
     return NextResponse.json({
       success: true,
       sessions,
-      totalSessions: sessions.length,
+      totalSessions: sessions.sessions.length,
       facilityId,
       fetchedAt: new Date().toISOString(),
     });
