@@ -10,12 +10,21 @@ import { StickAndPuckSession } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
+/** Build YYYY-MM-DD from local time — avoids UTC date shift on the server */
+function localTodayStr(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const lat = parseFloat(searchParams.get('lat') || '0');
   const lng = parseFloat(searchParams.get('lng') || '0');
   const sessionType = searchParams.get('type') || 'all';
-  const day = searchParams.get('day'); // 0-6 or null for all
+  const day = searchParams.get('day');
 
   const hasLocation = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
 
@@ -35,42 +44,28 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Determine which rinks have CONFIRMED live data ─────────────────
-  // Only suppress seed data for a rink when DaySmart confirmed a response
-  // (even if 0 sessions — that means the rink is genuinely empty today).
-  // If DaySmart errored (confirmed=false), keep seed data as fallback.
   const daySmartRinkIds = getDaySmartRinkIds();
   const slugToRinkId = getSlugToRinkId();
   const confirmedDaySmartRinkIds = new Set<string>();
 
   for (const [slug, info] of Object.entries(facilityResults)) {
     if (!info.confirmed) continue;
-
-    // Find rinkId from live sessions first (most reliable)
     const rinkIdFromSessions = daySmartSessions.find(
       (s) => s.id.startsWith(`ds-${slug}-`),
     )?.rinkId;
-
     const rinkId = rinkIdFromSessions ?? slugToRinkId[slug];
-    if (rinkId) {
-      confirmedDaySmartRinkIds.add(rinkId);
-    }
+    if (rinkId) confirmedDaySmartRinkIds.add(rinkId);
   }
 
   // ── Build session list ─────────────────────────────────────────────
   let sessions: StickAndPuckSession[] = [];
 
-  // 1. All DaySmart live sessions
   sessions.push(...daySmartSessions);
 
-  // 2. Seed sessions only for rinks without confirmed live data
   for (const seedSession of ALL_SEED_SESSIONS) {
     const isDaySmartManaged = daySmartRinkIds.has(seedSession.rinkId);
     const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(seedSession.rinkId);
-
-    if (isDaySmartManaged && hasConfirmedLiveData) {
-      // Live data confirmed for this rink — skip seed
-      continue;
-    }
+    if (isDaySmartManaged && hasConfirmedLiveData) continue;
     sessions.push(seedSession);
   }
 
@@ -87,8 +82,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Filter out past sessions ───────────────────────────────────────
-  const today = new Date().toISOString().split('T')[0];
+  // ── Filter out past sessions using LOCAL date (not UTC) ────────────
+  const today = localTodayStr();
   sessions = sessions.filter((s) => s.date >= today);
 
   // ── Add distance ───────────────────────────────────────────────────
@@ -123,14 +118,6 @@ export async function GET(request: NextRequest) {
     rinks.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
   }
 
-  // ── Source summary ─────────────────────────────────────────────────
-  const daySmartSessionCount = sessionsWithDistance.filter(
-    (s) => s.source === 'daysmart',
-  ).length;
-  const seedSessionCount = sessionsWithDistance.filter(
-    (s) => s.source === 'seed',
-  ).length;
-
   return NextResponse.json({
     sessions: sessionsWithDistance,
     rinks,
@@ -138,8 +125,8 @@ export async function GET(request: NextRequest) {
     totalRinks: rinks.length,
     sources: {
       daysmart: confirmedDaySmartRinkIds.size,
-      daysmartSessions: daySmartSessionCount,
-      seed: seedSessionCount,
+      daysmartSessions: sessionsWithDistance.filter((s) => s.source === 'daysmart').length,
+      seed: sessionsWithDistance.filter((s) => s.source === 'seed').length,
       facilityResults,
     },
   });

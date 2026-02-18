@@ -9,7 +9,8 @@ import {
 export const dynamic = 'force-dynamic';
 
 // ── Memoized Supabase client ───────────────────────────────────────────
-// createClient is called once per cold start, not on every request.
+// Created once per cold start. Always prefers the service role key —
+// never falls back to the anon key for server-side data operations.
 let _supabase: SupabaseClient | null = null;
 
 function getSupabase(): SupabaseClient | null {
@@ -17,11 +18,19 @@ function getSupabase(): SupabaseClient | null {
 
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !key) return null;
+  if (!url || !key) {
+    // Warn loudly in server logs — never silently use the anon key
+    if (!key && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error(
+        '[sync] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
+          'Refusing to use the anon key for server-side data operations. ' +
+          'Set SUPABASE_SERVICE_ROLE_KEY in your environment.',
+      );
+    }
+    return null;
+  }
 
   _supabase = createClient(url, key, {
     auth: {
@@ -48,7 +57,7 @@ export async function GET() {
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json(
-        { error: 'Sync not configured' },
+        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
         { status: 503 },
       );
     }
@@ -61,10 +70,7 @@ export async function GET() {
 
     if (error && error.code !== 'PGRST116') {
       console.error('Supabase fetch error:', error);
-      return NextResponse.json(
-        { error: 'Fetch failed' },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: 'Fetch failed' }, { status: 500 });
     }
 
     let settings = data?.settings || null;
@@ -81,10 +87,7 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Sync GET error:', err);
-    return NextResponse.json(
-      { error: 'Internal error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
 
@@ -103,7 +106,7 @@ export async function PUT(request: NextRequest) {
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json(
-        { error: 'Sync not configured' },
+        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
         { status: 503 },
       );
     }
@@ -134,10 +137,7 @@ export async function PUT(request: NextRequest) {
 
     if (error) {
       console.error('Supabase upsert error:', error);
-      return NextResponse.json(
-        { error: 'Save failed' },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: 'Save failed' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -146,9 +146,6 @@ export async function PUT(request: NextRequest) {
     });
   } catch (err) {
     console.error('Sync PUT error:', err);
-    return NextResponse.json(
-      { error: 'Internal error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

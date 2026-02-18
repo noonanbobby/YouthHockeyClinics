@@ -6,7 +6,6 @@ import { useStore } from '@/store/useStore';
 
 const SYNC_DEBOUNCE_MS = 3000;
 
-// Keys to sync to the server
 const SYNC_KEYS = [
   'favoriteIds',
   'childProfiles',
@@ -29,9 +28,12 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
     syncable[key] = state[key as keyof typeof state];
   }
 
-  // Strip the IceHockeyPro session cookie — it's ephemeral and should
-  // never be persisted to Supabase (it expires and is per-device).
-  if (syncable.iceHockeyProConfig && typeof syncable.iceHockeyProConfig === 'object') {
+  // Strip the IceHockeyPro session cookie — ephemeral, per-device, not
+  // suitable for cross-device sync.
+  if (
+    syncable.iceHockeyProConfig &&
+    typeof syncable.iceHockeyProConfig === 'object'
+  ) {
     const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
     delete ihp.sessionCookie;
     syncable.iceHockeyProConfig = ihp;
@@ -44,14 +46,19 @@ export function useSync() {
   const { data: session, status } = useSession();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPulledRef = useRef(false);
-  // Guard: true while we are applying a remote pull to the store.
-  // Prevents the store subscription from immediately pushing the
-  // just-pulled data back to the server (write-back loop).
   const isPullingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // Track mounted state so async callbacks don't update refs after unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // ── Push local settings to remote (debounced) ──────────────────────
   const pushSettings = useCallback(async () => {
-    // Never push while we are in the middle of applying a pull
     if (isPullingRef.current) return;
 
     try {
@@ -83,15 +90,15 @@ export function useSync() {
       const store = useStore.getState();
       const remote = data.settings;
 
-      // Set the pull guard BEFORE mutating the store so the subscription
-      // does not schedule a push for these changes.
+      // Set pull guard BEFORE mutating the store to prevent the
+      // store subscription from scheduling a push for these changes.
       isPullingRef.current = true;
 
       try {
-        // Merge strategy: remote wins for simple scalar values;
-        // union arrays so local + remote favorites are both kept.
         if (remote.favoriteIds?.length) {
-          const merged = [...new Set([...store.favoriteIds, ...remote.favoriteIds])];
+          const merged = [
+            ...new Set([...store.favoriteIds, ...remote.favoriteIds]),
+          ];
           useStore.setState({ favoriteIds: merged });
         }
         if (remote.childProfiles?.length && !store.childProfiles.length) {
@@ -112,23 +119,29 @@ export function useSync() {
         if (remote.homeLocation && !store.homeLocation) {
           useStore.setState({ homeLocation: remote.homeLocation });
         }
-        // Restore integration configs (passwords already decrypted by the API)
         if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
           useStore.setState({ daySmartConfig: remote.daySmartConfig });
         }
-        if (remote.iceHockeyProConfig?.email && !store.iceHockeyProConfig.email) {
+        if (
+          remote.iceHockeyProConfig?.email &&
+          !store.iceHockeyProConfig.email
+        ) {
           useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
         }
       } finally {
-        // Always release the pull guard, even if setState throws
-        // Use a short delay so the Zustand subscriber fires first
+        // Release the pull guard after Zustand subscribers have fired.
+        // Only update the ref if the component is still mounted.
         setTimeout(() => {
-          isPullingRef.current = false;
-        }, 100);
+          if (mountedRef.current) {
+            isPullingRef.current = false;
+          }
+        }, 150);
       }
     } catch {
       // Sync is optional — don't break the app
-      hasPulledRef.current = false; // Allow retry on next mount
+      if (mountedRef.current) {
+        hasPulledRef.current = false; // Allow retry on next mount
+      }
     }
   }, []);
 
@@ -137,7 +150,6 @@ export function useSync() {
     if (status === 'authenticated' && session?.user?.email) {
       pullSettings();
     }
-    // Reset pull flag on sign-out so next login pulls fresh data
     if (status === 'unauthenticated') {
       hasPulledRef.current = false;
       isPullingRef.current = false;
@@ -149,9 +161,7 @@ export function useSync() {
     if (status !== 'authenticated') return;
 
     const unsub = useStore.subscribe(() => {
-      // Skip push if we are currently applying a remote pull
       if (isPullingRef.current) return;
-
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(pushSettings, SYNC_DEBOUNCE_MS);
     });

@@ -1,5 +1,17 @@
 import { Rink, StickAndPuckSession } from '@/types';
 
+// ── Date helpers ──────────────────────────────────────────────────────
+// Build a YYYY-MM-DD string from a Date object using LOCAL time,
+// not UTC. This prevents timezone-shift bugs where a Monday 6 AM ET
+// session becomes Sunday in UTC.
+
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ── Helper to generate recurring weekly sessions ──────────────────────
 function weeklySession(
   rinkId: string,
@@ -21,7 +33,7 @@ function weeklySession(
 ): StickAndPuckSession[] {
   const sessions: StickAndPuckSession[] = [];
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = toLocalDateStr(now);
   const [startHour, startMin] = opts.startTime.split(':').map(Number);
 
   // Generate next 4 weeks of sessions
@@ -33,16 +45,17 @@ function weeklySession(
       if (daysUntil < 0) daysUntil += 7;
       date.setDate(now.getDate() + daysUntil + weekOffset * 7);
 
-      const dateStr = date.toISOString().split('T')[0];
+      // Use local date string — avoids UTC timezone shift
+      const dateStr = toLocalDateStr(date);
 
-      // Skip sessions that have already ended today
+      // Skip sessions that have already started today
       if (dateStr === todayStr) {
         const sessionStart = new Date(now);
         sessionStart.setHours(startHour, startMin, 0, 0);
         if (sessionStart <= now) continue;
       }
 
-      // Skip dates in the past (can happen on week 0 if daysUntil=0 and already past)
+      // Skip dates in the past
       if (dateStr < todayStr) continue;
 
       sessions.push({
@@ -65,7 +78,7 @@ function weeklySession(
         equipmentRequired: opts.equipmentRequired,
         notes: opts.notes,
         source: 'seed',
-        lastVerified: new Date().toISOString().split('T')[0],
+        lastVerified: toLocalDateStr(now),
       });
     }
   }
@@ -132,11 +145,10 @@ const FULL_EQUIP = ['Full hockey equipment required'];
 
 // ── Baptist Health IcePlex ──────────────────────────────────────────
 const iceplexSessions = [
-  // Stick & Puck — early AM + mid-morning
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck (Early)',
-    days: [1, 2, 3, 4, 5], // Mon-Fri
+    days: [1, 2, 3, 4, 5],
     startTime: '06:00',
     endTime: '07:30',
     price: 15,
@@ -148,7 +160,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '10:00',
     endTime: '11:30',
     price: 15,
@@ -159,7 +171,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '07:00',
     endTime: '08:30',
     price: 15,
@@ -170,7 +182,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Youth Stick & Puck (14U)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '09:00',
     endTime: '10:30',
     price: 12,
@@ -180,11 +192,10 @@ const iceplexSessions = [
     equipmentRequired: FULL_EQUIP,
     notes: 'Youth only. Great intro to open ice.',
   }),
-  // Open Hockey — midday + evening
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '12:00',
     endTime: '13:30',
     price: 20,
@@ -195,7 +206,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey (Evening)',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '20:00',
     endTime: '21:30',
     price: 20,
@@ -203,11 +214,10 @@ const iceplexSessions = [
     ageRestriction: '18+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate — afternoon + evening
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate (Afternoon)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '13:00',
     endTime: '15:00',
     price: 12,
@@ -216,7 +226,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'public-skate',
     name: 'Friday Night Skate',
-    days: [5], // Fri
+    days: [5],
     startTime: '19:00',
     endTime: '21:00',
     price: 14,
@@ -225,7 +235,7 @@ const iceplexSessions = [
   ...weeklySession('iceplex', 'Baptist Health IcePlex', ICEPLEX_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [3, 4], // Wed, Thu
+    days: [3, 4],
     startTime: '12:30',
     endTime: '14:00',
     price: 12,
@@ -235,11 +245,10 @@ const iceplexSessions = [
 
 // ── Florida Panthers IceDen ─────────────────────────────────────────
 const icedenSessions = [
-  // Stick & Puck — early + late morning
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck (Early)',
-    days: [1, 2, 3, 4, 5], // Mon-Fri
+    days: [1, 2, 3, 4, 5],
     startTime: '06:15',
     endTime: '07:45',
     price: 15,
@@ -251,7 +260,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '10:30',
     endTime: '12:00',
     price: 15,
@@ -262,7 +271,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '06:30',
     endTime: '08:00',
     price: 15,
@@ -273,7 +282,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Youth Stick & Puck (14U)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '08:30',
     endTime: '10:00',
     price: 12,
@@ -283,11 +292,10 @@ const icedenSessions = [
     equipmentRequired: FULL_EQUIP,
     notes: 'Youth only — 14 and under.',
   }),
-  // Drop-In Hockey
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'drop-in',
     name: 'Drop-In Hockey',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '12:00',
     endTime: '13:30',
     price: 20,
@@ -298,7 +306,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'drop-in',
     name: 'Drop-In Hockey (Evening)',
-    days: [2, 4, 6], // Tue, Thu, Sat
+    days: [2, 4, 6],
     startTime: '20:30',
     endTime: '22:00',
     price: 20,
@@ -306,11 +314,10 @@ const icedenSessions = [
     ageRestriction: '18+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '14:00',
     endTime: '16:00',
     price: 10,
@@ -319,7 +326,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [5], // Fri
+    days: [5],
     startTime: '19:00',
     endTime: '21:00',
     price: 12,
@@ -328,7 +335,7 @@ const icedenSessions = [
   ...weeklySession('iceden', 'Florida Panthers IceDen', ICEDEN_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [3], // Wed
+    days: [3],
     startTime: '13:00',
     endTime: '14:30',
     price: 10,
@@ -338,11 +345,10 @@ const icedenSessions = [
 
 // ── Pines Ice Arena ─────────────────────────────────────────────────
 const pinesSessions = [
-  // Stick & Puck
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck (Early)',
-    days: [1, 2, 3, 4, 5], // Mon-Fri
+    days: [1, 2, 3, 4, 5],
     startTime: '06:00',
     endTime: '07:30',
     price: 14,
@@ -354,7 +360,7 @@ const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [1, 3], // Mon, Wed
+    days: [1, 3],
     startTime: '10:00',
     endTime: '11:30',
     price: 14,
@@ -365,7 +371,7 @@ const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '07:00',
     endTime: '08:30',
     price: 14,
@@ -373,11 +379,10 @@ const pinesSessions = [
     goaliesFree: true,
     equipmentRequired: FULL_EQUIP,
   }),
-  // Drop-In
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'drop-in',
     name: 'Adult Drop-In',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '11:30',
     endTime: '13:00',
     price: 18,
@@ -387,18 +392,17 @@ const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'drop-in',
     name: 'Adult Drop-In (Evening)',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '21:00',
     endTime: '22:30',
     price: 18,
     ageRestriction: '18+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skating (Afternoon)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '12:00',
     endTime: '14:00',
     price: 10,
@@ -407,7 +411,7 @@ const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skating (Evening)',
-    days: [5, 6], // Fri, Sat
+    days: [5, 6],
     startTime: '19:00',
     endTime: '21:00',
     price: 12,
@@ -416,7 +420,7 @@ const pinesSessions = [
   ...weeklySession('pines-ice', 'Pines Ice Arena', PINESICE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skating',
-    days: [3], // Wed
+    days: [3],
     startTime: '12:30',
     endTime: '14:00',
     price: 10,
@@ -426,11 +430,10 @@ const pinesSessions = [
 
 // ── Incredible Ice ──────────────────────────────────────────────────
 const incredibleSessions = [
-  // Stick & Puck
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck (Early)',
-    days: [1, 2, 3, 4, 5], // Mon-Fri
+    days: [1, 2, 3, 4, 5],
     startTime: '06:30',
     endTime: '08:00',
     price: 13,
@@ -441,7 +444,7 @@ const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '10:00',
     endTime: '11:30',
     price: 13,
@@ -452,7 +455,7 @@ const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6], // Sat
+    days: [6],
     startTime: '07:00',
     endTime: '08:30',
     price: 13,
@@ -460,11 +463,10 @@ const incredibleSessions = [
     goaliesFree: true,
     equipmentRequired: FULL_EQUIP,
   }),
-  // Open Hockey
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '12:00',
     endTime: '13:30',
     price: 18,
@@ -474,18 +476,17 @@ const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey (Evening)',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '20:00',
     endTime: '21:30',
     price: 18,
     ageRestriction: '18+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Open Skating',
-    days: [5, 6], // Fri, Sat
+    days: [5, 6],
     startTime: '19:00',
     endTime: '21:00',
     price: 11,
@@ -494,7 +495,7 @@ const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Open Skating',
-    days: [0], // Sun
+    days: [0],
     startTime: '13:00',
     endTime: '15:00',
     price: 11,
@@ -503,7 +504,7 @@ const incredibleSessions = [
   ...weeklySession('incredible-ice', 'Incredible Ice', INCREDIBLE_LOCATION, {
     sessionType: 'public-skate',
     name: 'Open Skating',
-    days: [3], // Wed
+    days: [3],
     startTime: '12:00',
     endTime: '14:00',
     price: 11,
@@ -513,11 +514,10 @@ const incredibleSessions = [
 
 // ── Saveology Arena ─────────────────────────────────────────────────
 const saveologySessions = [
-  // Stick & Puck
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Early Bird Stick & Puck',
-    days: [1, 2, 3, 4, 5], // Mon-Fri
+    days: [1, 2, 3, 4, 5],
     startTime: '05:45',
     endTime: '07:15',
     price: 14,
@@ -529,7 +529,7 @@ const saveologySessions = [
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '10:00',
     endTime: '11:30',
     price: 14,
@@ -540,7 +540,7 @@ const saveologySessions = [
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '07:00',
     endTime: '08:30',
     price: 14,
@@ -548,11 +548,10 @@ const saveologySessions = [
     goaliesFree: true,
     equipmentRequired: FULL_EQUIP,
   }),
-  // Open Hockey
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Open Hockey',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '18:00',
     endTime: '19:30',
     price: 18,
@@ -562,18 +561,17 @@ const saveologySessions = [
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Open Hockey (Weeknight)',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '21:00',
     endTime: '22:30',
     price: 18,
     ageRestriction: '16+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'public-skate',
     name: 'Weekend Public Skate',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '13:00',
     endTime: '15:00',
     price: 10,
@@ -582,7 +580,7 @@ const saveologySessions = [
   ...weeklySession('saveology', 'Saveology Arena', SAVEOLOGY_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [5], // Fri
+    days: [5],
     startTime: '19:00',
     endTime: '21:00',
     price: 12,
@@ -592,11 +590,10 @@ const saveologySessions = [
 
 // ── The Rink at the Beach ───────────────────────────────────────────
 const rinkAtBeachSessions = [
-  // Stick & Puck
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck (Early)',
-    days: [1, 3, 5], // Mon, Wed, Fri
+    days: [1, 3, 5],
     startTime: '06:00',
     endTime: '07:30',
     price: 15,
@@ -608,7 +605,7 @@ const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Stick & Puck',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '07:00',
     endTime: '08:30',
     price: 15,
@@ -619,7 +616,7 @@ const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'stick-and-puck',
     name: 'Youth Stick & Puck (12U)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '09:00',
     endTime: '10:30',
     price: 10,
@@ -629,11 +626,10 @@ const rinkAtBeachSessions = [
     equipmentRequired: FULL_EQUIP,
     notes: 'Youth only. 12 and under.',
   }),
-  // Open Hockey
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey',
-    days: [2, 4], // Tue, Thu
+    days: [2, 4],
     startTime: '12:00',
     endTime: '13:30',
     price: 20,
@@ -644,7 +640,7 @@ const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'open-hockey',
     name: 'Adult Open Hockey (Evening)',
-    days: [1, 3], // Mon, Wed
+    days: [1, 3],
     startTime: '20:30',
     endTime: '22:00',
     price: 20,
@@ -652,11 +648,10 @@ const rinkAtBeachSessions = [
     ageRestriction: '18+',
     equipmentRequired: FULL_EQUIP,
   }),
-  // Public Skate
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate (Weekend)',
-    days: [6, 0], // Sat, Sun
+    days: [6, 0],
     startTime: '14:00',
     endTime: '16:00',
     price: 12,
@@ -665,7 +660,7 @@ const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate (Evening)',
-    days: [5], // Fri
+    days: [5],
     startTime: '19:00',
     endTime: '21:00',
     price: 14,
@@ -674,7 +669,7 @@ const rinkAtBeachSessions = [
   ...weeklySession('rink-at-beach', 'The Rink at the Beach', RINKATBEACH_LOCATION, {
     sessionType: 'public-skate',
     name: 'Public Skate',
-    days: [3], // Wed
+    days: [3],
     startTime: '12:00',
     endTime: '14:00',
     price: 12,
