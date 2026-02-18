@@ -43,18 +43,26 @@
 .theme-bg-header { background-color: var(--theme-header-bg); }
 .theme-bg-nav { background-color: var(--theme-nav-bg); }
 
+/* ─── Stick & Puck / shared page aliases ──────────
+   Used in stick-and-puck/page.tsx to avoid all
+   inline style={{}} props.                        */
+.theme-primary-bg       { background-color: var(--theme-primary); }
+.theme-primary-bg-faint { background-color: color-mix(in srgb, var(--theme-primary) 12%, transparent); }
+.theme-primary-text     { color: var(--theme-primary); }
+.theme-primary-border   { border-color: var(--theme-primary); }
+
 /* Alpha variants */
-.theme-bg-primary-5 { background-color: color-mix(in srgb, var(--theme-primary) 5%, transparent); }
+.theme-bg-primary-5  { background-color: color-mix(in srgb, var(--theme-primary)  5%, transparent); }
 .theme-bg-primary-10 { background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent); }
 .theme-bg-primary-15 { background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent); }
 .theme-bg-primary-20 { background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent); }
 
 /* Borders */
-.theme-border { border-color: var(--theme-card-border); }
+.theme-border        { border-color: var(--theme-card-border); }
 .theme-border-strong { border-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
 
 /* Ring / Focus */
-.theme-ring { --tw-ring-color: var(--theme-primary); }
+.theme-ring      { --tw-ring-color: var(--theme-primary); }
 .theme-ring-glow { box-shadow: 0 0 20px var(--theme-glow); }
 
 /* Gradient helpers */
@@ -63,11 +71,11 @@
 }
 
 /* ─── Safe Areas for iPhone ────────────────────── */
-.safe-area-top { padding-top: env(safe-area-inset-top); }
+.safe-area-top    { padding-top:    env(safe-area-inset-top); }
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 /* ─── Scrollbar ────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -84,13 +92,19 @@ body {
   background-color: var(--theme-bg);
 }
 
+/* ─── Focus ring ───────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
+}
+
 /* ─── Map ─────────────────────────────────────── */
 .leaflet-container { background: var(--theme-bg) !important; font-family: inherit !important; }
-.custom-marker { background: transparent !important; border: none !important; }
+.custom-marker     { background: transparent !important; border: none !important; }
 
 @keyframes marker-pulse {
-  0% { box-shadow: 0 0 0 0 var(--theme-glow); }
-  70% { box-shadow: 0 0 0 15px transparent; }
+  0%   { box-shadow: 0 0 0 0 var(--theme-glow); }
+  70%  { box-shadow: 0 0 0 15px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
@@ -102,8 +116,8 @@ main { animation: fadeIn 0.15s ease-out; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 .skeleton {
   background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);

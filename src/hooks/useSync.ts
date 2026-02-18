@@ -28,6 +28,24 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
   for (const key of SYNC_KEYS) {
     syncable[key] = state[key as keyof typeof state];
   }
+
+  // Strip passwords before sending to the sync API.
+  // The API route (src/app/api/sync/route.ts) re-encrypts them server-side
+  // before writing to Supabase, so we must send the plaintext password so
+  // the server can encrypt it.  However, we must NOT send an already-encrypted
+  // "enc:..." value back up — that would double-encrypt it.
+  // The server's encryptSettingsCredentials() handles the enc: sentinel check,
+  // so it is safe to always send the current plaintext value.
+  //
+  // What we DO strip: session cookies from IceHockeyPro — those are transient
+  // and should never be persisted to Supabase.
+  if (syncable.iceHockeyProConfig && typeof syncable.iceHockeyProConfig === 'object') {
+    const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
+    // Remove session cookie — it's ephemeral and not needed cross-device
+    delete ihp.sessionCookie;
+    syncable.iceHockeyProConfig = ihp;
+  }
+
   return syncable;
 }
 
@@ -75,6 +93,13 @@ export function useSync() {
       if (remote.homeLocation && !store.homeLocation) {
         useStore.setState({ homeLocation: remote.homeLocation });
       }
+      // Restore integration configs (passwords already decrypted by the API)
+      if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
+        useStore.setState({ daySmartConfig: remote.daySmartConfig });
+      }
+      if (remote.iceHockeyProConfig?.email && !store.iceHockeyProConfig.email) {
+        useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
+      }
 
       lastSyncedRef.current = data.updatedAt;
     } catch {
@@ -102,6 +127,10 @@ export function useSync() {
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.email) {
       pullSettings();
+    }
+    // Reset pull flag on sign-out so next login pulls fresh
+    if (status === 'unauthenticated') {
+      hasPulledRef.current = false;
     }
   }, [status, session?.user?.email, pullSettings]);
 

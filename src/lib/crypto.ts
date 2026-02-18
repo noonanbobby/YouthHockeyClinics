@@ -25,6 +25,10 @@ export function isEncryptionConfigured(): boolean {
 
 /** Import the hex key as a CryptoKey for AES-GCM */
 async function importKey(): Promise<CryptoKey> {
+  // Guard: should only be called when isEncryptionConfigured() is true
+  if (!isEncryptionConfigured()) {
+    throw new Error('CREDENTIAL_ENCRYPTION_KEY is not configured');
+  }
   const raw = new Uint8Array(
     ENV_KEY.match(/.{2}/g)!.map((b) => parseInt(b, 16)),
   );
@@ -57,17 +61,22 @@ export async function encryptCredential(plaintext: string): Promise<string> {
   if (plaintext.startsWith(SENTINEL)) return plaintext; // already encrypted
   if (!isEncryptionConfigured()) return plaintext;       // no key — pass through
 
-  const key = await importKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
-  const encoded = new TextEncoder().encode(plaintext);
+  try {
+    const key = await importKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
+    const encoded = new TextEncoder().encode(plaintext);
 
-  const cipherBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoded,
-  );
+    const cipherBuf = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encoded,
+    );
 
-  return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
+    return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
+  } catch {
+    // Encryption failure — return plaintext rather than losing the credential
+    return plaintext;
+  }
 }
 
 /**
