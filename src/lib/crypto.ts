@@ -31,7 +31,6 @@ async function importKey(): Promise<CryptoKey> {
   if (!isEncryptionConfigured()) {
     throw new Error('CREDENTIAL_ENCRYPTION_KEY is not configured');
   }
-  // Parse hex string to Uint8Array without using Buffer
   const raw = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     raw[i] = parseInt(ENV_KEY.slice(i * 2, i * 2 + 2), 16);
@@ -42,7 +41,7 @@ async function importKey(): Promise<CryptoKey> {
   ]);
 }
 
-/** Encode ArrayBuffer to base64url string without using Buffer */
+/** Encode ArrayBuffer to base64url string — no Node.js Buffer */
 function toBase64url(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let binary = '';
@@ -55,10 +54,9 @@ function toBase64url(buf: ArrayBuffer): string {
     .replace(/=+$/, '');
 }
 
-/** Decode base64url string to Uint8Array without using Buffer */
+/** Decode base64url string to Uint8Array — no Node.js Buffer */
 function fromBase64url(s: string): Uint8Array {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  // Pad to multiple of 4
   const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
@@ -75,20 +73,18 @@ function fromBase64url(s: string): Uint8Array {
  */
 export async function encryptCredential(plaintext: string): Promise<string> {
   if (!plaintext) return plaintext;
-  if (plaintext.startsWith(SENTINEL)) return plaintext; // already encrypted
-  if (!isEncryptionConfigured()) return plaintext;       // no key — pass through
+  if (plaintext.startsWith(SENTINEL)) return plaintext;
+  if (!isEncryptionConfigured()) return plaintext;
 
   try {
     const key = await importKey();
-    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
+    const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(plaintext);
-
     const cipherBuf = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
       encoded,
     );
-
     return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
   } catch {
     // Encryption failure — return plaintext rather than losing the credential
@@ -103,20 +99,17 @@ export async function encryptCredential(plaintext: string): Promise<string> {
  */
 export async function decryptCredential(wire: string): Promise<string> {
   if (!wire) return wire;
-  if (!wire.startsWith(SENTINEL)) return wire; // plaintext pass-through
-  if (!isEncryptionConfigured()) return wire;  // no key — return as-is
+  if (!wire.startsWith(SENTINEL)) return wire;
+  if (!isEncryptionConfigured()) return wire;
 
   try {
     const payload = wire.slice(SENTINEL.length);
     const dotIdx = payload.indexOf('.');
     if (dotIdx === -1) return '';
 
-    const ivB64 = payload.slice(0, dotIdx);
-    const cipherB64 = payload.slice(dotIdx + 1);
-
     const key = await importKey();
-    const iv = fromBase64url(ivB64);
-    const cipherBuf = fromBase64url(cipherB64);
+    const iv = fromBase64url(payload.slice(0, dotIdx));
+    const cipherBuf = fromBase64url(payload.slice(dotIdx + 1));
 
     const plainBuf = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
@@ -125,21 +118,19 @@ export async function decryptCredential(wire: string): Promise<string> {
     );
     return new TextDecoder().decode(plainBuf);
   } catch {
-    // Decryption failure — return empty string rather than leaking wire data
     return '';
   }
 }
 
 /**
  * Encrypt sensitive credential fields in a settings object before
- * writing to Supabase.  Non-credential fields are passed through unchanged.
+ * writing to Supabase.
  */
 export async function encryptSettingsCredentials(
   settings: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const out = { ...settings };
 
-  // DaySmart password
   if (out.daySmartConfig && typeof out.daySmartConfig === 'object') {
     const dsc = { ...(out.daySmartConfig as Record<string, unknown>) };
     if (typeof dsc.password === 'string' && dsc.password) {
@@ -148,9 +139,13 @@ export async function encryptSettingsCredentials(
     out.daySmartConfig = dsc;
   }
 
-  // IceHockeyPro password
-  if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
-    const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
+  if (
+    out.iceHockeyProConfig &&
+    typeof out.iceHockeyProConfig === 'object'
+  ) {
+    const ihp = {
+      ...(out.iceHockeyProConfig as Record<string, unknown>),
+    };
     if (typeof ihp.password === 'string' && ihp.password) {
       ihp.password = await encryptCredential(ihp.password);
     }
@@ -176,8 +171,13 @@ export async function decryptSettingsCredentials(
     out.daySmartConfig = dsc;
   }
 
-  if (out.iceHockeyProConfig && typeof out.iceHockeyProConfig === 'object') {
-    const ihp = { ...(out.iceHockeyProConfig as Record<string, unknown>) };
+  if (
+    out.iceHockeyProConfig &&
+    typeof out.iceHockeyProConfig === 'object'
+  ) {
+    const ihp = {
+      ...(out.iceHockeyProConfig as Record<string, unknown>),
+    };
     if (typeof ihp.password === 'string') {
       ihp.password = await decryptCredential(ihp.password);
     }

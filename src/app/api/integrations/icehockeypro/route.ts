@@ -10,6 +10,10 @@ import * as cheerio from 'cheerio';
  *   POST ?action=login   → Login to WooCommerce, return session cookies
  *   POST ?action=sync    → Scrape authenticated order history
  *   POST ?action=camps   → Scrape public camp catalog (no auth needed)
+ *
+ * NOTE: The `camps` action does not require a request body. All other
+ * actions require a JSON body. Body parsing is fault-tolerant — a missing
+ * or malformed body will not throw a 500.
  */
 
 const IHP_BASE = 'https://icehockeypro.com';
@@ -29,6 +33,7 @@ const MAX_IVANOV_SEARCH_URLS = [
   `${IHP_BASE}/?s=max+ivanov&post_type=product`,
   `${IHP_BASE}/?s=ivanov&post_type=product`,
   `${IHP_BASE}/?s=super+skills&post_type=product`,
+  `${IHP_BASE}/?s=max+ivanov+2026&post_type=product`,
 ];
 
 interface ScrapedOrder {
@@ -78,18 +83,25 @@ function scoreCampName(value: string, key: string): number {
   const clean = value.replace(/\s*×\s*\d+$/, '').trim();
   if (!isMeaningful(clean)) return 0;
 
-  // Base score: length (longer = more descriptive)
   let score = clean.length;
-
   const kl = key.toLowerCase();
   const vl = clean.toLowerCase();
 
-  // Boost for keys that indicate this IS the camp name
-  if (kl === 'name' || kl === 'camp name' || kl === 'event name' || kl === 'title') score += 60;
+  if (
+    kl === 'name' ||
+    kl === 'camp name' ||
+    kl === 'event name' ||
+    kl === 'title'
+  )
+    score += 60;
   if (kl === 'program' || kl === 'class') score += 40;
-  if (kl.includes('camp') && !kl.includes('date') && !kl.includes('location')) score += 50;
+  if (
+    kl.includes('camp') &&
+    !kl.includes('date') &&
+    !kl.includes('location')
+  )
+    score += 50;
 
-  // Boost for hockey-related words in the value
   const hockeyWords = [
     'hockey', 'skating', 'skills', 'clinic', 'tournament', 'league',
     'goalie', 'power', 'elite', 'development', 'training', 'weekend',
@@ -102,7 +114,7 @@ function scoreCampName(value: string, key: string): number {
   // Large boost for Max Ivanov — his camps are the primary target
   if (vl.includes('ivanov') || vl.includes('max ivanov')) score += 100;
 
-  // Penalize location-like values (CITY, State) that have no hockey words
+  // Penalize location-like values that have no hockey words
   if (
     /^[A-Z][a-zA-Z\s]+,\s*[A-Za-z\s]+$/.test(clean) &&
     !hockeyWords.some((w) => vl.includes(w))
@@ -122,7 +134,7 @@ function scoreCampName(value: string, key: string): number {
   // Penalize price-like values
   if (/^\$?\d+\.?\d*$/.test(clean)) score -= 100;
 
-  // Do NOT penalize ALL-CAPS — Max Ivanov uses them ("SUPER SKILLS WEEKEND")
+  // Do NOT penalize ALL-CAPS — Max Ivanov uses them
   return Math.max(score, 0);
 }
 
@@ -156,29 +168,58 @@ async function fetchPage(
   }
 }
 
+// ── Safe body parser ──────────────────────────────────────────────────
+// Returns an empty object rather than throwing when the body is absent
+// or malformed (e.g. the `camps` action sends no body).
+
+async function safeParseBody(
+  request: NextRequest,
+): Promise<Record<string, unknown>> {
+  try {
+    const text = await request.text();
+    if (!text || text.trim() === '') return {};
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
 // ── Main route handler ────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const action = request.nextUrl.searchParams.get('action') || 'sync';
+  const action =
+    request.nextUrl.searchParams.get('action') || 'sync';
 
   try {
-    const body = await request.json();
-    const { email, password, sessionCookie, linkedChildNames } = body;
+    const body = await safeParseBody(request);
+    const email = typeof body.email === 'string' ? body.email : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const sessionCookie =
+      typeof body.sessionCookie === 'string' ? body.sessionCookie : '';
+    const linkedChildNames = Array.isArray(body.linkedChildNames)
+      ? (body.linkedChildNames as string[])
+      : [];
 
     switch (action) {
       case 'login':
         return handleLogin(email, password);
       case 'sync':
-        return handleSync(sessionCookie || '', linkedChildNames || []);
+        return handleSync(sessionCookie, linkedChildNames);
       case 'camps':
         return handleCamps();
       default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Unknown action' },
+          { status: 400 },
+        );
     }
   } catch (error) {
     console.error('[IceHockeyPro] Error:', error);
     return NextResponse.json(
-      { error: 'IceHockeyPro integration error', details: String(error) },
+      {
+        error: 'IceHockeyPro integration error',
+        details: String(error),
+      },
       { status: 500 },
     );
   }
@@ -188,13 +229,15 @@ export async function POST(request: NextRequest) {
 
 async function handleLogin(email: string, password: string) {
   if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Email and password required' },
+      { status: 400 },
+    );
   }
 
   try {
     const loginUrl = `${IHP_BASE}/my-account/`;
 
-    // Step 1: Fetch login page to get nonce + initial cookies
     const loginPageRes = await fetch(loginUrl, {
       headers: {
         'User-Agent':
@@ -207,13 +250,13 @@ async function handleLogin(email: string, password: string) {
     const loginPageHtml = await loginPageRes.text();
     const $loginPage = cheerio.load(loginPageHtml);
     const nonce =
-      ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) || '';
+      ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) ||
+      '';
 
     const initCookies = (loginPageRes.headers.getSetCookie?.() || [])
       .map((c) => c.split(';')[0])
       .join('; ');
 
-    // Step 2: Submit login form
     const formData = new URLSearchParams();
     formData.set('username', email);
     formData.set('password', password);
@@ -236,7 +279,6 @@ async function handleLogin(email: string, password: string) {
       redirect: 'manual',
     });
 
-    // Collect all cookies from the login response
     const setCookieHeaders = res.headers.getSetCookie?.() || [];
     const allCookies = [...initCookies.split('; ').filter(Boolean)];
     for (const c of setCookieHeaders) {
@@ -245,14 +287,17 @@ async function handleLogin(email: string, password: string) {
     }
     const cookies = allCookies.join('; ');
 
-    if (res.status !== 302 && res.status !== 301 && res.status !== 200) {
+    if (
+      res.status !== 302 &&
+      res.status !== 301 &&
+      res.status !== 200
+    ) {
       return NextResponse.json(
         { error: 'Login failed. Check your email and password.' },
         { status: 401 },
       );
     }
 
-    // Step 3: Verify by accessing orders page
     const ordersRes = await fetch(`${IHP_BASE}/my-account-2/orders/`, {
       headers: {
         'User-Agent':
@@ -276,7 +321,11 @@ async function handleLogin(email: string, password: string) {
       );
     }
 
-    return NextResponse.json({ success: true, sessionCookie: cookies, hasOrders });
+    return NextResponse.json({
+      success: true,
+      sessionCookie: cookies,
+      hasOrders,
+    });
   } catch (error) {
     console.error('[IceHockeyPro] Login error:', error);
     return NextResponse.json(
@@ -291,7 +340,10 @@ async function handleLogin(email: string, password: string) {
 
 // ── Sync (authenticated order history) ───────────────────────────────
 
-async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
+async function handleSync(
+  sessionCookie: string,
+  linkedChildNames: string[],
+) {
   const headers: Record<string, string> = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -309,7 +361,8 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
       return NextResponse.json(
         {
           error: `Failed to fetch orders: ${ordersRes.status}`,
-          needsReauth: ordersRes.status === 403 || ordersRes.status === 401,
+          needsReauth:
+            ordersRes.status === 403 || ordersRes.status === 401,
         },
         { status: ordersRes.status },
       );
@@ -328,7 +381,6 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
       );
     }
 
-    // Collect order detail links
     const orderLinks: string[] = [];
     $(
       'a.woocommerce-button.view, a.button.view, td.woocommerce-orders-table__cell--order-actions a',
@@ -366,9 +418,13 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
           'td.product-name, .woocommerce-table--order-details .product-name',
         ).first();
 
-        // Product link text + URL slug
-        const productLinkText = $productCell.find('a').first().text().trim();
-        const productHref = $productCell.find('a').first().attr('href') || '';
+        const productLinkText = $productCell
+          .find('a')
+          .first()
+          .text()
+          .trim();
+        const productHref =
+          $productCell.find('a').first().attr('href') || '';
         const slugMatch = productHref.match(/\/product\/([^/?#]+)/);
         const slugName = slugMatch
           ? decodeURIComponent(slugMatch[1])
@@ -376,30 +432,40 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
               .replace(/\b\w/g, (c) => c.toUpperCase())
           : '';
 
-        // Variation key/value pairs — all WooCommerce formats
         const variations: Record<string, string> = {};
 
-        $productCell.find('dl.variation dt, dl.wc-item-meta dt').each((_, el) => {
-          const key = $order(el).text().replace(/[:\s]+$/, '').trim().toLowerCase();
-          const val = $order(el).next('dd').text().trim();
-          if (key && val) variations[key] = val;
-        });
+        $productCell
+          .find('dl.variation dt, dl.wc-item-meta dt')
+          .each((_, el) => {
+            const key = $order(el)
+              .text()
+              .replace(/[:\s]+$/, '')
+              .trim()
+              .toLowerCase();
+            const val = $order(el).next('dd').text().trim();
+            if (key && val) variations[key] = val;
+          });
 
-        $productCell.find('.wc-item-meta li, ul.wc-item-meta li').each((_, el) => {
-          const label = $order(el)
-            .find('strong, .wc-item-meta-label')
-            .text()
-            .replace(/[:\s]+$/, '')
-            .trim()
-            .toLowerCase();
-          const fullText = $order(el).text().trim();
-          const labelText = $order(el)
-            .find('strong, .wc-item-meta-label')
-            .text()
-            .trim();
-          const val = fullText.replace(labelText, '').replace(/^[:\s]+/, '').trim();
-          if (label && val) variations[label] = val;
-        });
+        $productCell
+          .find('.wc-item-meta li, ul.wc-item-meta li')
+          .each((_, el) => {
+            const label = $order(el)
+              .find('strong, .wc-item-meta-label')
+              .text()
+              .replace(/[:\s]+$/, '')
+              .trim()
+              .toLowerCase();
+            const fullText = $order(el).text().trim();
+            const labelText = $order(el)
+              .find('strong, .wc-item-meta-label')
+              .text()
+              .trim();
+            const val = fullText
+              .replace(labelText, '')
+              .replace(/^[:\s]+/, '')
+              .trim();
+            if (label && val) variations[label] = val;
+          });
 
         $productCell.find('table.wc-item-meta tr').each((_, el) => {
           const key = $order(el)
@@ -414,8 +480,11 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
 
         const fullCellText = $productCell.text().trim();
 
-        // Score all name candidates
-        const candidates: { name: string; score: number; source: string }[] = [];
+        const candidates: {
+          name: string;
+          score: number;
+          source: string;
+        }[] = [];
 
         for (const [key, val] of Object.entries(variations)) {
           const clean = val.replace(/\s*×\s*\d+$/, '').trim();
@@ -526,8 +595,10 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
           .last()
           .text()
           .trim();
-        const priceText = itemPriceText || cellPriceText || orderTotalText;
-        const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+        const priceText =
+          itemPriceText || cellPriceText || orderTotalText;
+        const price =
+          parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
         const currency = priceText.includes('€') ? 'EUR' : 'USD';
 
         const billingName =
@@ -547,10 +618,14 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
           .trim();
 
         const status =
-          $order('.woocommerce-order-data mark, .order-status').first().text().trim() ||
-          'completed';
+          $order('.woocommerce-order-data mark, .order-status')
+            .first()
+            .text()
+            .trim() || 'completed';
         const orderDate =
-          $order('.woocommerce-order-data__meta time, .order-date time')
+          $order(
+            '.woocommerce-order-data__meta time, .order-date time',
+          )
             .first()
             .attr('datetime') ||
           $order('.woocommerce-order-data__meta, .order-date')
@@ -577,7 +652,11 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
             candidateCount: candidates.length,
             topCandidates: candidates
               .slice(0, 5)
-              .map((c) => ({ name: c.name, score: c.score, source: c.source })),
+              .map((c) => ({
+                name: c.name,
+                score: c.score,
+                source: c.source,
+              })),
             fullCellTextPreview: fullCellText.substring(0, 300),
           },
         });
@@ -586,10 +665,9 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
       }
     }
 
-    // Match orders to linked children
     const matchedOrders = orders.map((order) => {
       const billingLower = order.billingName.toLowerCase();
-      let matchedChild = linkedChildNames.find((name: string) =>
+      let matchedChild = linkedChildNames.find((name) =>
         billingLower.includes(name.toLowerCase()),
       );
       if (!matchedChild) {
@@ -597,10 +675,11 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
         const billingLast = billingParts[billingParts.length - 1];
         if (billingLast && billingLast.length > 2) {
           const lastNameMatches = linkedChildNames.filter(
-            (name: string) =>
+            (name) =>
               name.toLowerCase().split(/\s+/).pop() === billingLast,
           );
-          if (lastNameMatches.length === 1) matchedChild = lastNameMatches[0];
+          if (lastNameMatches.length === 1)
+            matchedChild = lastNameMatches[0];
         }
       }
       return {
@@ -622,7 +701,10 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
   } catch (error) {
     console.error('[IceHockeyPro] Sync error:', error);
     return NextResponse.json(
-      { error: 'Failed to scrape IceHockeyPro orders', details: String(error) },
+      {
+        error: 'Failed to scrape IceHockeyPro orders',
+        details: String(error),
+      },
       { status: 500 },
     );
   }
@@ -632,14 +714,15 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
 
 async function handleCamps() {
   try {
-    // Scrape all category pages + Max Ivanov search results in parallel
-    const urlsToScrape = [...CAMP_CATEGORY_URLS, ...MAX_IVANOV_SEARCH_URLS];
+    const urlsToScrape = [
+      ...CAMP_CATEGORY_URLS,
+      ...MAX_IVANOV_SEARCH_URLS,
+    ];
 
     const pageResults = await Promise.allSettled(
       urlsToScrape.map((url) => fetchPage(url)),
     );
 
-    // Collect unique product URLs and quick camp data across all pages
     const productUrlSet = new Set<string>();
     const quickCamps: ScrapedCamp[] = [];
 
@@ -649,57 +732,69 @@ async function handleCamps() {
       const { html } = result.value;
       const $ = cheerio.load(html);
 
-      // WooCommerce product listing
-      $('li.product, .product-item, .woocommerce ul.products li').each((_, el) => {
-        const $el = $(el);
-        const name = $el
-          .find('.woocommerce-loop-product__title, h2, .product-title')
-          .first()
-          .text()
-          .trim();
-        const url =
-          $el.find('a.woocommerce-LoopProduct-link, a').first().attr('href') || '';
-        const priceText = $el
-          .find('.woocommerce-Price-amount, .price .amount')
-          .first()
-          .text()
-          .trim();
-        const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
-        const imageUrl = $el.find('img').first().attr('src') || '';
-        const desc = $el
-          .find('.short-description, .product-excerpt, p')
-          .first()
-          .text()
-          .trim();
+      $('li.product, .product-item, .woocommerce ul.products li').each(
+        (_, el) => {
+          const $el = $(el);
+          const name = $el
+            .find(
+              '.woocommerce-loop-product__title, h2, .product-title',
+            )
+            .first()
+            .text()
+            .trim();
+          const url =
+            $el
+              .find('a.woocommerce-LoopProduct-link, a')
+              .first()
+              .attr('href') || '';
+          const priceText = $el
+            .find('.woocommerce-Price-amount, .price .amount')
+            .first()
+            .text()
+            .trim();
+          const price =
+            parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+          const imageUrl =
+            $el.find('img').first().attr('src') || '';
+          const desc = $el
+            .find('.short-description, .product-excerpt, p')
+            .first()
+            .text()
+            .trim();
 
-        if (name && url && !productUrlSet.has(url)) {
-          productUrlSet.add(url);
-          const nameLower = name.toLowerCase();
-          const descLower = desc.toLowerCase();
-          const isMaxIvanov =
-            nameLower.includes('ivanov') ||
-            nameLower.includes('max ivanov') ||
-            descLower.includes('ivanov');
+          if (name && url && !productUrlSet.has(url)) {
+            productUrlSet.add(url);
+            const nameLower = name.toLowerCase();
+            const descLower = desc.toLowerCase();
+            const isMaxIvanov =
+              nameLower.includes('ivanov') ||
+              nameLower.includes('max ivanov') ||
+              descLower.includes('ivanov');
 
-          const parsed = parseCampDescription(`${name} | ${desc}`);
-          quickCamps.push({
-            name,
-            url,
-            location: parsed.location || '',
-            dates: parsed.dates || '',
-            price,
-            currency: priceText.includes('€') ? 'EUR' : 'USD',
-            description: desc,
-            imageUrl,
-            isMaxIvanov,
-          });
-        }
-      });
+            const parsed = parseCampDescription(`${name} | ${desc}`);
+            quickCamps.push({
+              name,
+              url,
+              location: parsed.location || '',
+              dates: parsed.dates || '',
+              price,
+              currency: priceText.includes('€') ? 'EUR' : 'USD',
+              description: desc,
+              imageUrl,
+              isMaxIvanov,
+            });
+          }
+        },
+      );
 
-      // Also pick up product links from search result pages
+      // Pick up product links from search result pages
       $('a[href*="/product/"]').each((_, el) => {
         const href = $(el).attr('href') || '';
-        if (href && !productUrlSet.has(href) && /\/product\/[a-z0-9-]+\/?$/.test(href)) {
+        if (
+          href &&
+          !productUrlSet.has(href) &&
+          /\/product\/[a-z0-9-]+\/?$/.test(href)
+        ) {
           productUrlSet.add(href);
         }
       });
@@ -707,10 +802,11 @@ async function handleCamps() {
 
     // Deduplicate by URL
     const uniqueCamps = quickCamps.filter(
-      (c, idx, arr) => arr.findIndex((x) => x.url === c.url) === idx,
+      (c, idx, arr) =>
+        arr.findIndex((x) => x.url === c.url) === idx,
     );
 
-    // Prioritize Max Ivanov camps + camps missing details for detail scraping
+    // Max Ivanov camps + camps missing details → scrape detail pages
     const needsDetail = uniqueCamps.filter(
       (c) => c.isMaxIvanov || !c.dates || !c.location,
     );
@@ -718,10 +814,12 @@ async function handleCamps() {
       (c) => !c.isMaxIvanov && !!c.dates && !!c.location,
     );
 
-    // Scrape detail pages in parallel (cap at 20 to avoid rate limiting)
+    // Cap at 20 detail pages to avoid rate limiting
     const detailLimit = Math.min(needsDetail.length, 20);
     const detailResults = await Promise.allSettled(
-      needsDetail.slice(0, detailLimit).map((camp) => scrapeProductDetail(camp)),
+      needsDetail
+        .slice(0, detailLimit)
+        .map((camp) => scrapeProductDetail(camp)),
     );
 
     const detailedCamps: ScrapedCamp[] = [];
@@ -730,12 +828,10 @@ async function handleCamps() {
         detailedCamps.push(result.value);
       }
     }
-    // Add any that exceeded the limit without detail scraping
     for (const camp of needsDetail.slice(detailLimit)) {
       detailedCamps.push(camp);
     }
 
-    // Combine: detailed first, then already-complete
     const allCamps = [...detailedCamps, ...alreadyComplete];
 
     // Sort: Max Ivanov first, then alphabetically
@@ -765,7 +861,10 @@ async function handleCamps() {
   } catch (error) {
     console.error('[IceHockeyPro] Camps error:', error);
     return NextResponse.json(
-      { error: 'Failed to scrape IceHockeyPro camps', details: String(error) },
+      {
+        error: 'Failed to scrape IceHockeyPro camps',
+        details: String(error),
+      },
       { status: 500 },
     );
   }
@@ -773,7 +872,9 @@ async function handleCamps() {
 
 // ── Product detail page scraper ───────────────────────────────────────
 
-async function scrapeProductDetail(camp: ScrapedCamp): Promise<ScrapedCamp> {
+async function scrapeProductDetail(
+  camp: ScrapedCamp,
+): Promise<ScrapedCamp> {
   if (!camp.url) return camp;
 
   const { html, ok } = await fetchPage(camp.url);
@@ -781,50 +882,50 @@ async function scrapeProductDetail(camp: ScrapedCamp): Promise<ScrapedCamp> {
 
   const $detail = cheerio.load(html);
 
-  // Product title (may be more complete than listing title)
   const detailTitle =
-    $detail('.product_title, h1.entry-title').first().text().trim() || camp.name;
+    $detail('.product_title, h1.entry-title').first().text().trim() ||
+    camp.name;
 
-  // Short description (most reliable for camp details on WooCommerce)
   const shortDesc = $detail(
     '.woocommerce-product-details__short-description, .product-short-description, .entry-summary .description',
   )
     .text()
     .trim();
 
-  // Long description
   const longDesc = $detail(
     '.woocommerce-Tabs-panel--description, .product-description, #tab-description',
   )
     .text()
     .trim();
 
-  // Price
-  const detailPriceText = $detail('.woocommerce-Price-amount, .price .amount')
+  const detailPriceText = $detail(
+    '.woocommerce-Price-amount, .price .amount',
+  )
     .first()
     .text()
     .trim();
   const detailPrice =
     parseFloat(detailPriceText.replace(/[^0-9.]/g, '')) || camp.price;
 
-  // Image
   const detailImage =
-    $detail('.woocommerce-product-gallery__image img, .wp-post-image')
+    $detail(
+      '.woocommerce-product-gallery__image img, .wp-post-image',
+    )
       .first()
       .attr('src') || camp.imageUrl;
 
-  // Parse combined text for location + dates
   const combined = `${detailTitle} | ${shortDesc} | ${longDesc}`;
   const parsed = parseCampDescription(combined);
 
-  // JSON-LD structured data (most reliable when present)
+  // JSON-LD structured data — most reliable source for dates/location
   let jsonLdDates = '';
   let jsonLdLocation = '';
   $detail('script[type="application/ld+json"]').each((_, el) => {
     try {
       const data = JSON.parse($detail(el).html() || '{}');
-      // Handle both single object and @graph array
-      const items = Array.isArray(data['@graph']) ? data['@graph'] : [data];
+      const items = Array.isArray(data['@graph'])
+        ? data['@graph']
+        : [data];
       for (const item of items) {
         if (item.startDate && !jsonLdDates) {
           jsonLdDates = item.startDate;
@@ -883,7 +984,6 @@ function parseCampDescription(description: string): {
   let dates = '';
 
   for (const part of parts.slice(1)) {
-    // Location: "CITY, State" or "City, ST - Country"
     const locationMatch = part.match(
       /([A-Z][a-zA-Z\s]+),\s*([A-Za-z\s]+?)(?:\s*-\s*[A-Z]{2,3})?$/,
     );
@@ -892,7 +992,6 @@ function parseCampDescription(description: string): {
       continue;
     }
 
-    // Dates: month name + number
     const dateMatch = part.match(
       /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d/i,
     );
@@ -901,7 +1000,6 @@ function parseCampDescription(description: string): {
       continue;
     }
 
-    // Year-only date fallback
     if (/\b202[5-9]\b/.test(part) && !dates) {
       dates = part;
     }

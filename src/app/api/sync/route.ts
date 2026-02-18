@@ -15,7 +15,8 @@ let _supabase: SupabaseClient | null = null;
 function getSupabase(): SupabaseClient | null {
   if (_supabase) return _supabase;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -24,7 +25,6 @@ function getSupabase(): SupabaseClient | null {
 
   _supabase = createClient(url, key, {
     auth: {
-      // We manage auth ourselves via NextAuth — disable Supabase auth helpers
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
@@ -39,12 +39,18 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 },
+      );
     }
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json({ error: 'Sync not configured' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'Sync not configured' },
+        { status: 503 },
+      );
     }
 
     const { data, error } = await supabase
@@ -54,12 +60,13 @@ export async function GET() {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      // PGRST116 = no rows found — not an error for us
       console.error('Supabase fetch error:', error);
-      return NextResponse.json({ error: 'Fetch failed' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Fetch failed' },
+        { status: 500 },
+      );
     }
 
-    // Decrypt credential fields before returning to the client
     let settings = data?.settings || null;
     if (settings && typeof settings === 'object') {
       settings = await decryptSettingsCredentials(
@@ -74,7 +81,10 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Sync GET error:', err);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal error' },
+      { status: 500 },
+    );
   }
 }
 
@@ -84,12 +94,18 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 },
+      );
     }
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json({ error: 'Sync not configured' }, { status: 503 });
+      return NextResponse.json(
+        { error: 'Sync not configured' },
+        { status: 503 },
+      );
     }
 
     const body = await request.json();
@@ -102,7 +118,6 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Encrypt credential fields before writing to Supabase
     const encryptedSettings = await encryptSettingsCredentials(
       settings as Record<string, unknown>,
     );
@@ -119,7 +134,10 @@ export async function PUT(request: NextRequest) {
 
     if (error) {
       console.error('Supabase upsert error:', error);
-      return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Save failed' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({
@@ -128,6 +146,9 @@ export async function PUT(request: NextRequest) {
     });
   } catch (err) {
     console.error('Sync PUT error:', err);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal error' },
+      { status: 500 },
+    );
   }
 }
