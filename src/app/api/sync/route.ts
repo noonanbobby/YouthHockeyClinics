@@ -15,9 +15,7 @@ function getSupabase(): SupabaseClient | null {
 
   if (!url || !key) {
     if (!key && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error(
-        '[sync] SUPABASE_SERVICE_ROLE_KEY is not set. Refusing to use the anon key for server-side data operations.',
-      );
+      console.error('[sync] SUPABASE_SERVICE_ROLE_KEY is not set. Refusing to use the anon key for server-side data operations.');
     }
     return null;
   }
@@ -37,10 +35,7 @@ export async function GET() {
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json(
-        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
-        { status: 503 },
-      );
+      return NextResponse.json({ error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' }, { status: 503 });
     }
 
     const { data, error } = await supabase
@@ -75,10 +70,7 @@ export async function PUT(request: NextRequest) {
 
     const supabase = getSupabase();
     if (!supabase) {
-      return NextResponse.json(
-        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
-        { status: 503 },
-      );
+      return NextResponse.json({ error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' }, { status: 503 });
     }
 
     const body = await request.json();

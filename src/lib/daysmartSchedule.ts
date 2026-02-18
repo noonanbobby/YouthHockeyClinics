@@ -63,10 +63,7 @@ const FACILITY_META: Record<string, FacilityMeta> = {
   },
 };
 
-function classifySessionType(
-  eventName: string,
-  eventTypeName: string,
-): SessionType | null {
+function classifySessionType(eventName: string, eventTypeName: string): SessionType | null {
   const combined = `${eventName} | ${eventTypeName}`.toLowerCase();
 
   if (combined.includes('stick') && combined.includes('puck')) return 'stick-and-puck';
@@ -126,11 +123,7 @@ interface JsonApiResource {
   attributes?: Record<string, unknown>;
   relationships?: Record<
     string,
-    {
-      data?:
-        | { id: string; type: string }
-        | Array<{ id: string; type: string }>;
-    }
+    { data?: { id: string; type: string } | Array<{ id: string; type: string }> }
   >;
 }
 
@@ -159,9 +152,7 @@ async function fetchWithRetry(
     } catch (err) {
       clearTimeout(timer);
       lastErr = err;
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, attempt * 1000));
-      }
+      if (attempt < retries) await new Promise((r) => setTimeout(r, attempt * 1000));
     }
   }
   throw lastErr;
@@ -171,20 +162,14 @@ function buildHeaders(facilitySlug: string): Record<string, string> {
   return {
     Accept: 'application/vnd.api+json, application/json',
     'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent':
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     Referer: `${DASH_BASE}/${facilitySlug}/`,
     Origin: 'https://apps.daysmartrecreation.com',
   };
 }
 
-async function discoverOrgId(
-  facilitySlug: string,
-  headers: Record<string, string>,
-): Promise<string | null> {
-  if (orgIdCache.has(facilitySlug)) {
-    return orgIdCache.get(facilitySlug) ?? null;
-  }
+async function discoverOrgId(facilitySlug: string, headers: Record<string, string>): Promise<string | null> {
+  if (orgIdCache.has(facilitySlug)) return orgIdCache.get(facilitySlug) ?? null;
 
   const strategies = [
     `${API_BASE}/organizations?filter[slug]=${encodeURIComponent(facilitySlug)}&page[size]=5`,
@@ -197,7 +182,6 @@ async function discoverOrgId(
     try {
       const res = await fetchWithRetry(url, headers, 2, 8000);
       if (!res.ok) continue;
-
       const json = await res.json();
       const orgs: JsonApiResource[] = Array.isArray(json?.data) ? json.data : [];
       if (orgs.length === 0) continue;
@@ -207,9 +191,7 @@ async function discoverOrgId(
           (o) =>
             (o.attributes?.slug as string | undefined) === facilitySlug ||
             (o.attributes?.company as string | undefined) === facilitySlug ||
-            (o.attributes?.name as string | undefined)
-              ?.toLowerCase()
-              .replace(/\s+/g, '') ===
+            (o.attributes?.name as string | undefined)?.toLowerCase().replace(/\s+/g, '') ===
               facilitySlug.toLowerCase().replace(/\s+/g, ''),
         ) ?? (orgs.length === 1 ? orgs[0] : null);
 
@@ -279,12 +261,9 @@ async function fetchEventsPage(
 
     const data: JsonApiResource[] = Array.isArray(json?.data) ? (json.data as JsonApiResource[]) : [];
     const included: JsonApiResource[] = Array.isArray(json?.included) ? (json.included as JsonApiResource[]) : [];
-
     const pageMeta = json?.meta as Record<string, unknown> | undefined;
     const pageInfo = pageMeta?.page as Record<string, unknown> | undefined;
-    const lastPage = Number(
-      pageInfo?.['last-page'] ?? pageInfo?.last_page ?? pageMeta?.['last-page'] ?? 1,
-    );
+    const lastPage = Number(pageInfo?.['last-page'] ?? pageInfo?.last_page ?? pageMeta?.['last-page'] ?? 1);
 
     return { data, included, lastPage };
   }
@@ -306,9 +285,7 @@ export async function fetchDaySmartSchedule(
   if (cached) {
     const age = Date.now() - cached.timestamp;
     const ttl = cached.confirmed ? CACHE_TTL : ERROR_CACHE_TTL;
-    if (age < ttl) {
-      return { sessions: cached.data, fromCache: true, confirmed: cached.confirmed };
-    }
+    if (age < ttl) return { sessions: cached.data, fromCache: true, confirmed: cached.confirmed };
   }
   const staleData = cached?.data ?? [];
 
@@ -317,11 +294,8 @@ export async function fetchDaySmartSchedule(
     const orgId = await discoverOrgId(facilitySlug, headers);
 
     const now = new Date();
-    const startDate = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
-    );
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
     const endDate = new Date(startDate.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000);
-
     const startDateStr = toNaiveISOStr(startDate);
     const endDateStr = toNaiveISOStr(endDate);
 
@@ -344,13 +318,9 @@ export async function fetchDaySmartSchedule(
 
       gotAnyResponse = true;
       allEvents = allEvents.concat(result.data);
-
       for (const inc of result.included) {
-        if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type)) {
-          allIncluded.push(inc);
-        }
+        if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type)) allIncluded.push(inc);
       }
-
       hasMore = page < result.lastPage && result.data.length > 0;
       page++;
     }
@@ -366,9 +336,7 @@ export async function fetchDaySmartSchedule(
 
     for (const item of allIncluded) {
       const nt = normalizeType(item.type ?? '');
-      if (nt === 'resource') {
-        resourceMap.set(item.id, (item.attributes?.name as string) ?? '');
-      }
+      if (nt === 'resource') resourceMap.set(item.id, (item.attributes?.name as string) ?? '');
       if (nt === 'eventtype') {
         eventTypeMap.set(item.id, {
           name: (item.attributes?.name as string) ?? '',
@@ -403,9 +371,7 @@ export async function fetchDaySmartSchedule(
 
       const rawPrice = attrs.price ?? attrs.cost ?? 0;
       const price =
-        typeof rawPrice === 'number'
-          ? rawPrice
-          : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
+        typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
 
       const maxParticipants =
         typeof attrs.max_participants === 'number'
@@ -430,8 +396,7 @@ export async function fetchDaySmartSchedule(
         noteParts.push(`${registeredCount}/${maxParticipants} registered`);
       }
 
-      const combinedText =
-        `${eventName} ${eventTypeName} ${typeof desc === 'string' ? desc : ''}`.toLowerCase();
+      const combinedText = `${eventName} ${eventTypeName} ${typeof desc === 'string' ? desc : ''}`.toLowerCase();
       const goaliesFree =
         combinedText.includes('goalie free') ||
         combinedText.includes('goalies free') ||
@@ -466,9 +431,7 @@ export async function fetchDaySmartSchedule(
     }
 
     scheduleCache.set(facilitySlug, { data: sessions, timestamp: Date.now(), confirmed: true });
-    console.log(
-      `[DaySmart] ${facilitySlug}: ${sessions.length} ice-time sessions from ${allEvents.length} total events (${page - 1} page(s))`,
-    );
+    console.log(`[DaySmart] ${facilitySlug}: ${sessions.length} ice-time sessions from ${allEvents.length} total events (${page - 1} page(s))`);
     return { sessions, fromCache: false, confirmed: true };
   } catch (error) {
     console.error(`[DaySmart] Fatal error for ${facilitySlug}:`, error);

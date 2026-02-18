@@ -21,9 +21,7 @@ export async function POST(request: NextRequest) {
     const $ = cheerio.load(ordersHtml);
 
     const orderLinks: string[] = [];
-    $(
-      'a.woocommerce-button.view, a.button.view, td.woocommerce-orders-table__cell--order-actions a',
-    ).each((_, el) => {
+    $('a.woocommerce-button.view, a.button.view, td.woocommerce-orders-table__cell--order-actions a').each((_, el) => {
       const href = $(el).attr('href');
       if (href) orderLinks.push(href);
     });
@@ -47,62 +45,44 @@ export async function POST(request: NextRequest) {
     const $order = cheerio.load(orderHtml);
 
     const productTableHtml =
-      $order('.woocommerce-table--order-details, table.order_details, .shop_table').first().html() ||
-      'NOT FOUND';
+      $order('.woocommerce-table--order-details, table.order_details, .shop_table').first().html() || 'NOT FOUND';
 
     const productCells: { index: number; html: string; text: string }[] = [];
     $order('td.product-name, .woocommerce-table--order-details .product-name').each((i, el) => {
-      productCells.push({
-        index: i,
-        html: $order(el).html() || '',
-        text: $order(el).text().trim(),
-      });
+      productCells.push({ index: i, html: $order(el).html() || '', text: $order(el).text().trim() });
     });
 
     const variationData: Record<string, string>[] = [];
     $order('td.product-name, .woocommerce-table--order-details .product-name').each((_, el) => {
       const vars: Record<string, string> = {};
-
       $order(el).find('dl.variation dt, dl.wc-item-meta dt').each((_, dt) => {
         const key = $order(dt).text().replace(/[:\s]+$/, '').trim();
         const val = $order(dt).next('dd').text().trim();
         vars[`dl:${key}`] = val;
       });
-
       $order(el).find('.wc-item-meta li, ul.wc-item-meta li').each((_, li) => {
-        const label = $order(li)
-          .find('strong, .wc-item-meta-label')
-          .text()
-          .replace(/[:\s]+$/, '')
-          .trim();
+        const label = $order(li).find('strong, .wc-item-meta-label').text().replace(/[:\s]+$/, '').trim();
         const fullText = $order(li).text().trim();
         const labelText = $order(li).find('strong, .wc-item-meta-label').text().trim();
         const val = fullText.replace(labelText, '').replace(/^[:\s]+/, '').trim();
         vars[`li:${label}`] = val;
       });
-
       $order(el).find('table.wc-item-meta tr').each((_, tr) => {
         const key = $order(tr).find('td:first-child, th').text().replace(/[:\s]+$/, '').trim();
         const val = $order(tr).find('td:last-child').text().trim();
         vars[`table:${key}`] = val;
       });
-
       variationData.push(vars);
     });
 
     const priceCells: string[] = [];
-    $order(
-      'td.product-total, .woocommerce-table--order-details .product-total',
-    ).each((_, el) => {
+    $order('td.product-total, .woocommerce-table--order-details .product-total').each((_, el) => {
       priceCells.push($order(el).text().trim());
     });
 
     const orderTotal = $order(
       '.woocommerce-table--order-details tfoot tr:last-child .woocommerce-Price-amount, .order-total .amount',
-    )
-      .last()
-      .text()
-      .trim();
+    ).last().text().trim();
 
     return NextResponse.json({
       success: true,

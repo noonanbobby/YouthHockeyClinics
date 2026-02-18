@@ -91,13 +91,9 @@ function scoreCampName(value: string, key: string): number {
   if (
     /^[A-Z][a-zA-Z\s]+,\s*[A-Za-z\s]+$/.test(clean) &&
     !hockeyWords.some((w) => vl.includes(w))
-  ) {
-    score -= 40;
-  }
+  ) score -= 40;
 
-  if (
-    /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(clean)
-  ) {
+  if (/(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d/i.test(clean)) {
     score -= 40;
   }
 
@@ -116,8 +112,7 @@ async function fetchPage(
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'no-cache',
@@ -153,26 +148,17 @@ export async function POST(request: NextRequest) {
     const email = typeof body.email === 'string' ? body.email : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const sessionCookie = typeof body.sessionCookie === 'string' ? body.sessionCookie : '';
-    const linkedChildNames = Array.isArray(body.linkedChildNames)
-      ? (body.linkedChildNames as string[])
-      : [];
+    const linkedChildNames = Array.isArray(body.linkedChildNames) ? (body.linkedChildNames as string[]) : [];
 
     switch (action) {
-      case 'login':
-        return handleLogin(email, password);
-      case 'sync':
-        return handleSync(sessionCookie, linkedChildNames);
-      case 'camps':
-        return handleCamps();
-      default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+      case 'login': return handleLogin(email, password);
+      case 'sync': return handleSync(sessionCookie, linkedChildNames);
+      case 'camps': return handleCamps();
+      default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
   } catch (error) {
     console.error('[IceHockeyPro] Error:', error);
-    return NextResponse.json(
-      { error: 'IceHockeyPro integration error', details: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'IceHockeyPro integration error', details: String(error) }, { status: 500 });
   }
 }
 
@@ -185,21 +171,15 @@ async function handleLogin(email: string, password: string) {
     const loginUrl = `${IHP_BASE}/my-account/`;
 
     const loginPageRes = await fetch(loginUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        Accept: 'text/html',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36', Accept: 'text/html' },
       redirect: 'manual',
     });
 
     const loginPageHtml = await loginPageRes.text();
     const $loginPage = cheerio.load(loginPageHtml);
-    const nonce =
-      ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) || '';
+    const nonce = ($loginPage('input[name="woocommerce-login-nonce"]').val() as string) || '';
 
-    const initCookies = (loginPageRes.headers.getSetCookie?.() || [])
-      .map((c) => c.split(';')[0])
-      .join('; ');
+    const initCookies = (loginPageRes.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ');
 
     const formData = new URLSearchParams();
     formData.set('username', email);
@@ -231,10 +211,7 @@ async function handleLogin(email: string, password: string) {
     const cookies = allCookies.join('; ');
 
     if (res.status !== 302 && res.status !== 301 && res.status !== 200) {
-      return NextResponse.json(
-        { error: 'Login failed. Check your email and password.' },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: 'Login failed. Check your email and password.' }, { status: 401 });
     }
 
     const ordersRes = await fetch(`${IHP_BASE}/my-account-2/orders/`, {
@@ -253,10 +230,7 @@ async function handleLogin(email: string, password: string) {
       ordersHtml.includes('order-number');
 
     if (ordersHtml.includes('woocommerce-login-nonce') && !hasOrders) {
-      return NextResponse.json(
-        { error: 'Login failed. Invalid credentials.' },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: 'Login failed. Invalid credentials.' }, { status: 401 });
     }
 
     return NextResponse.json({ success: true, sessionCookie: cookies, hasOrders });
@@ -277,17 +251,11 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
   if (sessionCookie) headers['Cookie'] = sessionCookie;
 
   try {
-    const ordersRes = await fetch(`${IHP_BASE}/my-account-2/orders/`, {
-      headers,
-      redirect: 'follow',
-    });
+    const ordersRes = await fetch(`${IHP_BASE}/my-account-2/orders/`, { headers, redirect: 'follow' });
 
     if (!ordersRes.ok) {
       return NextResponse.json(
-        {
-          error: `Failed to fetch orders: ${ordersRes.status}`,
-          needsReauth: ordersRes.status === 403 || ordersRes.status === 401,
-        },
+        { error: `Failed to fetch orders: ${ordersRes.status}`, needsReauth: ordersRes.status === 403 || ordersRes.status === 401 },
         { status: ordersRes.status },
       );
     }
@@ -296,16 +264,11 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
     const $ = cheerio.load(ordersHtml);
 
     if (ordersHtml.includes('woocommerce-login-nonce') && !ordersHtml.includes('order-number')) {
-      return NextResponse.json(
-        { error: 'Session expired. Please reconnect.', needsReauth: true },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: 'Session expired. Please reconnect.', needsReauth: true }, { status: 401 });
     }
 
     const orderLinks: string[] = [];
-    $(
-      'a.woocommerce-button.view, a.button.view, td.woocommerce-orders-table__cell--order-actions a',
-    ).each((_, el) => {
+    $('a.woocommerce-button.view, a.button.view, td.woocommerce-orders-table__cell--order-actions a').each((_, el) => {
       const href = $(el).attr('href');
       if (href && !orderLinks.includes(href)) orderLinks.push(href);
     });
@@ -327,23 +290,16 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
         const orderId =
           link.match(/order\/(\d+)/)?.[1] ||
           link.match(/view-order\/(\d+)/)?.[1] ||
-          $order('.woocommerce-order-data__heading, .order-number')
-            .first()
-            .text()
-            .replace(/[^\d]/g, '') ||
+          $order('.woocommerce-order-data__heading, .order-number').first().text().replace(/[^\d]/g, '') ||
           `unknown-${orders.length}`;
 
-        const $productCell = $order(
-          'td.product-name, .woocommerce-table--order-details .product-name',
-        ).first();
+        const $productCell = $order('td.product-name, .woocommerce-table--order-details .product-name').first();
 
         const productLinkText = $productCell.find('a').first().text().trim();
         const productHref = $productCell.find('a').first().attr('href') || '';
         const slugMatch = productHref.match(/\/product\/([^/?#]+)/);
         const slugName = slugMatch
-          ? decodeURIComponent(slugMatch[1])
-              .replace(/-/g, ' ')
-              .replace(/\b\w/g, (c) => c.toUpperCase())
+          ? decodeURIComponent(slugMatch[1]).replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
           : '';
 
         const variations = extractVariations($order, $productCell);
@@ -353,9 +309,7 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
 
         for (const [key, val] of Object.entries(variations)) {
           const clean = val.replace(/\s*×\s*\d+$/, '').trim();
-          if (clean) {
-            candidates.push({ name: clean, score: scoreCampName(clean, key), source: `variation[${key}]` });
-          }
+          if (clean) candidates.push({ name: clean, score: scoreCampName(clean, key), source: `variation[${key}]` });
         }
 
         const pipeParsed = parseCampDescription(fullCellText);
@@ -390,11 +344,7 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
         }
 
         if (isMeaningful(productLinkText)) {
-          candidates.push({
-            name: productLinkText,
-            score: scoreCampName(productLinkText, 'product-link') + 5,
-            source: 'product-link',
-          });
+          candidates.push({ name: productLinkText, score: scoreCampName(productLinkText, 'product-link') + 5, source: 'product-link' });
         }
         if (isMeaningful(slugName)) {
           candidates.push({ name: slugName, score: scoreCampName(slugName, 'url-slug'), source: 'url-slug' });
@@ -405,91 +355,43 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
         const scrapedName = bestCandidate ? bestCandidate.name : `IceHockeyPro Order #${orderId}`;
 
         const scrapedLocation =
-          variations['camp location'] ||
-          variations['location'] ||
-          variations['venue'] ||
-          variations['rink'] ||
-          variations['camplocation1'] ||
-          variations['camp location 1'] ||
-          pipeParsed.location ||
-          '';
+          variations['camp location'] || variations['location'] || variations['venue'] ||
+          variations['rink'] || variations['camplocation1'] || variations['camp location 1'] ||
+          pipeParsed.location || '';
 
         const scrapedDates =
-          variations['camp dates'] ||
-          variations['dates'] ||
-          variations['date'] ||
-          variations['camp date'] ||
-          variations['campdates1'] ||
-          variations['camp dates 1'] ||
-          pipeParsed.dates ||
-          '';
+          variations['camp dates'] || variations['dates'] || variations['date'] ||
+          variations['camp date'] || variations['campdates1'] || variations['camp dates 1'] ||
+          pipeParsed.dates || '';
 
-        const itemPriceText = $productCell
-          .parent()
-          .find('td.product-total .woocommerce-Price-amount, td.product-total .amount')
-          .first()
-          .text()
-          .trim();
-        const cellPriceText = $productCell
-          .find('.woocommerce-Price-amount, .amount')
-          .first()
-          .text()
-          .trim();
+        const itemPriceText = $productCell.parent()
+          .find('td.product-total .woocommerce-Price-amount, td.product-total .amount').first().text().trim();
+        const cellPriceText = $productCell.find('.woocommerce-Price-amount, .amount').first().text().trim();
         const orderTotalText = $order(
           '.woocommerce-table--order-details tfoot tr:last-child .woocommerce-Price-amount, .order-total .amount',
-        )
-          .last()
-          .text()
-          .trim();
+        ).last().text().trim();
         const priceText = itemPriceText || cellPriceText || orderTotalText;
         const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
         const currency = priceText.includes('€') ? 'EUR' : 'USD';
 
         const billingName =
-          $order(
-            '.woocommerce-column--billing-address address, .woocommerce-customer-details address',
-          )
-            .first()
-            .text()
-            .trim()
-            .split('\n')[0]
-            ?.trim() || '';
-        const billingAddress = $order(
-          '.woocommerce-column--billing-address address, .woocommerce-customer-details address',
-        )
-          .first()
-          .text()
-          .trim();
+          $order('.woocommerce-column--billing-address address, .woocommerce-customer-details address')
+            .first().text().trim().split('\n')[0]?.trim() || '';
+        const billingAddress =
+          $order('.woocommerce-column--billing-address address, .woocommerce-customer-details address')
+            .first().text().trim();
 
-        const status =
-          $order('.woocommerce-order-data mark, .order-status').first().text().trim() || 'completed';
+        const status = $order('.woocommerce-order-data mark, .order-status').first().text().trim() || 'completed';
         const orderDate =
           $order('.woocommerce-order-data__meta time, .order-date time').first().attr('datetime') ||
-          $order('.woocommerce-order-data__meta, .order-date')
-            .first()
-            .text()
-            .match(/\w+ \d+, \d{4}/)?.[0] ||
-          '';
+          $order('.woocommerce-order-data__meta, .order-date').first().text().match(/\w+ \d+, \d{4}/)?.[0] || '';
 
         orders.push({
-          orderId,
-          campName: scrapedName,
-          location: scrapedLocation,
-          dates: scrapedDates,
-          price,
-          currency,
-          billingName,
-          billingAddress,
-          status,
-          orderDate,
+          orderId, campName: scrapedName, location: scrapedLocation, dates: scrapedDates,
+          price, currency, billingName, billingAddress, status, orderDate,
           debug: {
-            productLinkText,
-            slugName,
-            variations,
-            candidateCount: candidates.length,
-            topCandidates: candidates
-              .slice(0, 5)
-              .map((c) => ({ name: c.name, score: c.score, source: c.source })),
+            productLinkText, slugName, variations, candidateCount: candidates.length,
+            topCandidates: candidates.slice(0, 5).map((c) => ({ name: c.name, score: c.score, source: c.source })),
             fullCellTextPreview: fullCellText.substring(0, 300),
           },
         });
@@ -500,9 +402,7 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
 
     const matchedOrders = orders.map((order) => {
       const billingLower = order.billingName.toLowerCase();
-      let matchedChild = linkedChildNames.find((name) =>
-        billingLower.includes(name.toLowerCase()),
-      );
+      let matchedChild = linkedChildNames.find((name) => billingLower.includes(name.toLowerCase()));
       if (!matchedChild) {
         const billingParts = billingLower.split(/\s+/);
         const billingLast = billingParts[billingParts.length - 1];
@@ -527,10 +427,7 @@ async function handleSync(sessionCookie: string, linkedChildNames: string[]) {
     });
   } catch (error) {
     console.error('[IceHockeyPro] Sync error:', error);
-    return NextResponse.json(
-      { error: 'Failed to scrape IceHockeyPro orders', details: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Failed to scrape IceHockeyPro orders', details: String(error) }, { status: 500 });
   }
 }
 
@@ -547,12 +444,7 @@ function extractVariations(
   });
 
   $productCell.find('.wc-item-meta li, ul.wc-item-meta li').each((_, el) => {
-    const label = $(el)
-      .find('strong, .wc-item-meta-label')
-      .text()
-      .replace(/[:\s]+$/, '')
-      .trim()
-      .toLowerCase();
+    const label = $(el).find('strong, .wc-item-meta-label').text().replace(/[:\s]+$/, '').trim().toLowerCase();
     const fullText = $(el).text().trim();
     const labelText = $(el).find('strong, .wc-item-meta-label').text().trim();
     const val = fullText.replace(labelText, '').replace(/^[:\s]+/, '').trim();
@@ -560,12 +452,7 @@ function extractVariations(
   });
 
   $productCell.find('table.wc-item-meta tr').each((_, el) => {
-    const key = $(el)
-      .find('td:first-child, th')
-      .text()
-      .replace(/[:\s]+$/, '')
-      .trim()
-      .toLowerCase();
+    const key = $(el).find('td:first-child, th').text().replace(/[:\s]+$/, '').trim().toLowerCase();
     const val = $(el).find('td:last-child').text().trim();
     if (key && val && key !== val) variations[key] = val;
   });
@@ -576,9 +463,7 @@ function extractVariations(
     if (match) {
       const key = match[1].trim().toLowerCase();
       const val = match[2].trim();
-      if (!variations[key] && isMeaningful(val)) {
-        variations[key] = val;
-      }
+      if (!variations[key] && isMeaningful(val)) variations[key] = val;
     }
   });
 
@@ -588,7 +473,6 @@ function extractVariations(
 async function handleCamps() {
   try {
     const urlsToScrape = [...CAMP_CATEGORY_URLS, ...MAX_IVANOV_SEARCH_URLS];
-
     const pageResults = await Promise.allSettled(urlsToScrape.map((url) => fetchPage(url)));
 
     const productUrlSet = new Set<string>();
@@ -597,7 +481,6 @@ async function handleCamps() {
     for (let i = 0; i < pageResults.length; i++) {
       const result = pageResults[i];
       const sourceUrl = urlsToScrape[i];
-
       if (result.status !== 'fulfilled') continue;
       const { html, ok } = result.value;
       if (!ok || !html) continue;
@@ -615,17 +498,9 @@ async function handleCamps() {
 
       $('li.product, .product-item, .woocommerce ul.products li').each((_, el) => {
         const $el = $(el);
-        const name = $el
-          .find('.woocommerce-loop-product__title, h2, .product-title')
-          .first()
-          .text()
-          .trim();
+        const name = $el.find('.woocommerce-loop-product__title, h2, .product-title').first().text().trim();
         const url = $el.find('a.woocommerce-LoopProduct-link, a').first().attr('href') || '';
-        const priceText = $el
-          .find('.woocommerce-Price-amount, .price .amount')
-          .first()
-          .text()
-          .trim();
+        const priceText = $el.find('.woocommerce-Price-amount, .price .amount').first().text().trim();
         const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
         const imageUrl = $el.find('img').first().attr('src') || '';
         const desc = $el.find('.short-description, .product-excerpt, p').first().text().trim();
@@ -634,22 +509,11 @@ async function handleCamps() {
           productUrlSet.add(url);
           const nameLower = name.toLowerCase();
           const descLower = desc.toLowerCase();
-          const isMaxIvanov =
-            nameLower.includes('ivanov') ||
-            nameLower.includes('max ivanov') ||
-            descLower.includes('ivanov');
-
+          const isMaxIvanov = nameLower.includes('ivanov') || nameLower.includes('max ivanov') || descLower.includes('ivanov');
           const parsed = parseCampDescription(`${name} | ${desc}`);
           quickCamps.push({
-            name,
-            url,
-            location: parsed.location || '',
-            dates: parsed.dates || '',
-            price,
-            currency: priceText.includes('€') ? 'EUR' : 'USD',
-            description: desc,
-            imageUrl,
-            isMaxIvanov,
+            name, url, location: parsed.location || '', dates: parsed.dates || '',
+            price, currency: priceText.includes('€') ? 'EUR' : 'USD', description: desc, imageUrl, isMaxIvanov,
           });
         }
       });
@@ -659,19 +523,8 @@ async function handleCamps() {
         if (href && !productUrlSet.has(href) && /\/product\/[a-z0-9-]+\/?(\?.*)?$/.test(href)) {
           productUrlSet.add(href);
           const linkText = $(el).text().trim();
-          const isMaxIvanov =
-            href.toLowerCase().includes('ivanov') || linkText.toLowerCase().includes('ivanov');
-          quickCamps.push({
-            name: linkText || href,
-            url: href,
-            location: '',
-            dates: '',
-            price: 0,
-            currency: 'USD',
-            description: '',
-            imageUrl: '',
-            isMaxIvanov,
-          });
+          const isMaxIvanov = href.toLowerCase().includes('ivanov') || linkText.toLowerCase().includes('ivanov');
+          quickCamps.push({ name: linkText || href, url: href, location: '', dates: '', price: 0, currency: 'USD', description: '', imageUrl: '', isMaxIvanov });
         }
       });
     }
@@ -683,12 +536,8 @@ async function handleCamps() {
       return true;
     });
 
-    const needsDetail = uniqueCamps.filter(
-      (c) => c.isMaxIvanov || !c.dates || !c.location || c.price === 0,
-    );
-    const alreadyComplete = uniqueCamps.filter(
-      (c) => !c.isMaxIvanov && !!c.dates && !!c.location && c.price > 0,
-    );
+    const needsDetail = uniqueCamps.filter((c) => c.isMaxIvanov || !c.dates || !c.location || c.price === 0);
+    const alreadyComplete = uniqueCamps.filter((c) => !c.isMaxIvanov && !!c.dates && !!c.location && c.price > 0);
 
     const detailLimit = Math.min(needsDetail.length, 30);
     const detailResults = await Promise.allSettled(
@@ -697,16 +546,11 @@ async function handleCamps() {
 
     const detailedCamps: ScrapedCamp[] = [];
     for (const result of detailResults) {
-      if (result.status === 'fulfilled') {
-        detailedCamps.push(result.value);
-      }
+      if (result.status === 'fulfilled') detailedCamps.push(result.value);
     }
-    for (const camp of needsDetail.slice(detailLimit)) {
-      detailedCamps.push(camp);
-    }
+    for (const camp of needsDetail.slice(detailLimit)) detailedCamps.push(camp);
 
     const allCamps = [...detailedCamps, ...alreadyComplete];
-
     allCamps.sort((a, b) => {
       if (a.isMaxIvanov && !b.isMaxIvanov) return -1;
       if (!a.isMaxIvanov && b.isMaxIvanov) return 1;
@@ -714,10 +558,7 @@ async function handleCamps() {
     });
 
     const camps2026 = allCamps.filter(
-      (c) =>
-        c.dates.includes('2026') ||
-        c.description.includes('2026') ||
-        c.name.includes('2026'),
+      (c) => c.dates.includes('2026') || c.description.includes('2026') || c.name.includes('2026'),
     );
     const finalCamps = camps2026.length > 0 ? camps2026 : allCamps;
 
@@ -730,10 +571,7 @@ async function handleCamps() {
     });
   } catch (error) {
     console.error('[IceHockeyPro] Camps error:', error);
-    return NextResponse.json(
-      { error: 'Failed to scrape IceHockeyPro camps', details: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Failed to scrape IceHockeyPro camps', details: String(error) }, { status: 500 });
   }
 }
 
@@ -744,37 +582,25 @@ async function scrapeProductDetail(camp: ScrapedCamp): Promise<ScrapedCamp> {
   return scrapeProductDetailFromHtml(camp.url, html, camp);
 }
 
-async function scrapeProductDetailFromHtml(
-  url: string,
-  html: string,
-  baseCamp?: Partial<ScrapedCamp>,
-): Promise<ScrapedCamp> {
+async function scrapeProductDetailFromHtml(url: string, html: string, baseCamp?: Partial<ScrapedCamp>): Promise<ScrapedCamp> {
   const $detail = cheerio.load(html);
 
   const detailTitle =
-    $detail('.product_title, h1.entry-title, h1.product-title').first().text().trim() ||
-    baseCamp?.name ||
-    url;
+    $detail('.product_title, h1.entry-title, h1.product-title').first().text().trim() || baseCamp?.name || url;
 
   const shortDesc = $detail(
     '.woocommerce-product-details__short-description, .product-short-description, .entry-summary .description',
-  )
-    .text()
-    .trim();
+  ).text().trim();
 
   const longDesc = $detail(
     '.woocommerce-Tabs-panel--description, .product-description, #tab-description, .entry-content',
-  )
-    .text()
-    .trim();
+  ).text().trim();
 
   const detailPriceText = $detail('.woocommerce-Price-amount, .price .amount').first().text().trim();
   const detailPrice = parseFloat(detailPriceText.replace(/[^0-9.]/g, '')) || baseCamp?.price || 0;
 
   const detailImage =
-    $detail('.woocommerce-product-gallery__image img, .wp-post-image').first().attr('src') ||
-    baseCamp?.imageUrl ||
-    '';
+    $detail('.woocommerce-product-gallery__image img, .wp-post-image').first().attr('src') || baseCamp?.imageUrl || '';
 
   let jsonLdDates = '';
   let jsonLdLocation = '';
@@ -794,9 +620,7 @@ async function scrapeProductDetailFromHtml(
             jsonLdLocation = item.location.name;
           } else if (item.location.address) {
             const addr = item.location.address;
-            jsonLdLocation = [addr.streetAddress, addr.addressLocality, addr.addressRegion]
-              .filter(Boolean)
-              .join(', ');
+            jsonLdLocation = [addr.streetAddress, addr.addressLocality, addr.addressRegion].filter(Boolean).join(', ');
           }
         }
       }
@@ -805,7 +629,6 @@ async function scrapeProductDetailFromHtml(
     }
   });
 
-  // Supports hyphen, en-dash (–), em-dash (—) in date ranges
   let scrapedDates = jsonLdDates;
   if (!scrapedDates) {
     const fullText = `${shortDesc} ${longDesc}`;
@@ -827,15 +650,8 @@ async function scrapeProductDetailFromHtml(
       const label = $detail(el).find('th').text().trim().toLowerCase();
       const val = $detail(el).find('td').text().trim();
       if (!val) return;
-      if (!scrapedDates && (label.includes('date') || label.includes('when'))) {
-        scrapedDates = val;
-      }
-      if (
-        !scrapedLocation &&
-        (label.includes('location') || label.includes('where') || label.includes('venue'))
-      ) {
-        scrapedLocation = val;
-      }
+      if (!scrapedDates && (label.includes('date') || label.includes('when'))) scrapedDates = val;
+      if (!scrapedLocation && (label.includes('location') || label.includes('where') || label.includes('venue'))) scrapedLocation = val;
     });
   }
 
@@ -851,7 +667,6 @@ async function scrapeProductDetailFromHtml(
 
   const combined = `${detailTitle} | ${shortDesc} | ${longDesc}`;
   const parsed = parseCampDescription(combined);
-
   const isMaxIvanov =
     baseCamp?.isMaxIvanov ||
     combined.toLowerCase().includes('ivanov') ||
@@ -870,43 +685,24 @@ async function scrapeProductDetailFromHtml(
   };
 }
 
-function parseCampDescription(description: string): {
-  name: string;
-  location: string;
-  dates: string;
-} {
+function parseCampDescription(description: string): { name: string; location: string; dates: string } {
   const parts = description.split('|').map((p) => p.trim());
-
   let name = parts[0] || '';
   let location = '';
   let dates = '';
 
   for (const part of parts.slice(1)) {
     if (!part) continue;
-
     const dateMatch = part.match(
       /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d/i,
     );
-    if (dateMatch) {
-      dates = dates || part;
-      continue;
-    }
-
-    if (/\b202[5-9]\b/.test(part) && !dates) {
-      dates = part;
-      continue;
-    }
-
+    if (dateMatch) { dates = dates || part; continue; }
+    if (/\b202[5-9]\b/.test(part) && !dates) { dates = part; continue; }
     const locationMatch = part.match(/^[A-Z][a-zA-Z\s]{2,},\s*(?:[A-Z]{2}|[A-Za-z]{4,})$/);
-    if (locationMatch) {
-      location = location || part;
-      continue;
-    }
-
+    if (locationMatch) { location = location || part; continue; }
     if (!location && part.length > 3 && !dates) location = part;
   }
 
   name = name.replace(/\s*×\s*\d+$/, '').trim();
-
   return { name, location, dates };
 }

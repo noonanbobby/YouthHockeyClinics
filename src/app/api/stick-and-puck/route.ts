@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SEED_RINKS, ALL_SEED_SESSIONS } from '@/lib/seedStickAndPuck';
-import {
-  fetchAllDaySmartSchedules,
-  getDaySmartRinkIds,
-  getSlugToRinkId,
-} from '@/lib/daysmartSchedule';
+import { fetchAllDaySmartSchedules, getDaySmartRinkIds, getSlugToRinkId } from '@/lib/daysmartSchedule';
 import { calculateDistance } from '@/lib/geocoder';
 import { StickAndPuckSession } from '@/types';
 
