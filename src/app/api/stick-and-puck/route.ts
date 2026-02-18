@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SEED_RINKS, ALL_SEED_SESSIONS } from '@/lib/seedStickAndPuck';
-import { fetchAllDaySmartSchedules, isDaySmartRink } from '@/lib/daysmartSchedule';
+import {
+  fetchAllDaySmartSchedules,
+  getDaySmartRinkIds,
+  getSlugToRinkId,
+} from '@/lib/daysmartSchedule';
 import { calculateDistance } from '@/lib/geocoder';
 import { StickAndPuckSession } from '@/types';
 
@@ -13,54 +17,81 @@ export async function GET(request: NextRequest) {
   const sessionType = searchParams.get('type') || 'all';
   const day = searchParams.get('day'); // 0-6 or null for all
 
-  const hasLocation = lat !== 0 && lng !== 0;
+  const hasLocation = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
 
-  // ── Fetch REAL schedule data from DaySmart facilities ──
+  // ── Fetch live DaySmart data ───────────────────────────────────────
   let daySmartSessions: StickAndPuckSession[] = [];
+  const facilityResults: Record<
+    string,
+    { count: number; fromCache: boolean; confirmed: boolean }
+  > = {};
+
   try {
-    daySmartSessions = await fetchAllDaySmartSchedules();
+    const result = await fetchAllDaySmartSchedules();
+    daySmartSessions = result.sessions;
+    Object.assign(facilityResults, result.facilityResults);
   } catch (err) {
-    console.error('[Ice Time] DaySmart fetch failed, using seed data:', err);
+    console.error('[Ice Time] DaySmart fetch failed, using seed data only:', err);
   }
 
-  // Track which rinks got real data from DaySmart
-  const daySmartRinkIds = new Set(daySmartSessions.map((s) => s.rinkId));
+  // ── Determine which rinks have CONFIRMED live data ─────────────────
+  // Only suppress seed data for a rink when DaySmart confirmed a response
+  // (even if 0 sessions — that means the rink is genuinely empty today).
+  // If DaySmart errored (confirmed=false), keep seed data as fallback.
+  const daySmartRinkIds = getDaySmartRinkIds();
+  const slugToRinkId = getSlugToRinkId();
+  const confirmedDaySmartRinkIds = new Set<string>();
 
-  // ── Build session list ──
-  // For DaySmart rinks: use real data if available, otherwise fall back to seed data
-  // For non-DaySmart rinks: always use seed data
+  for (const [slug, info] of Object.entries(facilityResults)) {
+    if (!info.confirmed) continue;
+
+    // Find rinkId from live sessions first (most reliable)
+    const rinkIdFromSessions = daySmartSessions.find(
+      (s) => s.id.startsWith(`ds-${slug}-`),
+    )?.rinkId;
+
+    const rinkId = rinkIdFromSessions ?? slugToRinkId[slug];
+    if (rinkId) {
+      confirmedDaySmartRinkIds.add(rinkId);
+    }
+  }
+
+  // ── Build session list ─────────────────────────────────────────────
   let sessions: StickAndPuckSession[] = [];
 
-  // Add DaySmart live sessions
+  // 1. All DaySmart live sessions
   sessions.push(...daySmartSessions);
 
-  // Add seed sessions for rinks that DON'T have live DaySmart data
+  // 2. Seed sessions only for rinks without confirmed live data
   for (const seedSession of ALL_SEED_SESSIONS) {
-    if (isDaySmartRink(seedSession.rinkId) && daySmartRinkIds.has(seedSession.rinkId)) {
-      // This rink has real DaySmart data — skip seed data
+    const isDaySmartManaged = daySmartRinkIds.has(seedSession.rinkId);
+    const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(seedSession.rinkId);
+
+    if (isDaySmartManaged && hasConfirmedLiveData) {
+      // Live data confirmed for this rink — skip seed
       continue;
     }
     sessions.push(seedSession);
   }
 
-  // ── Filter by session type ──
+  // ── Filter by session type ─────────────────────────────────────────
   if (sessionType !== 'all') {
     sessions = sessions.filter((s) => s.sessionType === sessionType);
   }
 
-  // ── Filter by day of week ──
+  // ── Filter by day of week ──────────────────────────────────────────
   if (day !== null && day !== undefined) {
     const dayNum = parseInt(day, 10);
-    if (!isNaN(dayNum)) {
+    if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
       sessions = sessions.filter((s) => s.dayOfWeek === dayNum);
     }
   }
 
-  // ── Filter out past sessions ──
+  // ── Filter out past sessions ───────────────────────────────────────
   const today = new Date().toISOString().split('T')[0];
   sessions = sessions.filter((s) => s.date >= today);
 
-  // ── Add distance ──
+  // ── Add distance ───────────────────────────────────────────────────
   const sessionsWithDistance = sessions.map((s) => ({
     ...s,
     distance: hasLocation
@@ -68,15 +99,18 @@ export async function GET(request: NextRequest) {
       : null,
   }));
 
-  // ── Sort by date then time ──
+  // ── Sort: date → time → distance ──────────────────────────────────
   sessionsWithDistance.sort((a, b) => {
     const dateComp = a.date.localeCompare(b.date);
     if (dateComp !== 0) return dateComp;
-    return a.startTime.localeCompare(b.startTime);
+    const timeComp = a.startTime.localeCompare(b.startTime);
+    if (timeComp !== 0) return timeComp;
+    if (a.distance != null && b.distance != null) return a.distance - b.distance;
+    return 0;
   });
 
-  // ── Build rink list ──
-  const rinkIds = new Set(sessions.map((s) => s.rinkId));
+  // ── Build rink list ────────────────────────────────────────────────
+  const rinkIds = new Set(sessionsWithDistance.map((s) => s.rinkId));
   const rinks = SEED_RINKS.filter((r) => rinkIds.has(r.id)).map((r) => ({
     ...r,
     sessions: [],
@@ -86,8 +120,16 @@ export async function GET(request: NextRequest) {
   }));
 
   if (hasLocation) {
-    rinks.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    rinks.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
   }
+
+  // ── Source summary ─────────────────────────────────────────────────
+  const daySmartSessionCount = sessionsWithDistance.filter(
+    (s) => s.source === 'daysmart',
+  ).length;
+  const seedSessionCount = sessionsWithDistance.filter(
+    (s) => s.source === 'seed',
+  ).length;
 
   return NextResponse.json({
     sessions: sessionsWithDistance,
@@ -95,9 +137,10 @@ export async function GET(request: NextRequest) {
     totalSessions: sessionsWithDistance.length,
     totalRinks: rinks.length,
     sources: {
-      daysmart: daySmartRinkIds.size,
-      daysmartSessions: daySmartSessions.length,
-      seed: sessions.filter((s) => s.source === 'seed').length,
+      daysmart: confirmedDaySmartRinkIds.size,
+      daysmartSessions: daySmartSessionCount,
+      seed: seedSessionCount,
+      facilityResults,
     },
   });
 }
