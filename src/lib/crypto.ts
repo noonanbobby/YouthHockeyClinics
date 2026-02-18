@@ -24,20 +24,20 @@ async function importKey(): Promise<CryptoKey> {
   ]);
 }
 
-function toBase64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
+function toBase64url(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function fromBase64url(s: string): Uint8Array {
+function fromBase64url(s: string): ArrayBuffer {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
   const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return bytes.buffer;
 }
 
 export async function encryptCredential(plaintext: string): Promise<string> {

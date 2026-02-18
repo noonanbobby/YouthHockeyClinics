@@ -85,8 +85,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!(session as any)?.isAdmin) {
+    if (!session?.isAdmin) {
       setLoading(false);
       return;
     }
@@ -111,8 +110,7 @@ export default function AdminPage() {
   }
 
   // Not logged in or not admin
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!(session as any)?.isAdmin) {
+  if (!session?.isAdmin) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ backgroundColor: 'var(--theme-bg)' }}>
         <motion.div

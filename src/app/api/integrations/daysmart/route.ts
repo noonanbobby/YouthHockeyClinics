@@ -1445,11 +1445,13 @@ async function handlePrograms(
 
 async function handleSchedule(facilityId: string) {
   try {
-    const sessions = await fetchDaySmartSchedule(facilityId);
+    const result = await fetchDaySmartSchedule(facilityId);
     return NextResponse.json({
       success: true,
-      sessions,
-      totalSessions: sessions.length,
+      sessions: result.sessions,
+      totalSessions: result.sessions.length,
+      fromCache: result.fromCache,
+      confirmed: result.confirmed,
       facilityId,
       fetchedAt: new Date().toISOString(),
     });

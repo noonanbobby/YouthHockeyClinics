@@ -335,7 +335,7 @@ export async function fetchDaySmartSchedule(
     const endDateStr = toNaiveISOStr(endDate);
 
     let allEvents: JsonApiResource[] = [];
-    let allIncluded: JsonApiResource[] = [];
+    const allIncluded: JsonApiResource[] = [];
     let page = 1;
     let hasMore = true;
     let gotAnyResponse = false;

@@ -7,21 +7,7 @@ export function useServiceWorker() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
-        .then((registration) => {
-          console.log('SW registered:', registration.scope);
-
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'activated') {
-                  console.log('New SW activated');
-                }
-              });
-            }
-          });
-        })
-        .catch((err) => console.log('SW registration failed:', err));
+        .catch(() => {});
     }
   }, []);
 }

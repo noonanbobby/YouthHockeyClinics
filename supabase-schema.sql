@@ -1,8 +1,11 @@
--- ═══════════════════════════════════════════════════════════════
--- Noonan Hockey — Supabase Schema
--- ═══════════════════════════════════════════════════════════════
+-- Noonan Hockey — Supabase Schema (Quick Setup)
 -- Run this in your Supabase SQL Editor (Dashboard > SQL Editor)
--- This creates the tables needed for cross-device sync.
+--
+-- For the full, idempotent migration with triggers, see:
+--   src/supabase/migrations/001_user_settings_rls.sql
+--
+-- Architecture: All access goes through API routes using SUPABASE_SERVICE_ROLE_KEY.
+-- RLS policies deny all direct anon/authenticated access as defence-in-depth.
 
 -- User settings (synced across devices)
 CREATE TABLE IF NOT EXISTS user_settings (
@@ -16,19 +19,24 @@ CREATE TABLE IF NOT EXISTS user_settings (
 -- Enable Row Level Security
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
--- Policy: users can only read/write their own settings
--- (Using service role key on server bypasses RLS, but this protects direct access)
-CREATE POLICY "Users can read own settings"
-  ON user_settings FOR SELECT
-  USING (true);
+-- Drop old permissive policies if they exist
+DROP POLICY IF EXISTS "Users can read own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can insert own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can update own settings" ON user_settings;
+DROP POLICY IF EXISTS "Allow all" ON user_settings;
+DROP POLICY IF EXISTS "Enable read access for all users" ON user_settings;
 
-CREATE POLICY "Users can insert own settings"
-  ON user_settings FOR INSERT
-  WITH CHECK (true);
+-- Deny all direct access from anon and authenticated roles.
+-- The service_role key (used by API routes) bypasses RLS automatically.
+CREATE POLICY "deny_select" ON user_settings FOR SELECT TO anon, authenticated USING ((1 = 0));
+CREATE POLICY "deny_insert" ON user_settings FOR INSERT TO anon, authenticated WITH CHECK ((1 = 0));
+CREATE POLICY "deny_update" ON user_settings FOR UPDATE TO anon, authenticated USING ((1 = 0)) WITH CHECK ((1 = 0));
+CREATE POLICY "deny_delete" ON user_settings FOR DELETE TO anon, authenticated USING ((1 = 0));
 
-CREATE POLICY "Users can update own settings"
-  ON user_settings FOR UPDATE
-  USING (true);
+-- Revoke direct table access; grant only to service_role
+REVOKE ALL ON user_settings FROM anon;
+REVOKE ALL ON user_settings FROM authenticated;
+GRANT ALL ON user_settings TO service_role;
 
 -- Index for fast lookups
 CREATE INDEX IF NOT EXISTS idx_user_settings_email ON user_settings(user_email);

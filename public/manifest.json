@@ -4,7 +4,7 @@
   "description": "Discover youth hockey clinics and camps worldwide",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0e1a",
+  "background_color": "#f0f4f8",
   "theme_color": "#0ea5e9",
   "orientation": "portrait-primary",
   "scope": "/",

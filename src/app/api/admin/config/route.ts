@@ -7,8 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await auth();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!(session as any)?.isAdmin) {
+  if (!session?.isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -36,8 +35,7 @@ export async function GET() {
     user: {
       email: session?.user?.email ?? null,
       name: session?.user?.name ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      isAdmin: (session as any)?.isAdmin ?? false,
+      isAdmin: session?.isAdmin ?? false,
     },
   });
 }

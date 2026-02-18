@@ -119,5 +119,5 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: 'jwt',
   },
-  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'hockey-clinics-dev-secret-change-in-production',
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
 });
