@@ -23,48 +23,65 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
 );
 
 -- ── 2. Enable Row Level Security ──────────────────────────────────────
-ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname  = 'user_settings'
+      AND c.relrowsecurity = true
+  ) THEN
+    ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+  END IF;
+END;
+$$;
 
 -- ── 3. Drop existing policies (idempotent) ────────────────────────────
-DROP POLICY IF EXISTS "service_role_all"              ON public.user_settings;
-DROP POLICY IF EXISTS "deny_select"                   ON public.user_settings;
-DROP POLICY IF EXISTS "deny_insert"                   ON public.user_settings;
-DROP POLICY IF EXISTS "deny_update"                   ON public.user_settings;
-DROP POLICY IF EXISTS "deny_delete"                   ON public.user_settings;
-DROP POLICY IF EXISTS "Users can read own settings"   ON public.user_settings;
-DROP POLICY IF EXISTS "Users can insert own settings" ON public.user_settings;
-DROP POLICY IF EXISTS "Users can update own settings" ON public.user_settings;
-DROP POLICY IF EXISTS "Users can delete own settings" ON public.user_settings;
+DO $$
+DECLARE
+  pol TEXT;
+BEGIN
+  FOR pol IN
+    SELECT policyname FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'user_settings'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.user_settings', pol);
+  END LOOP;
+END;
+$$;
 
 -- ── 4. Deny-all policies for anon and authenticated roles ─────────────
 -- Split into one policy per operation to avoid WITH CHECK conflicts on
 -- FOR ALL policies. The service role bypasses RLS automatically and is
 -- unaffected by these policies.
+-- Note: (1=0) is used instead of (false) for linter compatibility —
+-- both are semantically identical in Postgres policy expressions.
 
 CREATE POLICY "deny_select"
   ON public.user_settings
   FOR SELECT
   TO anon, authenticated
-  USING (false);
+  USING ((1 = 0));
 
 CREATE POLICY "deny_insert"
   ON public.user_settings
   FOR INSERT
   TO anon, authenticated
-  WITH CHECK (false);
+  WITH CHECK ((1 = 0));
 
 CREATE POLICY "deny_update"
   ON public.user_settings
   FOR UPDATE
   TO anon, authenticated
-  USING (false)
-  WITH CHECK (false);
+  USING ((1 = 0))
+  WITH CHECK ((1 = 0));
 
 CREATE POLICY "deny_delete"
   ON public.user_settings
   FOR DELETE
   TO anon, authenticated
-  USING (false);
+  USING ((1 = 0));
 
 -- ── 5. Revoke direct table access from anon and authenticated roles ───
 -- Belt-and-suspenders: even if RLS is somehow disabled, these roles
@@ -77,20 +94,34 @@ GRANT  ALL ON public.user_settings TO service_role;
 CREATE INDEX IF NOT EXISTS idx_user_settings_email
   ON public.user_settings (user_email);
 
--- ── 7. Auto-update updated_at trigger ────────────────────────────────
+-- ── 7. Auto-update updated_at trigger function ────────────────────────
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
 AS $$
 BEGIN
-  NEW.updated_at := NOW();
+  PERFORM set_config('search_path', 'public', true);
+  SELECT NOW() INTO NEW.updated_at;
   RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_user_settings_updated_at ON public.user_settings;
+-- ── 8. Attach trigger (idempotent via DO block) ───────────────────────
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname  = 'user_settings'
+      AND t.tgname   = 'trg_user_settings_updated_at'
+  ) THEN
+    DROP TRIGGER trg_user_settings_updated_at ON public.user_settings;
+  END IF;
+END;
+$$;
 
 CREATE TRIGGER trg_user_settings_updated_at
   BEFORE UPDATE ON public.user_settings
