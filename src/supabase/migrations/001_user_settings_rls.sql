@@ -27,28 +27,44 @@ ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 
 -- ── 3. Drop existing policies (idempotent) ────────────────────────────
 DROP POLICY IF EXISTS "service_role_all"              ON public.user_settings;
+DROP POLICY IF EXISTS "deny_select"                   ON public.user_settings;
+DROP POLICY IF EXISTS "deny_insert"                   ON public.user_settings;
+DROP POLICY IF EXISTS "deny_update"                   ON public.user_settings;
+DROP POLICY IF EXISTS "deny_delete"                   ON public.user_settings;
 DROP POLICY IF EXISTS "Users can read own settings"   ON public.user_settings;
 DROP POLICY IF EXISTS "Users can insert own settings" ON public.user_settings;
 DROP POLICY IF EXISTS "Users can update own settings" ON public.user_settings;
 DROP POLICY IF EXISTS "Users can delete own settings" ON public.user_settings;
 
--- ── 4. Single permissive policy: service role only ────────────────────
--- The service role key used by our Next.js API routes bypasses RLS
--- automatically.  We add an explicit DENY-ALL policy for every other
--- role so that even if the anon key is accidentally exposed it cannot
--- read or write any user data.
---
--- We use a RESTRICTIVE policy that denies all non-service-role access.
--- Because the service role bypasses RLS entirely, it is unaffected.
+-- ── 4. Deny-all policies for anon and authenticated roles ─────────────
+-- Split into one policy per operation to avoid WITH CHECK conflicts on
+-- FOR ALL policies. The service role bypasses RLS automatically and is
+-- unaffected by these policies.
 
--- Allow nothing by default for anon / authenticated roles.
--- (No USING clause = always false = deny.)
-CREATE POLICY "service_role_all"
+CREATE POLICY "deny_select"
   ON public.user_settings
-  FOR ALL
+  FOR SELECT
+  TO anon, authenticated
+  USING (false);
+
+CREATE POLICY "deny_insert"
+  ON public.user_settings
+  FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (false);
+
+CREATE POLICY "deny_update"
+  ON public.user_settings
+  FOR UPDATE
   TO anon, authenticated
   USING (false)
   WITH CHECK (false);
+
+CREATE POLICY "deny_delete"
+  ON public.user_settings
+  FOR DELETE
+  TO anon, authenticated
+  USING (false);
 
 -- ── 5. Revoke direct table access from anon and authenticated roles ───
 -- Belt-and-suspenders: even if RLS is somehow disabled, these roles
@@ -63,16 +79,20 @@ CREATE INDEX IF NOT EXISTS idx_user_settings_email
 
 -- ── 7. Auto-update updated_at trigger ────────────────────────────────
 CREATE OR REPLACE FUNCTION public.set_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql
+RETURNS TRIGGER
+LANGUAGE plpgsql
 SECURITY DEFINER
-AS $func$
+SET search_path = public
+AS $$
 BEGIN
-  NEW.updated_at = NOW();
+  NEW.updated_at := NOW();
   RETURN NEW;
 END;
-$func$;
+$$;
 
 DROP TRIGGER IF EXISTS trg_user_settings_updated_at ON public.user_settings;
+
 CREATE TRIGGER trg_user_settings_updated_at
   BEFORE UPDATE ON public.user_settings
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at();
