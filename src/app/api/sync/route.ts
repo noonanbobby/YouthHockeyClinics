@@ -8,9 +8,33 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ── Memoized Supabase client ───────────────────────────────────────────
-// Created once per cold start. Always prefers the service role key —
-// never falls back to the anon key for server-side data operations.
+/**
+ * Memoized Supabase admin client — uses the SERVICE ROLE KEY.
+ *
+ * This client bypasses RLS entirely and must only be used server-side.
+ * It is NEVER exposed to the browser.
+ *
+ * Required env vars:
+ *   NEXT_PUBLIC_SUPABASE_URL  or  SUPABASE_URL
+ *   SUPABASE_SERVICE_ROLE_KEY
+ *
+ * Required Supabase table (run once in SQL editor):
+ *
+ *   CREATE TABLE IF NOT EXISTS user_settings (
+ *     user_email  TEXT PRIMARY KEY,
+ *     user_name   TEXT,
+ *     settings    JSONB,
+ *     updated_at  TIMESTAMPTZ DEFAULT NOW()
+ *   );
+ *
+ *   ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+ *
+ *   -- Block all client-side access (service_role bypasses RLS)
+ *   CREATE POLICY "Deny anon access" ON user_settings
+ *     FOR ALL TO anon USING (false);
+ *   CREATE POLICY "Deny authenticated access" ON user_settings
+ *     FOR ALL TO authenticated USING (false);
+ */
 let _supabase: SupabaseClient | null = null;
 
 function getSupabase(): SupabaseClient | null {
@@ -21,7 +45,6 @@ function getSupabase(): SupabaseClient | null {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    // Warn loudly in server logs — never silently use the anon key
     if (!key && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.error(
         '[sync] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
@@ -57,7 +80,10 @@ export async function GET() {
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json(
-        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
+        {
+          error:
+            'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing',
+        },
         { status: 503 },
       );
     }
@@ -106,7 +132,10 @@ export async function PUT(request: NextRequest) {
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json(
-        { error: 'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing' },
+        {
+          error:
+            'Sync not configured — SUPABASE_SERVICE_ROLE_KEY missing',
+        },
         { status: 503 },
       );
     }
@@ -121,6 +150,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Encrypt sensitive credential fields before writing to Supabase
     const encryptedSettings = await encryptSettingsCredentials(
       settings as Record<string, unknown>,
     );

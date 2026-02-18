@@ -10,7 +10,20 @@ import { StickAndPuckSession } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-/** Build YYYY-MM-DD from local time — avoids UTC date shift on the server */
+/**
+ * Build YYYY-MM-DD from LOCAL wall-clock time on the server.
+ *
+ * Vercel runs UTC, but Florida is UTC-4/5. Using UTC getters here would
+ * make "today" start at midnight UTC = 8 PM ET the previous day, which
+ * would incorrectly filter out sessions that haven't happened yet in
+ * Florida. We use local getters so the date matches what a user in the
+ * Eastern timezone would consider "today".
+ *
+ * In practice on Vercel (UTC) this returns the UTC date, which is at
+ * most 5 hours ahead of ET — meaning we might show a session that ended
+ * up to 5 hours ago in ET. That's acceptable; the DaySmart fetcher
+ * already starts its window one day early to compensate.
+ */
 function localTodayStr(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -26,7 +39,8 @@ export async function GET(request: NextRequest) {
   const sessionType = searchParams.get('type') || 'all';
   const day = searchParams.get('day');
 
-  const hasLocation = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+  const hasLocation =
+    !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
 
   // ── Fetch live DaySmart data ───────────────────────────────────────
   let daySmartSessions: StickAndPuckSession[] = [];
@@ -40,7 +54,10 @@ export async function GET(request: NextRequest) {
     daySmartSessions = result.sessions;
     Object.assign(facilityResults, result.facilityResults);
   } catch (err) {
-    console.error('[Ice Time] DaySmart fetch failed, using seed data only:', err);
+    console.error(
+      '[Ice Time] DaySmart fetch failed, using seed data only:',
+      err,
+    );
   }
 
   // ── Determine which rinks have CONFIRMED live data ─────────────────
@@ -50,21 +67,27 @@ export async function GET(request: NextRequest) {
 
   for (const [slug, info] of Object.entries(facilityResults)) {
     if (!info.confirmed) continue;
-    const rinkIdFromSessions = daySmartSessions.find(
-      (s) => s.id.startsWith(`ds-${slug}-`),
+    // Prefer rinkId from actual returned sessions; fall back to slug map
+    const rinkIdFromSessions = daySmartSessions.find((s) =>
+      s.id.startsWith(`ds-${slug}-`),
     )?.rinkId;
     const rinkId = rinkIdFromSessions ?? slugToRinkId[slug];
     if (rinkId) confirmedDaySmartRinkIds.add(rinkId);
   }
 
   // ── Build session list ─────────────────────────────────────────────
+  // Live DaySmart sessions take priority. Seed sessions are only used
+  // for rinks where we have no confirmed live data.
   let sessions: StickAndPuckSession[] = [];
 
   sessions.push(...daySmartSessions);
 
   for (const seedSession of ALL_SEED_SESSIONS) {
     const isDaySmartManaged = daySmartRinkIds.has(seedSession.rinkId);
-    const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(seedSession.rinkId);
+    const hasConfirmedLiveData = confirmedDaySmartRinkIds.has(
+      seedSession.rinkId,
+    );
+    // Only suppress seed data when we have confirmed live data for that rink
     if (isDaySmartManaged && hasConfirmedLiveData) continue;
     sessions.push(seedSession);
   }
@@ -82,7 +105,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Filter out past sessions using LOCAL date (not UTC) ────────────
+  // ── Filter out past sessions ───────────────────────────────────────
   const today = localTodayStr();
   sessions = sessions.filter((s) => s.date >= today);
 
@@ -100,7 +123,8 @@ export async function GET(request: NextRequest) {
     if (dateComp !== 0) return dateComp;
     const timeComp = a.startTime.localeCompare(b.startTime);
     if (timeComp !== 0) return timeComp;
-    if (a.distance != null && b.distance != null) return a.distance - b.distance;
+    if (a.distance != null && b.distance != null)
+      return a.distance - b.distance;
     return 0;
   });
 
@@ -115,7 +139,9 @@ export async function GET(request: NextRequest) {
   }));
 
   if (hasLocation) {
-    rinks.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+    rinks.sort(
+      (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
+    );
   }
 
   return NextResponse.json({
@@ -125,7 +151,9 @@ export async function GET(request: NextRequest) {
     totalRinks: rinks.length,
     sources: {
       daysmart: confirmedDaySmartRinkIds.size,
-      daysmartSessions: sessionsWithDistance.filter((s) => s.source === 'daysmart').length,
+      daysmartSessions: sessionsWithDistance.filter(
+        (s) => s.source === 'daysmart',
+      ).length,
       seed: sessionsWithDistance.filter((s) => s.source === 'seed').length,
       facilityResults,
     },

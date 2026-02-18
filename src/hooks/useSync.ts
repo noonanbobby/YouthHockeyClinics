@@ -34,7 +34,9 @@ function getSyncableState(state: ReturnType<typeof useStore.getState>) {
     syncable.iceHockeyProConfig &&
     typeof syncable.iceHockeyProConfig === 'object'
   ) {
-    const ihp = { ...(syncable.iceHockeyProConfig as Record<string, unknown>) };
+    const ihp = {
+      ...(syncable.iceHockeyProConfig as Record<string, unknown>),
+    };
     delete ihp.sessionCookie;
     syncable.iceHockeyProConfig = ihp;
   }
@@ -65,11 +67,16 @@ export function useSync() {
       const state = useStore.getState();
       const settings = getSyncableState(state);
 
-      await fetch('/api/sync', {
+      const res = await fetch('/api/sync', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.warn('[useSync] Push failed:', data.error ?? res.status);
+      }
     } catch {
       // Silent fail — next change will retry
     }
@@ -82,7 +89,13 @@ export function useSync() {
 
     try {
       const res = await fetch('/api/sync');
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (res.status !== 503) {
+          // 503 = Supabase not configured — expected in dev, don't warn
+          console.warn('[useSync] Pull failed:', res.status);
+        }
+        return;
+      }
 
       const data = await res.json();
       if (!data.settings) return;
@@ -119,6 +132,14 @@ export function useSync() {
         if (remote.homeLocation && !store.homeLocation) {
           useStore.setState({ homeLocation: remote.homeLocation });
         }
+        if (remote.notificationsEnabled !== undefined) {
+          useStore.setState({
+            notificationsEnabled: remote.notificationsEnabled,
+          });
+        }
+        if (remote.preferredCurrency) {
+          useStore.setState({ preferredCurrency: remote.preferredCurrency });
+        }
         if (remote.daySmartConfig?.email && !store.daySmartConfig.email) {
           useStore.setState({ daySmartConfig: remote.daySmartConfig });
         }
@@ -126,7 +147,12 @@ export function useSync() {
           remote.iceHockeyProConfig?.email &&
           !store.iceHockeyProConfig.email
         ) {
-          useStore.setState({ iceHockeyProConfig: remote.iceHockeyProConfig });
+          useStore.setState({
+            iceHockeyProConfig: remote.iceHockeyProConfig,
+          });
+        }
+        if (remote.emailScanConfig?.connected && !store.emailScanConfig.connected) {
+          useStore.setState({ emailScanConfig: remote.emailScanConfig });
         }
       } finally {
         // Release the pull guard after Zustand subscribers have fired.

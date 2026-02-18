@@ -8,11 +8,17 @@
  * - Org-ID is discovered once via a pre-flight /organizations lookup and
  *   cached for the process lifetime.  DaySmart's JSON:API requires the
  *   numeric org ID, not the slug, on most filter params.
- * - Date math is done in UTC on the server (Vercel runs UTC).  We pass
- *   ISO-8601 date strings without a timezone suffix so DaySmart treats
- *   them as facility-local time (which is what the Dash SPA does).
+ * - Date math uses LOCAL date strings built from wall-clock UTC values.
+ *   DaySmart treats naive datetime strings as facility-local time.
+ *   Florida facilities are UTC-4/5; to avoid missing early-morning
+ *   sessions we start the window one day before today (UTC) so that
+ *   e.g. a 6 AM ET session on "today" isn't filtered out when Vercel
+ *   is already past midnight UTC.
  * - Pagination follows the JSON:API `meta.page.last-page` field.
  * - Retries with exponential back-off on 429 / 503 / network errors.
+ * - The eventType.code filter is sent as a soft hint only — if the API
+ *   rejects it we retry without it so we never get zero results due to
+ *   an unsupported filter param.
  */
 
 import { StickAndPuckSession, SessionType } from '@/types';
@@ -20,13 +26,14 @@ import { StickAndPuckSession, SessionType } from '@/types';
 const API_BASE = 'https://apps.daysmartrecreation.com/dash/jsonapi/api/v1';
 const DASH_BASE = 'https://apps.daysmartrecreation.com/dash/x/#/online';
 
-// ── Local date helpers ─────────────────────────────────────────────────
-// The server runs UTC.  We build "naive" datetime strings (no tz suffix)
-// so DaySmart interprets them as facility-local time — matching what the
-// Dash SPA sends from a browser in the facility's timezone.
+// ── Date helpers ───────────────────────────────────────────────────────
 
+/**
+ * Build a YYYY-MM-DD string from a Date using UTC getters.
+ * We always pass naive (no-tz) strings to DaySmart so it interprets
+ * them as facility-local time.
+ */
 function toNaiveDateStr(d: Date): string {
-  // Use UTC getters so the string is stable regardless of server TZ.
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
   const day = String(d.getUTCDate()).padStart(2, '0');
@@ -47,8 +54,8 @@ interface CacheEntry {
   confirmed: boolean;
 }
 const scheduleCache = new Map<string, CacheEntry>();
-const CACHE_TTL = 15 * 60 * 1000;       // 15 min for confirmed data
-const ERROR_CACHE_TTL = 2 * 60 * 1000;  // 2 min for error/empty data
+const CACHE_TTL = 15 * 60 * 1000;      // 15 min for confirmed data
+const ERROR_CACHE_TTL = 2 * 60 * 1000; // 2 min for error/empty data
 
 // ── Slug → rinkId mapping ──────────────────────────────────────────────
 const SLUG_TO_RINK_ID: Record<string, string> = {
@@ -84,7 +91,7 @@ const FACILITY_META: Record<string, FacilityMeta> = {
       address: '3299 Sportsplex Dr',
       city: 'Coral Springs',
       state: 'FL',
-      lat: 26.2710,
+      lat: 26.271,
       lng: -80.2534,
     },
   },
@@ -119,9 +126,12 @@ function classifySessionType(
     combined.includes('pickup hockey') ||
     combined.includes('pick-up hockey') ||
     combined.includes('pick up hockey')
-  ) return 'open-hockey';
-  if (combined.includes('adult hockey') && !combined.includes('league')) return 'open-hockey';
-  if (combined.includes('adult open') && combined.includes('hock')) return 'open-hockey';
+  )
+    return 'open-hockey';
+  if (combined.includes('adult hockey') && !combined.includes('league'))
+    return 'open-hockey';
+  if (combined.includes('adult open') && combined.includes('hock'))
+    return 'open-hockey';
 
   // Skip non-public-skate / non-hockey events
   const skip = [
@@ -144,24 +154,34 @@ function classifySessionType(
 /**
  * Extract HH:MM from a DaySmart datetime string.
  * DaySmart returns naive local-time strings like "2026-01-15T06:00:00"
- * (no timezone suffix).  Slice directly to avoid any UTC conversion.
+ * (no timezone suffix). Slice directly to avoid any UTC conversion.
  */
 function extractTime24(iso: string): string {
   // Naive string — slice directly
-  if (iso.length >= 16 && !iso.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(iso)) {
+  if (
+    iso.length >= 16 &&
+    !iso.endsWith('Z') &&
+    !/[+-]\d{2}:\d{2}$/.test(iso)
+  ) {
     return iso.slice(11, 16);
   }
-  // Zulu / offset string — parse and use UTC getters to preserve the
-  // original wall-clock time (DaySmart shouldn't send these, but be safe)
+  // Zulu / offset string — parse and use UTC getters
   const d = new Date(iso);
-  return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+  return `${d.getUTCHours().toString().padStart(2, '0')}:${d
+    .getUTCMinutes()
+    .toString()
+    .padStart(2, '0')}`;
 }
 
 /**
  * Extract YYYY-MM-DD from a DaySmart datetime string.
  */
 function extractDateISO(iso: string): string {
-  if (iso.length >= 10 && !iso.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(iso)) {
+  if (
+    iso.length >= 10 &&
+    !iso.endsWith('Z') &&
+    !/[+-]\d{2}:\d{2}$/.test(iso)
+  ) {
     return iso.slice(0, 10);
   }
   return new Date(iso).toISOString().split('T')[0];
@@ -195,7 +215,7 @@ async function fetchWithRetry(
   url: string,
   headers: Record<string, string>,
   retries = 3,
-  timeoutMs = 12000,
+  timeoutMs = 15000,
 ): Promise<Response> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -236,8 +256,11 @@ function buildHeaders(facilitySlug: string): Record<string, string> {
 // ── Org-ID discovery ────────────────────────────────────────────────────
 /**
  * DaySmart's JSON:API requires a numeric organization ID for some filter
- * params.  We discover it once by hitting the /organizations endpoint
+ * params. We discover it once by hitting the /organizations endpoint
  * filtered by slug and cache it for the process lifetime.
+ *
+ * Multiple filter strategies are tried in order because different
+ * DaySmart instances respond to different param names.
  *
  * Returns null if the org cannot be found (we fall back to slug-only
  * params in that case).
@@ -250,46 +273,131 @@ async function discoverOrgId(
     return orgIdCache.get(facilitySlug) ?? null;
   }
 
-  try {
-    const url = new URL(`${API_BASE}/organizations`);
-    url.searchParams.set('filter[slug]', facilitySlug);
-    url.searchParams.set('page[size]', '5');
+  // Try multiple filter strategies — DaySmart instances vary
+  const strategies = [
+    `${API_BASE}/organizations?filter[slug]=${encodeURIComponent(facilitySlug)}&page[size]=5`,
+    `${API_BASE}/organizations?filter[company]=${encodeURIComponent(facilitySlug)}&page[size]=5`,
+    `${API_BASE}/organizations?company=${encodeURIComponent(facilitySlug)}&page[size]=5`,
+    `${API_BASE}/organizations?page[size]=20`,
+  ];
 
-    const res = await fetchWithRetry(url.toString(), headers, 2, 8000);
-    if (!res.ok) {
-      orgIdCache.set(facilitySlug, null);
+  for (const url of strategies) {
+    try {
+      const res = await fetchWithRetry(url, headers, 2, 8000);
+      if (!res.ok) continue;
+
+      const json = await res.json();
+      const orgs: JsonApiResource[] = Array.isArray(json?.data)
+        ? json.data
+        : [];
+
+      if (orgs.length === 0) continue;
+
+      // Try to match by slug attribute, name, or just take the first
+      const match =
+        orgs.find(
+          (o) =>
+            (o.attributes?.slug as string | undefined) === facilitySlug ||
+            (o.attributes?.company as string | undefined) === facilitySlug ||
+            (o.attributes?.name as string | undefined)
+              ?.toLowerCase()
+              .replace(/\s+/g, '') ===
+              facilitySlug.toLowerCase().replace(/\s+/g, ''),
+        ) ?? (orgs.length === 1 ? orgs[0] : null);
+
+      if (match?.id) {
+        orgIdCache.set(facilitySlug, match.id);
+        console.log(
+          `[DaySmart] Discovered org ID for ${facilitySlug}: ${match.id} (via ${url})`,
+        );
+        return match.id;
+      }
+    } catch (err) {
+      console.warn(`[DaySmart] Org-ID strategy failed (${url}):`, err);
+    }
+  }
+
+  console.warn(`[DaySmart] Could not discover org ID for ${facilitySlug} — proceeding without it`);
+  orgIdCache.set(facilitySlug, null);
+  return null;
+}
+
+// ── Single-page event fetch ─────────────────────────────────────────────
+/**
+ * Fetch one page of events. Tries with the league-exclusion filter first;
+ * if the API returns a non-2xx we retry without that filter so an
+ * unsupported param never blocks all results.
+ */
+async function fetchEventsPage(
+  facilitySlug: string,
+  orgId: string | null,
+  startDateStr: string,
+  endDateStr: string,
+  page: number,
+  headers: Record<string, string>,
+): Promise<{ data: JsonApiResource[]; included: JsonApiResource[]; lastPage: number } | null> {
+  const buildUrl = (excludeLeague: boolean): string => {
+    const url = new URL(`${API_BASE}/events`);
+    url.searchParams.set('company', facilitySlug);
+    url.searchParams.set('filter[end__gte]', startDateStr);
+    url.searchParams.set('filter[start__lt]', endDateStr);
+    if (orgId) url.searchParams.set('filter[organization]', orgId);
+    if (excludeLeague) url.searchParams.set('filter[eventType.code__not]', 'L');
+    url.searchParams.set('include', 'resource,resourceArea,eventType');
+    url.searchParams.set('sort', 'start');
+    url.searchParams.set('page[size]', '100');
+    url.searchParams.set('page[number]', String(page));
+    return url.toString();
+  };
+
+  // First attempt: with league exclusion filter
+  for (const excludeLeague of [true, false]) {
+    const urlStr = buildUrl(excludeLeague);
+    let res: Response;
+    try {
+      res = await fetchWithRetry(urlStr, headers, 2, 15000);
+    } catch (err) {
+      console.error(`[DaySmart] Network error for ${facilitySlug} page ${page}:`, err);
       return null;
     }
 
-    const json = await res.json();
-    const orgs: JsonApiResource[] = Array.isArray(json?.data) ? json.data : [];
-
-    // Match by slug attribute or by id
-    const match =
-      orgs.find(
-        (o) =>
-          (o.attributes?.slug as string | undefined) === facilitySlug ||
-          (o.attributes?.name as string | undefined)
-            ?.toLowerCase()
-            .replace(/\s+/g, '') ===
-            facilitySlug.toLowerCase().replace(/\s+/g, ''),
-      ) ?? orgs[0];
-
-    const orgId = match?.id ?? null;
-    orgIdCache.set(facilitySlug, orgId);
-
-    if (orgId) {
-      console.log(`[DaySmart] Discovered org ID for ${facilitySlug}: ${orgId}`);
-    } else {
-      console.warn(`[DaySmart] Could not discover org ID for ${facilitySlug}`);
+    if (!res.ok) {
+      console.warn(
+        `[DaySmart] HTTP ${res.status} for ${facilitySlug} page ${page}` +
+          (excludeLeague ? ' (with league filter) — retrying without' : ' (without league filter)'),
+      );
+      if (excludeLeague) continue; // retry without the filter
+      return null;
     }
 
-    return orgId;
-  } catch (err) {
-    console.error(`[DaySmart] Org-ID discovery failed for ${facilitySlug}:`, err);
-    orgIdCache.set(facilitySlug, null);
-    return null;
+    let json: Record<string, unknown>;
+    try {
+      json = await res.json();
+    } catch {
+      console.error(`[DaySmart] JSON parse error for ${facilitySlug} page ${page}`);
+      return null;
+    }
+
+    const data: JsonApiResource[] = Array.isArray(json?.data)
+      ? (json.data as JsonApiResource[])
+      : [];
+    const included: JsonApiResource[] = Array.isArray(json?.included)
+      ? (json.included as JsonApiResource[])
+      : [];
+
+    const pageMeta = json?.meta as Record<string, unknown> | undefined;
+    const pageInfo = pageMeta?.page as Record<string, unknown> | undefined;
+    const lastPage = Number(
+      pageInfo?.['last-page'] ??
+        pageInfo?.last_page ??
+        pageMeta?.['last-page'] ??
+        1,
+    );
+
+    return { data, included, lastPage };
   }
+
+  return null;
 }
 
 // ── Main Fetch ──────────────────────────────────────────────────────────
@@ -314,7 +422,11 @@ export async function fetchDaySmartSchedule(
     const age = Date.now() - cached.timestamp;
     const ttl = cached.confirmed ? CACHE_TTL : ERROR_CACHE_TTL;
     if (age < ttl) {
-      return { sessions: cached.data, fromCache: true, confirmed: cached.confirmed };
+      return {
+        sessions: cached.data,
+        fromCache: true,
+        confirmed: cached.confirmed,
+      };
     }
   }
   const staleData = cached?.data ?? [];
@@ -326,14 +438,19 @@ export async function fetchDaySmartSchedule(
     const orgId = await discoverOrgId(facilitySlug, headers);
 
     // ── Build date range ───────────────────────────────────────────────
-    // Start from UTC midnight today; end daysAhead days later.
+    // Start ONE DAY BEFORE today (UTC) so that early-morning sessions in
+    // Florida (UTC-4/5) that have already started in UTC are still included.
+    // The route-level filter (s.date >= today) uses local time and will
+    // drop truly past sessions before returning to the client.
     const now = new Date();
-    const startOfToday = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    const startDate = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
     );
-    const endDate = new Date(startOfToday.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+    const endDate = new Date(
+      startDate.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000,
+    );
 
-    const startDateStr = toNaiveISOStr(startOfToday);
+    const startDateStr = toNaiveISOStr(startDate);
     const endDateStr = toNaiveISOStr(endDate);
 
     // ── Paginated fetch ────────────────────────────────────────────────
@@ -344,93 +461,53 @@ export async function fetchDaySmartSchedule(
     let gotAnyResponse = false;
 
     while (hasMore && page <= 10) {
-      const url = new URL(`${API_BASE}/events`);
+      const result = await fetchEventsPage(
+        facilitySlug,
+        orgId,
+        startDateStr,
+        endDateStr,
+        page,
+        headers,
+      );
 
-      // Always send the slug — it's the primary company identifier
-      url.searchParams.set('company', facilitySlug);
-
-      // Date range filters
-      url.searchParams.set('filter[end__gte]', startDateStr);
-      url.searchParams.set('filter[start__lt]', endDateStr);
-
-      // If we have the numeric org ID, add it as an additional filter
-      // (some DaySmart instances require it for correct scoping)
-      if (orgId) {
-        url.searchParams.set('filter[organization]', orgId);
-      }
-
-      // Exclude league events (code L = league)
-      url.searchParams.set('filter[eventType.code__not]', 'L');
-
-      // Include related resources for name/type lookup
-      url.searchParams.set('include', 'resource,resourceArea,eventType');
-
-      // Sorting and pagination
-      url.searchParams.set('sort', 'start');
-      url.searchParams.set('page[size]', '100');
-      url.searchParams.set('page[number]', String(page));
-
-      let res: Response;
-      try {
-        res = await fetchWithRetry(url.toString(), headers);
-      } catch (fetchErr) {
-        console.error(`[DaySmart] Network error for ${facilitySlug} page ${page}:`, fetchErr);
-        break;
-      }
-
-      if (!res.ok) {
-        console.error(
-          `[DaySmart] API ${res.status} for ${facilitySlug} page ${page} — URL: ${url.toString()}`,
-        );
+      if (!result) {
         if (!gotAnyResponse) {
           scheduleCache.set(facilitySlug, {
             data: staleData,
             timestamp: Date.now(),
             confirmed: false,
           });
-          return { sessions: staleData, fromCache: staleData.length > 0, confirmed: false };
+          return {
+            sessions: staleData,
+            fromCache: staleData.length > 0,
+            confirmed: false,
+          };
         }
         break;
       }
 
       gotAnyResponse = true;
-
-      let json: Record<string, unknown>;
-      try {
-        json = await res.json();
-      } catch {
-        console.error(`[DaySmart] JSON parse error for ${facilitySlug} page ${page}`);
-        break;
-      }
-
-      const events: JsonApiResource[] = Array.isArray(json?.data) ? (json.data as JsonApiResource[]) : [];
-      const included: JsonApiResource[] = Array.isArray(json?.included) ? (json.included as JsonApiResource[]) : [];
-
-      allEvents = allEvents.concat(events);
+      allEvents = allEvents.concat(result.data);
 
       // Merge included resources (deduplicate by id+type)
-      for (const inc of included) {
+      for (const inc of result.included) {
         if (!allIncluded.some((x) => x.id === inc.id && x.type === inc.type)) {
           allIncluded.push(inc);
         }
       }
 
-      // Determine if there are more pages
-      const pageMeta = json?.meta as Record<string, unknown> | undefined;
-      const pageInfo = pageMeta?.page as Record<string, unknown> | undefined;
-      const lastPage =
-        pageInfo?.['last-page'] ??
-        pageInfo?.last_page ??
-        pageMeta?.['last-page'] ??
-        1;
-      hasMore = page < Number(lastPage) && events.length > 0;
+      hasMore = page < result.lastPage && result.data.length > 0;
       page++;
     }
 
     // ── No events returned ─────────────────────────────────────────────
     if (allEvents.length === 0) {
       console.warn(`[DaySmart] No events returned for ${facilitySlug}`);
-      scheduleCache.set(facilitySlug, { data: [], timestamp: Date.now(), confirmed: true });
+      scheduleCache.set(facilitySlug, {
+        data: [],
+        timestamp: Date.now(),
+        confirmed: true,
+      });
       return { sessions: [], fromCache: false, confirmed: true };
     }
 
@@ -505,10 +582,17 @@ export async function fetchDaySmartSchedule(
       const noteParts: string[] = [];
       if (resourceName) noteParts.push(resourceName);
       const desc = attrs.description ?? attrs.notes;
-      if (typeof desc === 'string' && desc.trim().length > 0 && desc.trim().length < 200) {
+      if (
+        typeof desc === 'string' &&
+        desc.trim().length > 0 &&
+        desc.trim().length < 200
+      ) {
         noteParts.push(desc.trim());
       }
-      if (registeredCount !== undefined && maxParticipants !== undefined) {
+      if (
+        registeredCount !== undefined &&
+        maxParticipants !== undefined
+      ) {
         noteParts.push(`${registeredCount}/${maxParticipants} registered`);
       }
 
@@ -548,7 +632,11 @@ export async function fetchDaySmartSchedule(
       });
     }
 
-    scheduleCache.set(facilitySlug, { data: sessions, timestamp: Date.now(), confirmed: true });
+    scheduleCache.set(facilitySlug, {
+      data: sessions,
+      timestamp: Date.now(),
+      confirmed: true,
+    });
     console.log(
       `[DaySmart] ${facilitySlug}: ${sessions.length} ice-time sessions` +
         ` from ${allEvents.length} total events (${page - 1} page(s))`,
@@ -556,8 +644,16 @@ export async function fetchDaySmartSchedule(
     return { sessions, fromCache: false, confirmed: true };
   } catch (error) {
     console.error(`[DaySmart] Fatal error for ${facilitySlug}:`, error);
-    scheduleCache.set(facilitySlug, { data: staleData, timestamp: Date.now(), confirmed: false });
-    return { sessions: staleData, fromCache: staleData.length > 0, confirmed: false };
+    scheduleCache.set(facilitySlug, {
+      data: staleData,
+      timestamp: Date.now(),
+      confirmed: false,
+    });
+    return {
+      sessions: staleData,
+      fromCache: staleData.length > 0,
+      confirmed: false,
+    };
   }
 }
 
@@ -565,7 +661,10 @@ export async function fetchDaySmartSchedule(
 
 export async function fetchAllDaySmartSchedules(): Promise<{
   sessions: StickAndPuckSession[];
-  facilityResults: Record<string, { count: number; fromCache: boolean; confirmed: boolean }>;
+  facilityResults: Record<
+    string,
+    { count: number; fromCache: boolean; confirmed: boolean }
+  >;
 }> {
   const slugs = Object.keys(FACILITY_META);
   const results = await Promise.allSettled(
@@ -589,8 +688,15 @@ export async function fetchAllDaySmartSchedules(): Promise<{
         confirmed: result.value.confirmed,
       };
     } else {
-      console.error(`[DaySmart] fetchAllDaySmartSchedules: ${slug} rejected:`, result.reason);
-      facilityResults[slug] = { count: 0, fromCache: false, confirmed: false };
+      console.error(
+        `[DaySmart] fetchAllDaySmartSchedules: ${slug} rejected:`,
+        result.reason,
+      );
+      facilityResults[slug] = {
+        count: 0,
+        fromCache: false,
+        confirmed: false,
+      };
     }
   }
 
