@@ -52,7 +52,7 @@ export async function encryptCredential(plaintext: string): Promise<string> {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(plaintext);
     const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-    return `${SENTINEL}${toBase64url(iv)}.${toBase64url(cipherBuf)}`;
+    return `${SENTINEL}${toBase64url(iv)}.${toBase64url(new Uint8Array(cipherBuf))}`;
   } catch (err) {
     console.error('[crypto] encryptCredential failed:', err);
     return plaintext;
